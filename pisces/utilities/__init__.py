@@ -1,0 +1,1 @@
+from pisces.utilities.math import partial_derivative, function_partial_derivative

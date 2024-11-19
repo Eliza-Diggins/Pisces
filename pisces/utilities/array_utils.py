@@ -1,6 +1,8 @@
 from typing import Optional, Union
+
 import numpy as np
 from numpy.typing import NDArray
+
 
 def fill_missing_coord_axes(coordinates: NDArray[np.floating],
                             axis_mask: NDArray[np.bool_],
@@ -47,9 +49,11 @@ def fill_missing_coord_axes(coordinates: NDArray[np.floating],
     ndim_present = np.sum(axis_mask)
 
     if coordinates.shape[-1] != ndim_present:
-        raise ValueError(f"Expected {ndim_present} axes in `coordinates` based on `axis_mask`, but found {coordinates.shape[-1]}.")
+        raise ValueError(
+            f"Expected {ndim_present} axes in `coordinates` based on `axis_mask`, but found {coordinates.shape[-1]}.")
     if fill_values.size != (ndim - ndim_present):
-        raise ValueError(f"`fill_values` had size {fill_values.size}, expected {ndim - ndim_present} based on `axis_mask`.")
+        raise ValueError(
+            f"`fill_values` had size {fill_values.size}, expected {ndim - ndim_present} based on `axis_mask`.")
 
     full_coordinates = np.empty((*coordinates.shape[:-1], ndim))
     full_coordinates[..., axis_mask] = coordinates
@@ -103,7 +107,8 @@ def reshape_coords_as_grid(coordinates: NDArray[np.floating],
     else:
         grid_axis_mask = np.array(grid_axis_mask, dtype=bool)
     if len(grid_axis_mask) != ndim:
-        raise ValueError(f"`grid_axis_mask` length ({len(grid_axis_mask)}) must match the number of dimensions in the final coordinate shape ({ndim}).")
+        raise ValueError(
+            f"`grid_axis_mask` length ({len(grid_axis_mask)}) must match the number of dimensions in the final coordinate shape ({ndim}).")
     if np.sum(grid_axis_mask) != coordinates.ndim - 1:
         raise ValueError("The number of `True` values in `grid_axis_mask` must match `coordinates.ndim - 1`.")
 
@@ -210,3 +215,98 @@ def is_grid(array: NDArray[np.floating],
         return False
     else:
         return True
+
+
+def get_grid_coordinates(bbox: NDArray[np.floating],
+                         block_size: NDArray[np.int_],
+                         cell_size: Optional[NDArray[np.floating]] = None) -> NDArray[np.floating]:
+    """
+    Generate a grid of coordinates within a specified bounding box.
+
+    This function computes the coordinates of grid points within a bounding box
+    ``bbox`` for a grid of specified resolution ``block_size`` and cell size
+    ``cell_size``. The coordinates are generated such that the grid points are
+    spaced evenly across the bounding box, with each coordinate representing the
+    center of a grid cell.
+
+    Parameters
+    ----------
+    bbox : NDArray[np.float_]
+        A 2D array with shape ``(2, D)``, where ``D`` is the number of dimensions. The
+        first row (``bbox[0, :]``) represents the minimum coordinate values of the
+        bounding box, and the second row (``bbox[1, :]``) represents the maximum
+        coordinate values.
+    block_size : NDArray[np.int_]
+        A 1D array of integers specifying the number of grid points (blocks) along
+        each dimension. ``block_size`` must have shape ``(D,)``.
+    cell_size : NDArray[np.float_], optional
+        A 1D array of floats specifying the size of each grid cell along each
+        dimension. Must be ``(D,)`` in size. If it is not specified, it will be
+        calculated dynamically.
+
+    Returns
+    -------
+    NDArray[np.float_]
+        A grid of coordinates with shape `(block_size[0], ..., block_size[D-1], D)`,
+        where the last dimension corresponds to the spatial coordinates.
+
+    Examples
+    --------
+    **Generating a Simple 2D Grid**
+
+    Let's generate a grid from ``(0,0)`` to ``(1,1)`` that is a ``2x2`` grid. The points
+    are expected to be at ``0.25`` and ``0.75`` in each dimension.
+
+    >>> import numpy as np
+    >>> bbox = np.array([[0, 0], [1, 1]])
+    >>> block_size = np.array([2, 2])
+    >>> grid_coords = get_grid_coordinates(bbox, block_size)
+    >>> grid_coords[..., 0]  # x-coordinates
+    array([[0.25, 0.25],
+           [0.75, 0.75]])
+    >>> grid_coords[..., 1]  # y-coordinates
+    array([[0.25, 0.75],
+           [0.25, 0.75]])
+
+    **Performance Comparison with Precomputed `cell_size`**
+
+    When performance is a concern, precomputing `cell_size` can save time.
+
+    >>> from time import perf_counter
+    >>> bbox = np.array([[0, 0], [1, 1]])
+    >>> block_size = np.array([100, 100])
+    >>> cell_size = (bbox[1, :] - bbox[0, :]) / block_size
+    >>> precomputed_times = []
+    >>> for _ in range(100): # doctest: +SKIP
+    ...     start = perf_counter()
+    ...     get_grid_coordinates(bbox, block_size, cell_size=cell_size)
+    ...     precomputed_times.append(perf_counter() - start)
+    >>> dynamic_times = []
+    >>> for _ in range(100): # doctest: +SKIP
+    ...     start = perf_counter()
+    ...     get_grid_coordinates(bbox, block_size, cell_size=None)
+    ...     dynamic_times.append(perf_counter() - start)
+    >>> print(f"Precomputed: {np.mean(precomputed_times):.6f}s, Dynamic: {np.mean(dynamic_times):.6f}s")  # doctest: +SKIP
+
+    Notes
+    -----
+    - The grid coordinates are centered within the cells, with the first coordinate
+      offset by `cell_size / 2` from the lower bound of the bounding box along
+      each dimension.
+    - The resulting grid points are evenly spaced and cover the entire bounding box.
+    """
+    if cell_size is None:
+        cell_size = (bbox[1, :] - bbox[0, :]) / block_size
+
+    # Generate slices for mgrid
+    slices = tuple(
+        slice(bbox[0, i] + (cell_size[i] / 2), bbox[1, i] - (cell_size[i] / 2), complex(0, block_size[i]))
+        for i in range(len(block_size))
+    )
+
+    # Generate the grid using mgrid and reorder dimensions
+    grid = np.mgrid[slices]
+    grid = np.stack(grid, axis=-1)
+
+    return grid
+

@@ -6,7 +6,10 @@ def find_in_subclasses(base_class: Type[_T], class_name: str) -> Type[_T]:
     for subclass in base_class.__subclasses__():
         if subclass.__name__ == class_name:
             return subclass
-        result = find_in_subclasses(subclass, class_name)
+        try:
+            result = find_in_subclasses(subclass, class_name)
+        except ValueError as e:
+            continue
         if result:
             return result
 

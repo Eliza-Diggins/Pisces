@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Union, List, Callable
 from pisces.geometry._exceptions import ConversionError
 import numpy as np
 if TYPE_CHECKING:
-    from pisces.geometry.abc import CoordinateSystem
+    from pisces.geometry.base import CoordinateSystem
     from pisces.geometry._typing import LameCoefficientFunction
 
 class CoordinateConverter:

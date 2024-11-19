@@ -1,6 +1,6 @@
 import numpy as np
 
-from profiles.abc import FixedProfile
+from profiles.base import FixedProfile
 
 
 class RadialEntropyProfile(FixedProfile):

@@ -143,7 +143,7 @@ See Also
 `Orthogonal coordinates <https://en.wikipedia.org/wiki/Orthogonal_coordinates>`_
 
 """
-from pisces.geometry.abc import CoordinateSystem
+from pisces.geometry.base import CoordinateSystem
 from pisces.geometry.utils import lame_coefficient
 from numpy.typing import NDArray
 import numpy as np

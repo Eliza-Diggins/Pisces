@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional, List, Collection, Any, Union, Callable
 
-from pisces.geometry.abc import CoordinateSystem
+from pisces.geometry.base import CoordinateSystem
 from pisces.geometry.symmetry import Symmetry
 from pisces.utilities.array_utils import fill_missing_coord_axes, complete_and_reshape_as_grid, is_grid
 from pisces.utilities.general import find_in_subclasses
@@ -913,9 +913,10 @@ class GeometryHandler:
             raise ValueError(f"Failed to load symmetry from HDF5: {e}")
 
         try:
-            fill_values = np.array(handle.attrs.get('fill_values', None), dtype=np.float64)
-            if fill_values.size == 0:
+            fill_values = handle.attrs.get('fill_values',None)
+            if fill_values is None:
                 raise ValueError("Fill values are missing or empty in the HDF5 file.")
+            fill_values = np.array(fill_values, dtype=np.float64)
         except Exception as e:
             raise ValueError(f"Failed to load fill_values from HDF5: {e}")
 

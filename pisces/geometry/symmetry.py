@@ -52,7 +52,7 @@ import numpy as np
 from pisces.geometry._typing import InvarianceArray
 
 if TYPE_CHECKING:
-    from pisces.geometry.abc import CoordinateSystem
+    from pisces.geometry.base import CoordinateSystem
 
 class Symmetry:
     def __init__(self, symmetry_axes: Iterable[str|int], coordinate_system: 'CoordinateSystem'):

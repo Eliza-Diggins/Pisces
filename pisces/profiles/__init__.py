@@ -1,7 +1,6 @@
-from pisces.profiles.abc import Profile
-from pisces.profiles.registries import _DEFAULT_PROFILE_REGISTRY,ProfileRegistry
+from .registries import _DEFAULT_PROFILE_REGISTRY,ProfileRegistry
 
-from pisces.profiles.density import (RadialDensityProfile,
+from .density import (RadialDensityProfile,
     NFWDensityProfile,
     HernquistDensityProfile,
     EinastoDensityProfile,
@@ -19,12 +18,12 @@ from pisces.profiles.density import (RadialDensityProfile,
     SNFWDensityProfile,
     TNFWDensityProfile)
 
-from pisces.profiles.entropy import (WalkerEntropyProfile,
+from .entropy import (WalkerEntropyProfile,
                                      BaselineEntropyProfile,
                                      BrokenEntropyProfile,
                                      RadialEntropyProfile)
 
-from pisces.profiles.temperature import (RadialTemperatureProfile,
+from .temperature import (RadialTemperatureProfile,
                                          IsothermalTemperatureProfile,
                                          UniversalPressureTemperatureProfile,
                                          VikhlininTemperatureProfile,
@@ -32,3 +31,4 @@ from pisces.profiles.temperature import (RadialTemperatureProfile,
                                          CoolingFlowTemperatureProfile,
                                          BetaModelTemperatureProfile,
                                          AM06TemperatureProfile)
+from .base import Profile

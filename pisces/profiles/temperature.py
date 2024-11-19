@@ -1,4 +1,4 @@
-from pisces.profiles.abc import FixedProfile
+from pisces.profiles.base import FixedProfile
 
 class RadialTemperatureProfile(FixedProfile):
     axes = ["r"]

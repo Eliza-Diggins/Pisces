@@ -7,6 +7,8 @@ import dill
 import numpy as np
 from pisces.profiles.registries import _DEFAULT_PROFILE_REGISTRY
 from pisces.profiles._typing import ProfileType
+from pisces.utilities.math import function_partial_derivative
+
 if TYPE_CHECKING:
     from pisces.profiles.registries import ProfileRegistry
 
@@ -267,18 +269,20 @@ class Profile(metaclass=ProfileMeta):
         # Return a new instance of the correct Profile subclass with loaded data
         return cls(function, axes, units, **parameters)
 
-    def partial_derivative(self, axis: str, coords: List[float], h: float = 1e-5) -> float:
+    def partial_derivative(self, x: np.ndarray, axes: List[str]|str, **kwargs) -> np.ndarray:
         """
         Compute the partial derivative with respect to a specific axis at a given position.
 
         Parameters
         ----------
-        axis : str
+        axes : List[str] or str
             The axis with respect to which the derivative is taken (must be one of self.axes).
-        coords : List[float]
-            The coordinates at which to evaluate the derivative.
-        h : float, optional
-            The step size for central difference approximation, default is 1e-5.
+        x : np.ndarray
+            The coordinates at which to evaluate the derivative. This should be a ``(N,NDIM)`` array
+            where ``N`` is the number of input sets to pass through and ``NDIM`` is the number of inputs per
+            input set.
+        kwargs:
+            Additional kwargs to pass to :py:func:`utilities.math.function_partial_derivative`.
 
         Returns
         -------
@@ -290,32 +294,10 @@ class Profile(metaclass=ProfileMeta):
         ValueError
             If the specified axis is not in the profile's axes.
         """
+        # Determine the conversion from the axes (strings) to the relevant integers.
+        axes = [self.axes.index(axis) for axis in axes]
 
-        if axis not in self.axes:
-            raise ValueError(f"Axis '{axis}' not found in profile axes {self.axes}.")
-
-        # Find the index of the axis in the coordinate list
-        axis_index = self.axes.index(axis)
-
-        # Convert coords to a numpy array for easy manipulation
-        coords = np.array(coords)
-
-        # Create coordinate sets for forward and backward steps
-        coords_forward = coords.copy()
-        coords_backward = coords.copy()
-
-        # Increment and decrement the coordinate along the specified axis
-        coords_forward[axis_index] += h
-        coords_backward[axis_index] -= h
-
-        # Evaluate the function at forward and backward steps
-        f_forward = self(*coords_forward)
-        f_backward = self(*coords_backward)
-
-        # Use central difference to approximate the partial derivative
-        derivative = (f_forward - f_backward) / (2 * h)
-        return derivative
-
+        return function_partial_derivative(self,x,axes,**kwargs)
 
 
 class FixedProfile(Profile):

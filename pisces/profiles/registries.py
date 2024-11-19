@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING, Union, List, Tuple, Dict, Type
+from typing import TYPE_CHECKING, Type
+
 
 if TYPE_CHECKING:
-    from pisces.profiles.abc import ProfileMeta, Profile
+    from pisces.profiles.base import ProfileMeta, Profile
 
 class ProfileRegistry:
     """
@@ -76,3 +77,5 @@ class ProfileRegistry:
         return list(self.registry.keys())
 
 _DEFAULT_PROFILE_REGISTRY = ProfileRegistry()
+
+

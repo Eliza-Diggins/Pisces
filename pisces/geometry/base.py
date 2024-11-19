@@ -143,7 +143,7 @@ from numpy.typing import NDArray
 from pisces.geometry._exceptions import ConversionError
 from pisces.geometry.utils import CoordinateConverter
 from pisces.utilities.general import find_in_subclasses
-from pisces.utilities.math import partial_derivative
+from pisces.utilities.math import partial_derivative, function_partial_derivative
 
 if TYPE_CHECKING:
     from pisces.geometry._typing import LameCoefficientMap
@@ -819,20 +819,11 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             Computed gradient term along the specified axis, adjusted based on the selected basis.
         """
         if derivative is None:
-            # Use finite differences to compute the derivative if none is provided
-            perturbed_coords = coordinates.copy()
-            perturbed_coords[..., axis] += epsilon
-            f_plus = function(perturbed_coords)
-
-            perturbed_coords[..., axis] -= 2 * epsilon
-            f_minus = function(perturbed_coords)
-
-            derivative_result = (f_plus - f_minus) / (2 * epsilon)
+            derivative_result = function_partial_derivative(function, coordinates, axis, method='central',
+                                                           h=epsilon)
         else:
-            # Use the provided derivative function
             derivative_result = derivative(coordinates)
 
-        # Compute the Lame coefficients for the specified basis
         lame_coefficients = self.lame_coefficients[axis](coordinates)
 
         if basis == 'unit':
@@ -842,8 +833,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         elif basis == 'contravariant':
             return derivative_result
         else:
-            raise ValueError(
-                f"Unrecognized value for 'basis': {basis}. Expected one of 'unit', 'covariant', 'contravariant'.")
+            raise ValueError(f"Unrecognized basis '{basis}'. Expected one of 'unit', 'covariant', or 'contravariant'.")
 
     def gradient(self,
                  coordinates: NDArray,
@@ -931,7 +921,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                           *,
                           derivatives: Optional[List[Callable[[NDArray], NDArray]]] = None,
                           basis='unit',
-                          active_axes: List[int] | None = None,
+                          active_axes: Optional[List[int]] = None,
                           epsilon: float = 1e-5) -> NDArray:
         """
         Compute the gradient of a scalar function with respect to coordinates in a specified basis.
@@ -957,7 +947,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             Gradient of the function in the specified basis.
         """
         if active_axes is None:
-            active_axes = np.arange(self.NDIM)
+            active_axes: List[int] = list(np.arange(self.NDIM))
 
         gradients = []
         for i, axis in enumerate(active_axes):
@@ -1078,8 +1068,6 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             Specifies the basis in which the vector function is provided. Defaults to 'unit'.
         epsilon : float, optional
             Step size for finite differences, used in numerical differentiation.
-        **kwargs
-            Additional arguments to be passed to ``partial_derivative``, such as ``edge_order``.
 
         Returns
         -------
@@ -1102,34 +1090,19 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         else:
             raise ValueError(f"Unsupported basis '{basis}'. Expected 'unit', 'covariant', or 'contravariant'.")
 
-        # Determine dependent axes for Jacobian based on the Lame coefficient dependency
         dependent_axes = np.arange(self.NDIM)[~self.lame_invariance_matrix[axis, :]]
 
-        # Define the full composite function incorporating the dependent Jacobian
         if len(dependent_axes):
             jacobian_component = lambda coords: np.prod(
                 self.compute_lame_coefficients(coords, active_axes=dependent_axes), axis=0)
             composite_function = lambda coords: jacobian_component(coords) * corrected_function(coords)
         else:
-            # If no dependent axes, we use a trivial Jacobian component
             composite_function = corrected_function
 
-        # Compute the derivative of the composite function with respect to the specified axis using finite differences
-        perturbed_coords = coordinates.copy()
+        derivative_term = function_partial_derivative(composite_function, coordinates, axis, method='central', h=epsilon)
 
-        # f(x + epsilon)
-        perturbed_coords[..., axis] += epsilon
-        f_plus = composite_function(perturbed_coords)
-
-        # f(x - epsilon)
-        perturbed_coords[..., axis] -= 2 * epsilon
-        f_minus = composite_function(perturbed_coords)
-
-        # Calculate the central finite difference
-        derivative_term = (f_plus - f_minus) / (2 * epsilon)
-
-        # Normalize by the Jacobian component if required
         if len(dependent_axes):
+            # noinspection PyUnboundLocalVariable
             return derivative_term / jacobian_component(coordinates)
         else:
             return derivative_term
@@ -1289,8 +1262,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                             *,
                             basis: str = 'unit',
                             active_axes: Optional[List[int]] = None,
-                            epsilon: float = 1e-5,
-                            **kwargs) -> NDArray:
+                            epsilon: float = 1e-5) -> NDArray:
         """
         Compute the divergence of a vector function in this coordinate system.
 
@@ -1306,8 +1278,6 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             List of axis indices to include in the divergence calculation. By default, all axes are included.
         epsilon : float, optional
             Step size for finite differences, used in numerical differentiation.
-        **kwargs
-            Additional arguments for numerical differentiation.
 
         Returns
         -------
@@ -1328,8 +1298,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                 vector_function,
                 axis,
                 basis=basis,
-                epsilon=epsilon,
-                **kwargs
+                epsilon=epsilon
             )
 
         return divergence_result
@@ -1339,8 +1308,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                                    scalar_function: Callable[[NDArray], NDArray],
                                    *,
                                    active_axes: Optional[List[int]] = None,
-                                   epsilon: float = 1e-5,
-                                   **kwargs) -> NDArray:
+                                   epsilon: float = 1e-5) -> NDArray:
         """
         Compute the Laplacian of a scalar function in this coordinate system.
 
@@ -1354,8 +1322,6 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             List of axis indices to include in the Laplacian calculation. By default, all axes are included.
         epsilon : float, optional
             Step size for finite differences, used in numerical differentiation.
-        **kwargs
-            Additional arguments for numerical differentiation.
 
         Returns
         -------
@@ -1366,18 +1332,6 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         if active_axes is None:
             active_axes = np.arange(self.NDIM)
 
-        # Compute the gradient of the scalar function in the contravariant basis
-        gradient_values = np.stack([
-            self.compute_function_gradient_term(
-                coordinates,
-                scalar_function,
-                axis,
-                basis='contravariant',
-                epsilon=epsilon,
-                **kwargs
-            ) for axis in active_axes
-        ], axis=-1)
-
         # Define a gradient function to calculate the divergence of this gradient
         gradient_function = lambda coords: np.stack([
             self.compute_function_gradient_term(
@@ -1385,8 +1339,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                 scalar_function,
                 axis,
                 basis='contravariant',
-                epsilon=epsilon,
-                **kwargs
+                epsilon=epsilon
             ) for axis in active_axes
         ], axis=-1)
 
@@ -1396,8 +1349,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             gradient_function,
             basis='contravariant',
             active_axes=active_axes,
-            epsilon=epsilon,
-            **kwargs
+            epsilon=epsilon
         )
 
         return laplacian_values

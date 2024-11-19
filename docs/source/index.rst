@@ -1,4 +1,4 @@
-.. image:: docs/source/images/pisces.png
+.. image:: ./images/pisces.png
    :width: 200px
    :align: center
 

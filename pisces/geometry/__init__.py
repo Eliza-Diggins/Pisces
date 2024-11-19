@@ -6,7 +6,7 @@ differential operators in general coordinate systems, as well as other geometry 
 Pisces' code.
 
 """
-from pisces.geometry.abc import CoordinateSystem
+from pisces.geometry.base import CoordinateSystem
 from pisces.geometry.coordinate_systems import SphericalCoordinateSystem,CartesianCoordinateSystem,CylindricalCoordinateSystem,PolarCoordinateSystem
 from pisces.geometry.symmetry import Symmetry
 from pisces.geometry.handlers import GeometryHandler

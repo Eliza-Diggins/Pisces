@@ -1,15 +1,27 @@
-from pisces.profiles.abc import FixedProfile
+from pisces.profiles.base import FixedProfile
 import numpy as np
 
 class RadialDensityProfile(FixedProfile):
     """
     Base class for radial density profiles with fixed axes, units, and parameters.
     """
-    axes = ["r"]
-    units = "Msun/kpc^3"
-
+    AXES = ["r"]
+    UNITS = "Msun/kpc**3"
 
 class NFWDensityProfile(RadialDensityProfile):
+    """
+    Examples
+    --------
+
+    >>> import numpy as np
+    >>> import matplotlib.pyplot as plt
+    >>> q = NFWDensityProfile(rho_0=1,r_s=1)
+    >>> x = np.linspace(1,100,1000)
+    >>> y = q(x)
+    >>> plt.plot(x,y) # doctest: +SKIP
+    >>> plt.show()
+
+    """
     PARAMETERS = {
         "rho_0": 1.0,
         "r_s": 1.0,
@@ -18,7 +30,6 @@ class NFWDensityProfile(RadialDensityProfile):
     @staticmethod
     def FUNCTION(r, rho_0=1.0, r_s=1.0):
         return rho_0 / (r / r_s * (1 + r / r_s) ** 2)
-
 
 class HernquistDensityProfile(RadialDensityProfile):
     PARAMETERS = {
@@ -42,7 +53,6 @@ class EinastoDensityProfile(RadialDensityProfile):
     def FUNCTION(r, rho_0=1.0, r_s=1.0, alpha=0.18):
         return rho_0 * np.exp(-2 * alpha * ((r / r_s) ** alpha - 1))
 
-
 class SingularIsothermalDensityProfile(RadialDensityProfile):
     PARAMETERS = {
         "rho_0": 1.0,
@@ -51,7 +61,6 @@ class SingularIsothermalDensityProfile(RadialDensityProfile):
     @staticmethod
     def FUNCTION(r, rho_0=1.0):
         return rho_0 / r**2
-
 
 class CoredIsothermalDensityProfile(RadialDensityProfile):
     PARAMETERS = {
@@ -63,7 +72,6 @@ class CoredIsothermalDensityProfile(RadialDensityProfile):
     def FUNCTION(r, rho_0=1.0, r_c=1.0):
         return rho_0 / (1 + (r / r_c) ** 2)
 
-
 class PlummerDensityProfile(RadialDensityProfile):
     PARAMETERS = {
         "M": 1.0,
@@ -73,7 +81,6 @@ class PlummerDensityProfile(RadialDensityProfile):
     @staticmethod
     def FUNCTION(r, M=1.0, r_s=1.0):
         return (3 * M) / (4 * np.pi * r_s**3) * (1 + (r / r_s) ** 2) ** (-5 / 2)
-
 
 class DehnenDensityProfile(RadialDensityProfile):
     PARAMETERS = {
@@ -90,7 +97,6 @@ class DehnenDensityProfile(RadialDensityProfile):
             * (r / r_s) ** (-gamma)
             * (1 + r / r_s) ** (gamma - 4)
         )
-
 
 class JaffeDensityProfile(RadialDensityProfile):
     PARAMETERS = {
