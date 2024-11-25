@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, List, Collection, Any, Union, Callable
+from typing import Optional, List, Collection, Any, Union, Callable
 
 from pisces.geometry.base import CoordinateSystem
 from pisces.geometry.symmetry import Symmetry
@@ -8,6 +8,7 @@ import numpy as np
 from dataclasses import dataclass
 from numpy.typing import NDArray
 import h5py
+
 
 # noinspection PyProtectedMember
 @dataclass
@@ -145,7 +146,7 @@ class GeometryHandler:
             - If `grid_axis_mask` is omitted, it will default to `[True, False, True]` based on symmetry, resulting in the same grid.
 
             This parameter allows flexibility in representing certain axes with singleton dimensions, useful in higher-dimensional
-            grids where some axes are invariant.
+            _grids where some axes are invariant.
 
         symmetry : Optional[Symmetry], optional
             Symmetry object specifying invariant axes. Defaults to `self.symmetry`. This parameter determines the
@@ -767,6 +768,156 @@ class GeometryHandler:
         return self.coordinate_system.function_laplacian(
             coordinates, scalar_function, active_axes=active_axes, **kwargs
         )
+
+    def from_cartesian(self, coordinates: NDArray, symmetry: Symmetry=None) -> NDArray:
+        """
+        Convert Cartesian coordinates to the native coordinate system, showing only non-symmetric coordinates.
+
+        Parameters
+        ----------
+        coordinates : NDArray
+            Cartesian coordinates, shaped ``(..., 3)``.
+        symmetry : Optional[Symmetry], optional
+            Symmetry object specifying invariant axes. Defaults to the symmetry of this handler.
+
+        Returns
+        -------
+        NDArray
+            Array of non-symmetric coordinates in this system's native coordinate system, shaped ``(..., NDIM_NSIM)``.
+
+        Raises
+        ------
+        ValueError
+            If the Cartesian coordinates cannot be converted.
+
+        Notes
+        -----
+        The symmetry determines which axes are invariant. Only non-symmetric coordinates
+        are included in the output.
+        """
+        if symmetry is None:
+            symmetry = self.symmetry
+        try:
+            # Convert Cartesian to native coordinates
+            native_coordinates = self.coordinate_system.from_cartesian(coordinates)
+            # Return only non-symmetric coordinates
+            return native_coordinates[..., ~symmetry._invariance_array]
+        except Exception as e:
+            raise ValueError(f"Failed to convert from Cartesian coordinates: {e}")
+
+    def to_cartesian(self, coordinates: NDArray, symmetry: Symmetry=None) -> NDArray:
+        """
+        Convert coordinates from the current coordinate system to Cartesian coordinates.
+
+        Parameters
+        ----------
+        coordinates : NDArray
+            Coordinates in the current coordinate system, shaped ``(..., NDIM)``.
+        symmetry : Optional[Symmetry], optional
+            Symmetry object specifying invariant axes. Defaults to the symmetry of this handler.
+
+        Returns
+        -------
+        NDArray
+            Cartesian coordinates corresponding to the input coordinates, shaped ``(..., 3)``.
+
+        Raises
+        ------
+        ValueError
+            If the input coordinates cannot be validated or converted.
+
+        Notes
+        -----
+        Missing coordinates are filled with default values based on the specified or default symmetry.
+        """
+        if symmetry is None:
+            symmetry = self.symmetry
+        try:
+            # Fill missing coordinates based on symmetry
+            coordinates = self.fill_missing_coordinates(coordinates, symmetry=symmetry)
+            # Convert native coordinates to Cartesian
+            return self.coordinate_system.to_cartesian(coordinates)
+        except Exception as e:
+            raise ValueError(f"Failed to convert to Cartesian coordinates: {e}")
+
+    def from_grid(self, coordinates: NDArray, axes: Optional[List[str]] = None, symmetry: Symmetry=None) -> NDArray:
+        """
+        Convert Cartesian grid coordinates to the native coordinate system.
+
+        Parameters
+        ----------
+        coordinates : NDArray
+            Array of Cartesian coordinates with shape ``(..., len(axes))``.
+        axes : Optional[List[str]], optional
+            List of axes corresponding to the coordinates provided. If None, assumes
+            the first `len(coordinates.shape[-1])` axes of the Cartesian coordinate system
+            (e.g., ['x', 'y', 'z'][:len(coordinates.shape[-1])]).
+        symmetry : Optional[Symmetry], optional
+            Symmetry object specifying invariant axes. Defaults to the symmetry of this handler.
+
+        Returns
+        -------
+        NDArray
+            Array of coordinates in this system's native coordinate system, shaped ``(..., NDIM_NSIM)``.
+
+        Raises
+        ------
+        ValueError
+            If the Cartesian coordinates or axes are invalid.
+
+        Notes
+        -----
+        This method converts Cartesian grid coordinates to native coordinates and filters
+        out symmetric axes, returning only non-symmetric coordinates.
+        """
+        if symmetry is None:
+            symmetry = self.symmetry
+        try:
+            # Convert grid coordinates to native system
+            native_coordinates = self.coordinate_system.from_grid(coordinates, axes=axes)
+            # Return only non-symmetric coordinates
+            return native_coordinates[..., ~symmetry._invariance_array]
+        except Exception as e:
+            raise ValueError(f"Failed to convert from grid coordinates: {e}")
+
+    def to_grid(self, coordinates: NDArray, axes: Optional[List[str]] = None, symmetry: Symmetry =None) -> NDArray:
+        """
+        Convert native coordinates in this coordinate system to a Cartesian grid with specified axes.
+
+        Parameters
+        ----------
+        coordinates : NDArray
+            Array of coordinates in this system's native format, shaped ``(..., NDIM)``.
+        axes : Optional[List[str]], optional
+            List of axes for the output Cartesian grid. If None, assumes the first `NDIM` axes
+            of the Cartesian coordinate system.
+        symmetry : Optional[Symmetry], optional
+            Symmetry object specifying invariant axes. Defaults to the symmetry of this handler.
+
+        Returns
+        -------
+        NDArray
+            Array of Cartesian coordinates in the specified axes, shaped ``(..., len(axes))``.
+
+        Raises
+        ------
+        ValueError
+            If the native coordinates or axes are invalid.
+
+        Notes
+        -----
+        Missing coordinates are filled with default values based on the specified or default symmetry,
+        and the output is filtered to include only the specified axes.
+        """
+        if symmetry is None:
+            symmetry = self.symmetry
+        try:
+            # Fill missing coordinates based on symmetry
+            coordinates = self.fill_missing_coordinates(coordinates, symmetry=symmetry)
+            # Convert native coordinates to Cartesian grid coordinates
+            return self.coordinate_system.to_grid(coordinates, axes=axes)
+        except Exception as e:
+            raise ValueError(f"Failed to convert to grid coordinates: {e}")
 
     def as_dict(self) -> dict:
         """

@@ -1,5 +1,10 @@
 import numpy as np
-from typing import List, Any, Union, Callable, Literal
+from typing import List, Any, Union, Callable, Literal, TYPE_CHECKING, Optional
+from scipy.integrate import quad
+from numpy.typing import NDArray
+if TYPE_CHECKING:
+    from pisces.geometry.base import CoordinateSystem
+
 
 def compute_grid_spacing(coordinates: np.ndarray, axes: Union[List[int], None] = None) -> List[np.ndarray]:
     """
@@ -203,3 +208,153 @@ def function_partial_derivative(
 
     return partial_derivatives
 
+
+# noinspection PyUnresolvedReferences,PyTypeChecker
+def integrate_in_shells(
+        function: Callable[[NDArray[np.floating]], np.floating],
+        radii: NDArray[np.floating],
+        coordinate_system: Optional['CoordinateSystem'] = None
+) -> NDArray[np.floating]:
+    """
+    Perform volume integration of a function within spherical shells up to a given radius.
+
+    Parameters
+    ----------
+    function : Callable[[NDArray[np.floating]], np.floating]
+        The scalar function to integrate over shells.
+    radii : NDArray[np.floating]
+        Array of radii defining the upper bounds for integration. Must be non-negative.
+    coordinate_system : Optional['CoordinateSystem'], default=None
+        The coordinate system to use for volume elements. If provided, it must have
+        a `shell_volume` method. If not provided, assumes spherical coordinates with
+        a volume element of `4 * pi * r^2`.
+
+    Returns
+    -------
+    NDArray[np.floating]
+        Array of integrated values corresponding to the input `radii`.
+
+    Raises
+    ------
+    ValueError
+        If the `coordinate_system` does not have a `shell_volume` method.
+
+    Notes
+    -----
+    This function computes the integral:
+    .. math:: I(r) = \int_0^r f(r') V(r') dr'
+    where `V(r')` is the volume element.
+
+    Examples
+    --------
+    >>> from scipy.special import erf
+    >>> radii = np.linspace(0, 10, 100)
+    >>> function = lambda r: np.exp(-r**2)
+    >>> result = integrate_in_shells(function, radii)
+    """
+    if np.any(radii < 0):
+        raise ValueError("Radii must be non-negative.")
+
+    if coordinate_system is not None:
+        if not hasattr(coordinate_system, 'shell_volume'):
+            raise ValueError(
+                f"The provided coordinate system does not have a `shell_volume` method. "
+                f"Ensure it implements this method before integration."
+            )
+        volume_element = lambda _r: coordinate_system.shell_volume(_r)
+    else:
+        volume_element = lambda _r: 4 * np.pi * _r**2
+
+    func = lambda _r: function(_r) * volume_element(_r)
+    result = np.zeros_like(radii)
+
+    for i, r in enumerate(radii):
+        result[i] = quad(func, 0, r)[0]
+
+    return result
+
+
+# noinspection PyTypeChecker
+def integrate(
+        function: Callable[[float], float],
+        x: NDArray[np.floating],
+        x_0: Optional[float] = None,
+        minima: bool = False
+) -> NDArray[np.floating]:
+    """
+    Perform definite integration of a function from each value in `x` to `x_0`.
+
+    Parameters
+    ----------
+    function : Callable[[float], float]
+        The scalar function to integrate.
+    x : NDArray[np.floating]
+        Array of points defining the lower bounds of the integration.
+    x_0 : Optional[float], default=None
+        The upper bound of the integration. If None, the maximum value of `x` is used.
+    minima : bool, default=False
+        If True, the returned values are negated.
+
+    Returns
+    -------
+    NDArray[np.floating]
+        Array of integrated values corresponding to the input `x`.
+
+    Notes
+    -----
+    This function computes the integral:
+    .. math:: I(x) = \int_{x}^{x_0} f(x') dx'
+    If `minima` is True, the result is negated.
+
+    Examples
+    --------
+    >>> function = lambda x: x**2
+    >>> x = np.linspace(0, 10, 100)
+    >>> result = integrate(function, x)
+    """
+    result = np.zeros_like(x)
+    x_0 = x_0 if x_0 is not None else np.amax(x)
+
+    for i, _x in enumerate(x):
+        result[i] = quad(function, _x, x_0)[0]
+
+    return -result if minima else result
+
+
+# noinspection PyTypeChecker
+def integrate_toinf(
+        function: Callable[[float], float],
+        x: NDArray[np.floating]
+) -> NDArray[np.floating]:
+    """
+    Perform definite integration of a function from each value in `x` to infinity.
+
+    Parameters
+    ----------
+    function : Callable[[float], float]
+        The scalar function to integrate.
+    x : NDArray[np.floating]
+        Array of points defining the lower bounds of the integration.
+
+    Returns
+    -------
+    NDArray[np.floating]
+        Array of integrated values corresponding to the input `x`.
+
+    Notes
+    -----
+    This function computes the integral:
+    .. math:: I(x) = \int_{x}^{\infty} f(x') dx'
+
+    Examples
+    --------
+    >>> function = lambda x: np.exp(-x)
+    >>> x = np.linspace(1, 10, 100)
+    >>> result = integrate_toinf(function, x)
+    """
+    result = np.zeros_like(x)
+
+    for i, _x in enumerate(x):
+        result[i] = quad(function, _x, np.inf)[0]
+
+    return result

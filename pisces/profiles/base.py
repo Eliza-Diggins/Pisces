@@ -68,6 +68,29 @@ class Profile(metaclass=ProfileMeta):
         The units of the profile, default is an empty string.
     kwargs : dict
         Additional parameters for the profile function.
+
+    Examples
+    --------
+
+    **Creating an NFW Profile**: As a first example, we can create a NFW profile
+
+    >>> from pisces.profiles.density import NFWDensityProfile
+    >>> profile = NFWDensityProfile(rho_0=1,r_s=1,units='g/m**3')
+    >>> print(profile(1))
+    0.25
+
+    We can also perform operations on profiles:
+
+    >>> profile = 2*profile
+    >>> print(profile(1))
+    0.5
+
+    >>> profile = profile + profile
+    >>> profile(1)
+    1.0
+    >>> profile.parameters
+    {'rho_0': 1, 'r_s': 1}
+
     """
 
     def __init__(self,
@@ -122,42 +145,62 @@ class Profile(metaclass=ProfileMeta):
         if isinstance(other, Profile):
             # The other instance is another profile. We need to validate and then
             # coerce arguments for combination.
+            # ! validate is only necessary if we are doing an addition or subtraction.
             if validate and isinstance(other, Profile):
                 if self.units != other.units:
                     raise ValueError(f"Unit mismatch: {self.units} (self) vs {other.units} (other)")
 
-            # Setup shared attributes.
-            sf, of = self._function, other._function
-            axes = self.axes + [ax for ax in other.axes if ax not in self.axes]
+            # Combine axes and determine coordinate slices
+            combined_axes = self.axes + [ax for ax in other.axes if ax not in self.axes]
+            self_slices = [combined_axes.index(ax) for ax in self.axes]
+            other_slices = [combined_axes.index(ax) for ax in other.axes]
 
-            # Determine slices for each function based on the axes
-            self_slices = [axes.index(ax) for ax in self.axes]
-            other_slices = [axes.index(ax) for ax in other.axes]
-
-            # Merge parameters from self and other
+            # Merger parameters. If there are mixed parameters and they have different values
+            # then we need to create a new k_0 and k_1 in the new profile.
             combined_parameters = self.parameters.copy()  # Start with self's parameters
             for k, v in other.parameters.items():
-                if k in combined_parameters:
-                    # Handle conflicting parameter names here, if needed
-                    raise ValueError(f"Parameter conflict: {k} exists in both profiles.")
-                combined_parameters[k] = v
+                if (k in combined_parameters) and (combined_parameters[k] != v):
+                    # Handle conflicts by creating unique names
+                    combined_parameters[f"{k}_SELF"] = combined_parameters.pop(k)
+                    combined_parameters[f"{k}_OTHER"] = v
+                else:
+                    combined_parameters[k] = v
 
-            def combined_function(*coords):
-                # Slice coordinates according to self's and other's axes
+            # Define the combined function
+            def combined_function(*coords, **kwargs):
+                # Extract relevant coordinates for each profile
                 self_coords = [coords[i] for i in self_slices]
                 other_coords = [coords[i] for i in other_slices]
 
-                # Apply each function and combine results with op
-                return op(sf(*self_coords, **self.parameters), of(*other_coords, **other.parameters))
+                # Extract and map the relevant parameters
+                self_params = {k.replace("_SELF", ""): kwargs[k] for k in kwargs if k.endswith("_SELF")}
+                other_params = {k.replace("_OTHER", ""): kwargs[k] for k in kwargs if k.endswith("_OTHER")}
 
-            # Return a new Profile with combined function, axes, and inherited units
-            combined_units = op(self.units, other.units) if validate else self.units  # Define unit handling here
-            return Profile(combined_function, axes, units=combined_units, **combined_parameters)
+                # Compute the results for both profiles and apply the operation
+                self_result = self._function(*self_coords, **self_params)
+                other_result = other._function(*other_coords, **other_params)
+                return op(self_result, other_result)
 
+            # Handle combined units
+            try:
+                combined_units = op(self.units,other.units)
+            except Exception as e:
+                if self.units == other.units:
+                    combined_units = self.units
+                else:
+                    raise ValueError(f"Unit mismatch: {self.units} (self) vs {other.units} (other)") from e
+
+            # Return the new Profile
+            return Profile(
+                combined_function,
+                combined_axes,
+                units=combined_units,
+                **combined_parameters
+            )
         # If `other` is a scalar, apply operation directly to `self._function`
         else:
-            def scalar_function(*coords):
-                return op(self._function(*coords, **self.parameters), other)
+            def scalar_function(*coords,**kwargs):
+                return op(self._function(*coords, **kwargs), other)
 
             return Profile(scalar_function, self.axes, units=self.units, **self.parameters)
 
@@ -306,13 +349,25 @@ class FixedProfile(Profile):
     PARAMETERS: Dict[str,Any] = None
     FUNCTION: Callable = None
 
-    def __init__(self,**kwargs):
+    def __init__(self,units=None,**kwargs):
         # Load the parameters using the defaults and those provided
         # in kwargs.
         kwargs = self._validate_kwargs(kwargs)
 
+        # Check the validity of the units
+        if units is None:
+            units = self.__class__.UNITS
+
+        units = unyt.Unit(units)
+
+        try:
+            _ = units.get_conversion_factor(unyt.Unit(self.__class__.UNITS))
+        except Exception as e:
+            raise ValueError(f"Units {units} are not consistent with base units for {self.__class__.__name__} ({self.__class__.UNITS}).")
+
+
         # Perform the superclass load
-        super().__init__(self.__class__.FUNCTION,self.__class__.AXES,units=self.__class__.UNITS,**kwargs)
+        super().__init__(self.__class__.FUNCTION,self.__class__.AXES,units=units,**kwargs)
 
     def _validate_kwargs(self,kwargs):
         _new_kwargs = self.__class__.PARAMETERS.copy()
@@ -339,4 +394,5 @@ class FixedProfile(Profile):
 
 
         parameters = {key: group.attrs[key] for key in group.attrs if key not in ["class_name", "axes", "units", "is_fixed"]}
-        return cls( **parameters)
+        units = group.attrs.get('units',cls.UNITS)
+        return cls(units=units, **parameters)

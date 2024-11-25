@@ -1,22 +1,22 @@
 from collections import OrderedDict
 from pathlib import Path
-from typing import Union, Type, List, Dict, Optional, TYPE_CHECKING
+from typing import Union, Type, List, Dict, Optional, TYPE_CHECKING, Tuple, Any, Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from grids.grid_base import Grid
-from pisces.geometry.handlers import GeometryHandler
-from pisces.grids.manager_base import GridManager
+from pisces.geometry import CoordinateSystem
 from pisces.profiles import Profile
 from pisces.profiles.collections import HDF5ProfileRegistry
-
+from pisces.models.fields.base import ModelFieldContainer
+from pisces.io.hdf5 import HDF5_File_Handle
+import unyt
 if TYPE_CHECKING:
     pass
 
 # noinspection PyAttributeOutsideInit
 class Model:
     """
-    Base class for managing physical models with associated grids, profiles, and geometry.
+    Base class for managing physical models with associated _grids, profiles, and geometry.
 
     Class Attributes
     ----------------
@@ -24,15 +24,13 @@ class Model:
         A list of allowed coordinate system class names. If None, any coordinate system is permitted.
     ALLOWED_SYMMETRIES : Optional[List[str]]
         A list of allowed symmetry class names. If None, any symmetry is permitted.
-    ALLOWED_GRID_MANAGER_CLASSES : Optional[List[str]]
-        A list of allowed grid manager class names. If None, any grid manager class is permitted.
     """
     # Validation markers.
     # These can be adjusted to prevent users from attempting to
     # instantiate a model with invalid geometries / coordinate systems.
+    # Models may support multiple coordinate systems or symmetries if they can
+    # be solved generically by the solvers available.
     ALLOWED_COORDINATE_SYSTEMS: Optional[List[str]] = None
-    ALLOWED_SYMMETRIES: Optional[List[str]] = None
-    ALLOWED_GRID_MANAGER_CLASSES: Optional[List[str]] = None
 
     # Solver classes
     # These are simply the solvers attached to this model. We load
@@ -40,55 +38,40 @@ class Model:
     # instantiate on this model instance.
     SOLVERS = {}
 
-
     def __init__(self, path: Union[str, Path]):
         # Validate the path and ensure it exists
         self.path = Path(path)
         if not self.path.exists():
             raise ValueError(f"Failed to find path: {self.path}")
 
+        # Create the handle reference.
+        self._handle = HDF5_File_Handle(self.path,'r+')
+
         # Load essential components
         self._load_components()
+
+        # Load the FIELDS
+        _field_handle = self._handle.require_group("FIELDS")
+        self.FIELDS = ModelFieldContainer(self)
 
     def _load_components(self):
         """
         Load the essential components of the model.
         """
         try:
-            self._load_grid_manager()
             self._load_scratch_space()
             self._load_profiles()
-            self._load_geometry()
+            self._load_coordinate_system()
             self._load_solver()
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Model from path: {self.path}") from e
-
-    def _load_grid_manager(self):
-        """
-        Load the grid manager from disk.
-        """
-        try:
-            self._grid_manager = GridManager.load_subclass_from_disk(self.path)
-            self._check_allowed_grid_manager(self._grid_manager.__class__)
-        except Exception as e:
-            raise ValueError(f"Failed to load GridManager from path: {self.path}") from e
-
-    @classmethod
-    def _check_allowed_grid_manager(cls,manager_class: Type[GridManager]):
-        """
-        Check if the loaded GridManager class is allowed.
-        """
-        if cls.ALLOWED_GRID_MANAGER_CLASSES is not None:
-            if manager_class.__name__ not in cls.ALLOWED_GRID_MANAGER_CLASSES:
-                raise ValueError(f"GridManager class '{manager_class.__name__}' is not allowed for model type '{cls.__name__}'. "
-                                 f"Allowed classes: {cls.ALLOWED_GRID_MANAGER_CLASSES}")
 
     def _load_scratch_space(self):
         """
         Load or create the scratch space in the grid manager.
         """
         try:
-            self._scratch = self.grid_manager.handle.require_group("SCRATCH")
+            self._scratch = self._handle.require_group("SCRATCH")
         except Exception as e:
             raise RuntimeError("Failed to load or create scratch space.") from e
 
@@ -97,28 +80,28 @@ class Model:
         Load the profile registry from the grid manager.
         """
         try:
-            profiles_handle = self.grid_manager.handle.require_group("PROFILES")
+            profiles_handle = self._handle.require_group("PROFILES")
             self._profiles = HDF5ProfileRegistry(profiles_handle)
         except Exception as e:
             raise RuntimeError("Failed to load profile registry.") from e
 
-    def _load_geometry(self):
+    def _load_coordinate_system(self):
         """
         Load the geometry handler from the grid manager.
         """
         try:
-            geometry_handle = self.grid_manager.handle.get("GEOMETRY")
-            if geometry_handle is None:
-                raise KeyError("GEOMETRY group not found in the HDF5 structure.")
-            self._geometry_handler = GeometryHandler.from_hdf5(geometry_handle)
-            self._check_allowed_geometry(self.geometry_handler)
+            coord_handle = self._handle.get("CSYS")
+            if coord_handle is None:
+                raise KeyError("CSYS group not found in the HDF5 structure.")
+            self._coordinate_system = CoordinateSystem.from_file(coord_handle,fmt='hdf5')
+            self._check_allowed_geometry(self._coordinate_system)
         except KeyError as e:
-            raise ValueError("The grid manager lacks a 'GEOMETRY' group.") from e
+            raise ValueError("The grid manager lacks a 'CSYS' group.") from e
         except Exception as e:
             raise RuntimeError("Failed to load the geometry handler.") from e
 
     def _load_solver(self):
-        solver_name = self.grid_manager.handle.attrs.get('SOLVER',None)
+        solver_name = self._handle.attrs.get('SOLVER',None)
         if solver_name is not None:
             try:
                 _solver: Type[Solver] = self.__class__.SOLVERS[solver_name]
@@ -137,21 +120,16 @@ class Model:
         self._solver = _solver
 
     @classmethod
-    def _check_allowed_geometry(cls,geometry_handler: GeometryHandler):
+    def _check_allowed_geometry(cls,csys: CoordinateSystem):
         """
         Check if the loaded geometry handler uses allowed coordinate systems and symmetries.
         """
         if cls.ALLOWED_COORDINATE_SYSTEMS is not None:
-            coord_system_name = geometry_handler.coordinate_system.__class__.__name__
+            coord_system_name = csys.__class__.__name__
             if coord_system_name not in cls.ALLOWED_COORDINATE_SYSTEMS:
                 raise ValueError(f"Coordinate system '{coord_system_name}' is not allowed for model class '{cls.__name__}'. "
                                  f"Allowed systems: {cls.ALLOWED_COORDINATE_SYSTEMS}")
 
-        if cls.ALLOWED_SYMMETRIES is not None:
-            symmetry = {geometry_handler.coordinate_system.AXES[k] for k in geometry_handler.symmetry.symmetry_axes}
-            if symmetry not in cls.ALLOWED_SYMMETRIES:
-                raise ValueError(f"Symmetry '{symmetry}' is not allowed for model class '{cls.__name__}'. "
-                                 f"Allowed symmetries: {cls.ALLOWED_SYMMETRIES}")
 
     def __str__(self):
         return f"<{self.__class__.__name__}: path={self.path}>"
@@ -161,17 +139,18 @@ class Model:
         Ensure resources are released when the Model instance is deleted.
         """
         try:
-            self.grid_manager.close()
+            self._handle.close()
         except AttributeError:
             pass  # Ignore if grid_manager was not fully initialized
 
-    @property
-    def grid_manager(self):
-        return self._grid_manager
 
     @property
-    def geometry_handler(self):
-        return self._geometry_handler
+    def coordinate_system(self) -> CoordinateSystem:
+        return self._coordinate_system
+
+    @property
+    def handle(self) -> HDF5_File_Handle:
+        return self._handle
 
     @property
     def profiles(self):
@@ -200,394 +179,463 @@ class Model:
             raise ValueError(f"Failed to instantiate new solver (named {solver_name}) for {self}: {e}.") from e
 
         # Set the new solver
-        self.grid_manager.handle.attrs['SOLVER'] = solver_name
+        self._handle.attrs['SOLVER'] = solver_name
 
-    @classmethod
-    def build_skeleton(cls,
-                       path: Union[str, Path],
-                       bbox: NDArray[np.floating],
-                       grid_size: NDArray[np.int_],
-                       grid_manager_class: Type[GridManager],
-                       geometry_handler: GeometryHandler,
-                       profiles: Optional[Dict[str, Profile]] = None,
-                       solver: str = None,
-                       axes: Optional[List[str]] = None,
-                       overwrite: bool = False) -> "Model":
-        """
-        Build the skeleton structure for a new Model instance.
-
-        This method initializes the necessary components of the model, including the grid manager,
-        geometry handler, profiles, and scratch space, and saves them into an HDF5 file.
-
-        Parameters
-        ----------
-        path : Union[str, Path]
-            Path to the HDF5 file where the model will be saved.
-        bbox : NDArray[np.floating]
-            Bounding box for the grid structure. Must be a 2D array with shape `(2, NDIM)`.
-        grid_size : NDArray[np.int_]
-            Size of the grid along each dimension.
-        grid_manager_class : Type[GridManager]
-            The class used for managing grids, must be a subclass of `GridManager`.
-        geometry_handler : GeometryHandler
-            The geometry handler to initialize and save.
-        profiles : dict[str, Profile], optional
-            A dictionary of profile names to Profile objects to initialize in the profile registry.
-        axes : list[str], optional
-            Names of the axes for the grid. Defaults to `['X', 'Y', 'Z']` up to the grid dimensionality.
-        overwrite : bool, default False
-            If True, overwrites any existing file at the specified path.
-
-        Returns
-        -------
-        Model
-            An initialized `Model` instance pointing to the created HDF5 structure.
-
-        Raises
-        ------
-        ValueError
-            If the file already exists and `overwrite` is False.
-
-        Examples
-        --------
-
-        Generating a generic 1D skeleton for a model:
-
-        >>> from pisces.geometry.handlers import GeometryHandler
-        >>> from pisces.geometry.coordinate_systems import CartesianCoordinateSystem
-        >>> handler = GeometryHandler(CartesianCoordinateSystem())
-        >>> model = Model.build_skeleton('test.hdf5',[0,1], [100], GridManager, handler, overwrite=True)
-
-        """
-        path = Path(path)
-
-        # Handle file existence
-        if path.exists():
-            if overwrite:
-                path.unlink()
-            else:
-                raise ValueError(f"File at path '{path}' already exists. Use `overwrite=True` to replace it.")
-
-        # Default axes to match the dimensionality of the grid
-        if axes is None:
-            axes = ['X', 'Y', 'Z'][:len(grid_size)]
-
-        # Step 1: Initialize the grid manager
-        cls._check_allowed_grid_manager(grid_manager_class)
-        grid_manager = grid_manager_class(
-            path,
-            axes=axes,
-            bbox=bbox,
-            grid_size=grid_size,
-            overwrite=True
-        )
-
-        return cls.build_skeleton_on_grid_manager(grid_manager,
-                                                  geometry_handler,
-                                                  profiles = profiles,
-                                                  solver = solver,
-                                                  overwrite = overwrite)
-
-    @classmethod
-    def build_skeleton_on_grid_manager(cls,
-                                       grid_manager: GridManager,
-                                       geometry_handler: GeometryHandler,
-                                       profiles: Optional[Dict[str, Profile]] = None,
-                                       solver: str = None,
-                                       overwrite: bool = False):
-        cls._check_allowed_geometry(geometry_handler)
-        try:
-            # Step 2: Initialize the geometry handler
-            geometry_group = grid_manager.handle.require_group("GEOMETRY")
-            geometry_handler.to_hdf5(geometry_group)
-
-            # Step 3: Initialize the profile registry
-            profiles_group = grid_manager.handle.require_group("PROFILES")
-            profile_registry = HDF5ProfileRegistry(profiles_group)
-
-            if profiles:
-                for profile_name, profile in profiles.items():
-                    profile_registry.add_profile(profile_name, profile)
-
-            # Step 4: Initialize the scratch space
-            grid_manager.handle.require_group("SCRATCH")
-
-            # Step 5: Add the solver
-            if solver is not None:
-                grid_manager.handle.attrs['SOLVER'] = str(solver)
-
-        except Exception as e:
-            # Ensure resources are closed if any step fails
-            grid_manager.handle.flush()
-            grid_manager.close()
-            raise RuntimeError(f"Failed to build skeleton structure: {e}") from e
-
-        # Step 5: Close the grid manager to flush data and finalize the structure
-        grid_manager.handle.flush()
-        path = grid_manager.path
-        grid_manager.close()
-
-        # Return the initialized model
-        return cls(path)
+    # @classmethod
+    # def build_skeleton(cls,
+    #                    path: Union[str, Path],
+    #                    bbox: NDArray[np.floating],
+    #                    grid_size: NDArray[np.int_],
+    #                    grid_manager_class: Type[GridManager],
+    #                    geometry_handler: GeometryHandler,
+    #                    profiles: Optional[Dict[str, Profile]] = None,
+    #                    solver: str = None,
+    #                    axes: Optional[List[str]] = None,
+    #                    overwrite: bool = False) -> "Model":
+    #     """
+    #     Build the skeleton structure for a new Model instance.
+    #
+    #     This method initializes the necessary components of the model, including the grid manager,
+    #     geometry handler, profiles, and scratch space, and saves them into an HDF5 file.
+    #
+    #     Parameters
+    #     ----------
+    #     path : Union[str, Path]
+    #         Path to the HDF5 file where the model will be saved.
+    #     bbox : NDArray[np.floating]
+    #         Bounding box for the grid structure. Must be a 2D array with shape `(2, NDIM)`.
+    #     grid_size : NDArray[np.int_]
+    #         Size of the grid along each dimension.
+    #     grid_manager_class : Type[GridManager]
+    #         The class used for managing _grids, must be a subclass of `GridManager`.
+    #     geometry_handler : GeometryHandler
+    #         The geometry handler to initialize and save.
+    #     profiles : dict[str, Profile], optional
+    #         A dictionary of profile names to Profile objects to initialize in the profile registry.
+    #     axes : list[str], optional
+    #         Names of the axes for the grid. Defaults to `['X', 'Y', 'Z']` up to the grid dimensionality.
+    #     overwrite : bool, default False
+    #         If True, overwrites any existing file at the specified path.
+    #
+    #     Returns
+    #     -------
+    #     Model
+    #         An initialized `Model` instance pointing to the created HDF5 structure.
+    #
+    #     Raises
+    #     ------
+    #     ValueError
+    #         If the file already exists and `overwrite` is False.
+    #
+    #     Examples
+    #     --------
+    #
+    #     Generating a generic 1D skeleton for a model:
+    #
+    #     >>> from pisces.geometry.handlers import GeometryHandler
+    #     >>> from pisces.geometry.coordinate_systems import CartesianCoordinateSystem
+    #     >>> handler = GeometryHandler(CartesianCoordinateSystem())
+    #     >>> model = Model.build_skeleton('test.hdf5',[0,1], [100], GridManager, handler, overwrite=True)
+    #
+    #     """
+    #     path = Path(path)
+    #
+    #     # Handle file existence
+    #     if path.exists():
+    #         if overwrite:
+    #             path.unlink()
+    #         else:
+    #             raise ValueError(f"File at path '{path}' already exists. Use `overwrite=True` to replace it.")
+    #
+    #     # Default axes to match the dimensionality of the grid
+    #     if axes is None:
+    #         axes = ['X', 'Y', 'Z'][:len(grid_size)]
+    #
+    #     # Step 1: Initialize the grid manager
+    #     cls._check_allowed_grid_manager(grid_manager_class)
+    #     grid_manager = grid_manager_class(
+    #         path,
+    #         axes=axes,
+    #         bbox=bbox,
+    #         grid_size=grid_size,
+    #         overwrite=True
+    #     )
+    #
+    #     return cls.build_skeleton_on_grid_manager(grid_manager,
+    #                                               geometry_handler,
+    #                                               profiles = profiles,
+    #                                               solver = solver,
+    #                                               overwrite = overwrite)
+    #
+    # @classmethod
+    # def build_skeleton_on_grid_manager(cls,
+    #                                    grid_manager: GridManager,
+    #                                    geometry_handler: GeometryHandler,
+    #                                    profiles: Optional[Dict[str, Profile]] = None,
+    #                                    solver: str = None,
+    #                                    overwrite: bool = False):
+    #     cls._check_allowed_geometry(geometry_handler)
+    #     try:
+    #         # Step 2: Initialize the geometry handler
+    #         geometry_group = grid_manager.handle.require_group("GEOMETRY")
+    #         geometry_handler.to_hdf5(geometry_group)
+    #
+    #         # Step 3: Initialize the profile registry
+    #         profiles_group = grid_manager.handle.require_group("PROFILES")
+    #         profile_registry = HDF5ProfileRegistry(profiles_group)
+    #
+    #         if profiles:
+    #             for profile_name, profile in profiles.items():
+    #                 profile_registry.add_profile(profile_name, profile)
+    #
+    #         # Step 4: Initialize the scratch space
+    #         grid_manager.handle.require_group("SCRATCH")
+    #
+    #         # Step 5: Add the solver
+    #         if solver is not None:
+    #             grid_manager.handle.attrs['SOLVER'] = str(solver)
+    #
+    #     except Exception as e:
+    #         # Ensure resources are closed if any step fails
+    #         grid_manager.handle.flush()
+    #         grid_manager.close()
+    #         raise RuntimeError(f"Failed to build skeleton structure: {e}") from e
+    #
+    #     # Step 5: Close the grid manager to flush data and finalize the structure
+    #     grid_manager.handle.flush()
+    #     path = grid_manager.path
+    #     grid_manager.close()
+    #
+    #     # Return the initialized model
+    #     return cls(path)
 
 class SolverMeta(type):
     def __new__(mcls, name, bases, attrs):
         # Create the superclass object as normal.
         cls = super().__new__(mcls, name, bases, attrs)
 
-        # Generate pipeline registry
-        cls.pipeline_registry = {
-            attr_name: {
-                "kwargs": getattr(attr_value, "_kwargs", {}),
-            }
-            for attr_name, attr_value in attrs.items()
-            if getattr(attr_value, "_is_pipeline", False)
+        # Register all of the nodes
+        cls.NODES = {
+            attr_value.name: attr_name for attr_name,attr_value in attrs.items()
+            if getattr(attr_value,'_is_node',False)
         }
 
-        # Generate state checkers registry
-        cls.state_checkers = {
-            attr_value.name: {"name": attr_name, "type": attr_value.type}
-            for attr_name, attr_value in attrs.items()
-            if getattr(attr_value, "_is_state_checker", False)
+        # Register all of the CONDITIONS
+        # All of the conditions are collected as "name": name=attr_name, type=attr_value.typ.
+        cls.CONDITIONS = {
+            attr_value.name: dict(name=attr_name,type=attr_value.type) for attr_name,attr_value in attrs.items()
+            if getattr(attr_value,'_is_condition',False)
         }
 
         return cls
 
-
-class Solver(metaclass=SolverMeta):
+class _SolverNode:
     """
-    Base class for solvers that operate on models and grids.
+    Represents a node in the solver's Directed Acyclic Graph (DAG).
 
-    Solvers consist of "pipelines" that process grids based on the model's state
-    and the grid's attributes. Pipelines are automatically registered and validated
-    against state checkers to ensure compatibility.
+    Each node is linked to a specific method (or function reference) within the solver
+    and is responsible for executing a logical step in the computational pipeline.
 
     Attributes
     ----------
-    ALLOWED_MODEL_CLASSES : Optional[list[str]]
-        List of allowed model class names for this solver. If None, all models are allowed.
+    name : str
+        The name of the node, used for identification and referencing in the DAG.
+    solver : Solver
+        The solver instance to which this node belongs.
+    ref : Optional[str]
+        The name of the method in the solver to execute when this node is called.
+        If None, the node acts as a pass-through and always returns True.
 
-        For developers, this should be changed in subclasses of :py:class:`Solver` to ensure
-        that users cannot try to instantiate an invalid solver for a given model type.
-    _model_valid_pipelines : OrderedDict
-        Ordered dictionary of valid pipelines for the current model instance.
-
-        This is a dictionary of ``key`` and ``kwarg`` matches for pipelines which have passed
-        the model's checks but have not necessarily passed any grid checks.
-
-    Parameters
-    ----------
-    model : Model
-        The model instance to which the solver is bound.
-
-    Notes
-    -----
-    - Pipelines must be decorated with `@pipeline`.
-    - State checkers must be decorated with `@state_checker`.
-    - The class-level attribute `ALLOWED_MODEL_CLASSES` can be used to restrict
-      solver compatibility to specific model types.
-
-    See Also
-    --------
-    pipeline : Decorator for defining pipeline functions.
-    state_checker : Decorator for defining state checker functions.
+    Methods
+    -------
+    __call__(grid)
+        Executes the node's logic by invoking the associated method in the solver.
+        If no method is associated (ref is None), it returns True by default.
     """
+
+    def __init__(self, name: str, solver: 'Solver', ref: Optional[str] = None):
+        """
+        Initialize a solver node.
+
+        Parameters
+        ----------
+        name : str
+            The unique name of the node.
+        solver : Solver
+            The solver instance to which this node belongs.
+        ref : Optional[str], optional
+            The name of the method in the solver to execute when this node is called.
+            If None, the node acts as a pass-through node.
+
+        Raises
+        ------
+        ValueError
+            If the provided `ref` does not correspond to a valid method in the solver.
+        """
+        self.name = name
+        self.solver = solver
+        self.ref = ref
+
+        # Validate that the referenced method exists in the solver
+        if self.ref is not None and not hasattr(self.solver, self.ref):
+            raise ValueError(f"Node '{self.name}' references an undefined solver method '{self.ref}'.")
+
+    def __call__(self, grid):
+        """
+        Execute the node's logic by invoking the associated method in the solver.
+
+        Parameters
+        ----------
+        grid : Grid
+            The computational grid on which the node's logic operates.
+
+        Returns
+        -------
+        Any
+            The result of the associated solver method's execution.
+            If no method is associated (ref is None), returns True.
+
+        Raises
+        ------
+        RuntimeError
+            If the associated solver method raises an exception during execution.
+        """
+        if self.ref is None:
+            # If no method reference is provided, return True as a pass-through.
+            return True
+
+        try:
+            # Look up the solver method and execute it with the grid.
+            method = getattr(self.solver, self.ref)
+            return method(grid)
+        except Exception as e:
+            raise RuntimeError(f"Error executing node '{self.name}' with method '{self.ref}': {e}") from e
+
+    def __repr__(self):
+        """
+        Return a string representation of the _SolverNode.
+
+        Returns
+        -------
+        str
+            A string representation containing the node name and associated method reference.
+        """
+        return f"<_SolverNode(name={self.name}, ref={self.ref})>"
+
+class _SolverEdge:
+    """
+    Represents an edge in the solver's Directed Acyclic Graph (DAG).
+
+    An edge defines a dependency between two nodes (`start` and `end`) and optionally
+    includes a condition for execution. The condition is evaluated using a method
+    (or function reference) in the solver.
+
+    Attributes
+    ----------
+    start : str
+        The name of the starting node.
+    end : str
+        The name of the ending node.
+    solver : Solver
+        The solver instance to which this edge belongs.
+    ref : Optional[str]
+        The name of the method in the solver to evaluate the edge condition.
+        If None, the edge condition always evaluates to True.
+
+    Methods
+    -------
+    __call__(grid, result)
+        Evaluates the edge condition using the associated method in the solver.
+        If no method is associated (ref is None), it always returns True.
+    """
+
+    def __init__(self, start: str, end: str, solver: 'Solver', ref: Optional[str] = None,typ: str = 'model'):
+        """
+        Initialize a solver edge.
+
+        Parameters
+        ----------
+        start : str
+            The name of the starting node.
+        end : str
+            The name of the ending node.
+        solver : Solver
+            The solver instance to which this edge belongs.
+        ref : Optional[str], optional
+            The name of the method in the solver to evaluate the edge condition.
+            If None, the edge condition always evaluates to True.
+        typ: Literal['model','grid']
+            The type of condition. If the condition is a model condition then it
+            does not rely on the grid or the result of the previous node, just on
+            the model at init. This allows the DAG to be reduced at __init__ by removing
+            edges which fail their model conditions.
+        Raises
+        ------
+        ValueError
+            If the provided `ref` does not correspond to a valid method in the solver.
+        """
+        self.start = start
+        self.end = end
+        self.solver = solver
+        self.ref = ref
+        self.type = typ
+
+        # Validate that the referenced method exists in the solver
+        if self.ref is not None and not hasattr(self.solver, self.ref):
+            raise ValueError(f"Edge from '{self.start}' to '{self.end}' references an undefined condition method '{self.ref}'.")
+
+    def __call__(self, grid=None, result=None):
+        """
+        Evaluate the edge condition.
+
+        Parameters
+        ----------
+        grid : Grid
+            The computational grid on which the edge condition operates.
+        result : Any
+            The result produced by the starting node (`start`), used as input to the condition.
+
+        Returns
+        -------
+        bool
+            True if the edge condition is satisfied, False otherwise.
+
+        Raises
+        ------
+        RuntimeError
+            If the associated solver method raises an exception during execution.
+        """
+        if self.ref is None:
+            # If no method reference is provided, the edge is always valid.
+            return True
+
+        try:
+            # Look up the solver method and evaluate the condition.
+            method = getattr(self.solver, self.ref)
+            if self.type == 'model':
+                return method()
+            else:
+                return method(grid, result)
+        except Exception as e:
+            raise RuntimeError(f"Error evaluating edge condition for '{self.start} -> {self.end}' with method '{self.ref}': {e}") from e
+
+    def __repr__(self):
+        """
+        Return a string representation of the _SolverEdge.
+
+        Returns
+        -------
+        str
+            A string representation containing the edge details and associated method reference.
+        """
+        return f"<_SolverEdge(start={self.start}, end={self.end}, ref={self.ref})>"
+
+
+class Solver(metaclass=SolverMeta):
+    EDGES: Dict[Tuple[str,str],str] = {}
     ALLOWED_MODEL_CLASSES = None
 
     def __init__(self, model: 'Model'):
         self.model = model
 
         # Validate model compatibility
+        self._validate_model()
+
+        # Construct nodes and edges
+        self._nodes: Dict[str, _SolverNode] = {}
+        self._edges: Dict[Tuple[str, str], _SolverEdge] = {}
+        self._construct_nodes()
+        self._construct_edges()
+        self._prune_disconnected_graph()
+
+    def _validate_model(self):
+        """
+        Validate that the model is compatible with this solver.
+        """
         if (self.__class__.ALLOWED_MODEL_CLASSES is not None and
                 self.model.__class__.__name__ not in self.__class__.ALLOWED_MODEL_CLASSES):
             raise ValueError(f"Cannot initialize solver '{self.__class__.__name__}' for model type "
                              f"'{self.model.__class__.__name__}'. This solver does not support the model class.")
 
-        # Determine valid pipelines
-        self._model_valid_pipelines = self._construct_valid_pipelines()
-
-    def _construct_valid_pipelines(self) -> OrderedDict:
+    def _construct_nodes(self):
         """
-        Construct an ordered dictionary of valid pipelines based on state checkers.
-
-        Returns
-        -------
-        OrderedDict
-            An ordered dictionary where keys are valid pipeline names, and values
-            are the corresponding kwargs that validate the pipeline.
+        Construct _SolverNode instances from the class-level NODES attribute.
         """
-        valid_pipelines = OrderedDict()
+        # Add all nodes from the metaclass
+        for node_name, ref in self.__class__.NODES.items():
+            self._nodes[node_name] = _SolverNode(name=node_name, solver=self, ref=ref)
 
-        for pipeline_name, pipeline_data in self.__class__.pipeline_registry.items():
-            if self.check_pipeline(pipeline_name, grid=None):
-                valid_pipelines[pipeline_name] = pipeline_data['kwargs']
+        # Add implicit 'start' and 'end' nodes
+        self._nodes["start"] = _SolverNode(name="start", solver=self, ref=None)
+        self._nodes["end"] = _SolverNode(name="end", solver=self, ref=None)
 
-        return valid_pipelines
-
-    def get_state(self, grid: Optional['Grid']=None) -> Dict[str, Optional[bool]]:
+    def _construct_edges(self):
         """
-        Retrieve the current state of the model and optionally the grid.
+        Construct _SolverEdge instances from the class-level EDGES attribute.
 
-        Parameters
-        ----------
-        grid : Optional[Grid]
-            The grid to check against state checkers. If None, only model-level
-            state checkers are evaluated.
-
-        Returns
-        -------
-        Dict[str, Optional[bool]]
-            A dictionary of state checker results, with checker names as keys and
-            boolean results (or None for uncheckable states) as values.
+        This method uses the metaclass-registered CONDITIONS to evaluate edge conditions.
         """
-        state = {}
-        for name, checker in self.__class__.state_checkers.items():
-            if checker['type'] == 'grid':
-                state[name] = getattr(self, checker['name'])(grid) if grid else None
-            else:
-                state[name] = getattr(self, checker['name'])()
+        valid_edges = {}
 
-        return state
+        for (start,end), ref in self.__class__.EDGES.items():
+            if start not in self._nodes or end not in self._nodes:
+                raise ValueError(f"Invalid edge: nodes '{start}' or '{end}' do not exist.")
 
-    def check_state(self, grid: Optional['Grid']=None, **kwargs) -> bool:
+            # Create the edge
+            edge = _SolverEdge(start,
+                               end,
+                               self,
+                               ref=self.__class__.CONDITIONS[ref]['name'],
+                               typ=self.__class__.CONDITIONS[ref]['type'])
+
+            # Evaluate model conditions during graph construction
+            if edge.type == "model" and not edge():  # Model conditions don't use grid or result
+                continue
+
+            valid_edges[(start, end)] = edge
+
+        self._edges = valid_edges
+
+    def _prune_disconnected_graph(self):
         """
-        Validate the current state against expected state values.
-
-        Parameters
-        ----------
-        grid : Optional[Grid]
-            The grid to check against state checkers.
-        kwargs : dict
-            Expected state values to validate.
-
-        Returns
-        -------
-        bool
-            True if all state values match the expected values, False otherwise.
+        Remove nodes and edges that are not connected to the 'start' node.
         """
-        state = self.get_state(grid=grid)
-        return all(state.get(key) == value for key, value in kwargs.items())
+        reachable_nodes = self._find_all_reachable_nodes('start')
 
-    def check_pipeline(self, pipeline: str, grid: Optional['Grid']=None) -> bool:
-        """
-        Validate whether a pipeline is compatible with the current state.
+        self._nodes = {name: node for name, node in self._nodes.items() if name in reachable_nodes}
+        self._edges = {key: edge for key, edge in self._edges.items() if key[0] in reachable_nodes and key[1] in reachable_nodes}
 
-        Parameters
-        ----------
-        pipeline : str
-            Name of the pipeline to validate.
-        grid : Optional[Grid]
-            The grid to check against state checkers.
+    def _find_all_reachable_nodes(self,start: str):
+        reachable_nodes = set()
 
-        Returns
-        -------
-        bool
-            True if the pipeline is valid, False otherwise.
-        """
-        pipeline_kwargs = self.pipeline_registry[pipeline]['kwargs']
-        return self.check_state(grid=grid, **pipeline_kwargs)
+        for (_start,_end), _ in self._edges.items():
+            if start == _start:
+                reachable_nodes.add(_start)
+                if _end not in reachable_nodes:
+                    reachable_nodes = reachable_nodes.union(self._find_all_reachable_nodes(_end))
 
-    def has_pipeline(self,grid: 'Grid' = None):
-        try:
-            pipeline = self.get_pipeline(grid=grid)
-        except Exception as e:
-            raise ValueError(f"Failed to check pipeline: {e}.")
+        return reachable_nodes
 
-        return pipeline is not None
-
-    def get_pipeline(self, grid: Optional['Grid']=None, __preferred__: Optional[str] = None) -> str:
-        """
-        Retrieve the name of a valid pipeline for the current state.
-
-        Parameters
-        ----------
-        grid : Optional[Grid]
-            The grid to check against state checkers.
-        __preferred__ : Optional[str]
-            Preferred pipeline name to prioritize.
-
-        Returns
-        -------
-        str
-            The name of a valid pipeline, or None if no valid pipelines exist.
-        """
-        valid_pipelines = [name for name in self.pipeline_registry if self.check_pipeline(name, grid=grid)]
-
-        if not valid_pipelines:
-            raise ValueError(
-                f"No valid pipelines found in solver {self.__class__.__name__} for model {self.model} and grid {grid}. "
-                f"Ensure that the model and grid satisfy the requirements for at least one pipeline.")
-
-        return __preferred__ if __preferred__ in valid_pipelines else valid_pipelines[0]
-
-    def list_pipelines(self) -> List[str]:
-        """
-        List the names of all registered pipelines.
-
-        Returns
-        -------
-        List[str]
-            A list of registered pipeline names.
-        """
-        return list(self.__class__.pipeline_registry.keys())
-
-    def pipeline_status(self, grid: Optional['Grid'] = None) -> Dict[str,Dict[str,...]]:
-        """
-        Generate a table of pipelines, their conditions, and validation status.
-
-        Parameters
-        ----------
-        grid : Optional[Grid]
-            The grid to check against state checkers.
-
-        Returns
-        -------
-        pd.DataFrame
-            A DataFrame containing the pipeline names, their conditions, and whether they are valid.
-        """
-        state = self.get_state(grid=grid)
-
-        rows = {}
-        for pipeline_name, pipeline_data in self.__class__.pipeline_registry.items():
-            conditions = pipeline_data['kwargs']
-            valid = all(state.get(key) == value for key, value in conditions.items())
-            rows[pipeline_name] = {
-                "Conditions": conditions,
-                "Valid": valid
-            }
-
-        return rows
-
-    def solve(self, grid: 'Grid', __preferred__: Optional[str] = None):
-        """
-        Execute a valid pipeline on the given grid.
-
-        Parameters
-        ----------
-        grid : Grid
-            The grid to solve.
-        __preferred__ : Optional[str]
-            Preferred pipeline name to prioritize.
-
-        Returns
-        -------
-        Any
-            The result of the pipeline execution.
-
-        Raises
-        ------
-        ValueError
-            If no valid pipeline is found.
-        """
-        pipeline = self.get_pipeline(grid, __preferred__=__preferred__)
-
-        if pipeline is None:
-            raise ValueError("Failed to find a valid pipeline.")
-
-        return getattr(self, pipeline)(grid)
-
-    def __str__(self):
-        return f"<{self.__class__.__name__}(model={self.model})>"
 
     def __repr__(self):
-        return self.__str__()
+        """
+        String representation of the solver's current DAG structure.
+        """
+        nodes = ', '.join(self._nodes.keys())
+        edges = ', '.join(f"{start} -> {end}" for start, end in self._edges)
+        return f"<Solver(nodes=[{nodes}], edges=[{edges}])>"
+
+if __name__ == '__main__':
+    from pisces.geometry import SphericalCoordinateSystem, GeometryHandler, Symmetry
+    coord_system = SphericalCoordinateSystem()
+    import h5py
+    with h5py.File('test.hdf5','w') as fio:
+        fio.require_group('CSYS')
+        coord_system.to_file(fio['CSYS'],'hdf5')
+
+    from pisces.profiles import NFWDensityProfile
+
+    q = NFWDensityProfile(rho_0=1e5,r_s=200)
+    tq = NFWDensityProfile(rho_0=1e6, r_s=200)
+
+    rr = np.logspace()

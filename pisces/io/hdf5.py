@@ -1,6 +1,7 @@
 import h5py
 from abc import ABC, abstractmethod
-from typing import Union, OrderedDict, TypeVar, Generic, Iterable
+from collections import OrderedDict
+from typing import Union, TypeVar, Generic, Iterable
 import os
 
 class HDF5_File_Handle(h5py.File):
@@ -234,8 +235,8 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
             cache = DatasetCache(handle=file)
             print(list(cache.keys()))  # Lists all dataset names in the HDF5 file
         """
-        for key in self._identify_elements_from_handle():
-            super().__setitem__(self._key_to_index(key), None)
+        for index in self._identify_elements_from_handle():
+            OrderedDict.__setitem__(self,index, None)
 
     def _key_to_index(self, key: str) -> IndexType:
         """

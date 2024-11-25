@@ -1481,6 +1481,76 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         pass
 
+    def from_grid(self, coordinates: NDArray, axes: Optional[List[str]] = None) -> NDArray:
+        """
+        Convert Cartesian grid coordinates to the native coordinate system.
+
+        Parameters
+        ----------
+        coordinates : NDArray
+            Array of Cartesian coordinates with shape ``(..., len(axes))``.
+        axes : Optional[List[str]], optional
+            List of axes corresponding to the coordinates provided. If None, assumes
+            the first `len(axes)` axes of the Cartesian coordinate system (e.g., ['x', 'y', 'z'][:len(coordinates.shape[-1])]).
+
+        Returns
+        -------
+        NDArray
+            Array of coordinates in this system's native coordinate system, with shape ``(..., NDIM)``.
+        """
+        fixed_axes = ['x', 'y', 'z']
+        # Determine the axes if not provided
+        if axes is None:
+            axes = ['x', 'y', 'z'][:coordinates.shape[-1]]
+
+        # Validate input axes
+        if any(axis not in fixed_axes for axis in axes):
+            raise ValueError(f"Axes {axes} contain invalid axis names. Must be a subset of {fixed_axes}.")
+
+        # Create a full Cartesian coordinate array with missing axes filled with zeros
+        full_coordinates = np.zeros((*coordinates.shape[:-1], len(fixed_axes)))
+        for i, axis in enumerate(axes):
+            full_coordinates[..., fixed_axes.index(axis)] = coordinates[..., i]
+
+        # Convert to the native coordinate system
+        return self.from_cartesian(full_coordinates)
+
+    def to_grid(self, coordinates: NDArray, axes: Optional[List[str]] = None) -> NDArray:
+        """
+        Convert native coordinates in this coordinate system to a Cartesian grid with specified axes.
+
+        Parameters
+        ----------
+        coordinates : NDArray
+            Array of coordinates in this system's native format, with shape ``(..., NDIM)``.
+        axes : Optional[List[str]], optional
+            List of axes for the output Cartesian grid. If None, assumes the first `NDIM` axes of the Cartesian coordinate system.
+
+        Returns
+        -------
+        NDArray
+            Array of Cartesian coordinates in the specified axes, with shape ``(..., len(axes))``.
+        """
+        # Determine the axes if not provided
+        if axes is None:
+            axes = self.AXES[:self.NDIM]
+
+        # Validate input axes
+        fixed_axes = ['x', 'y', 'z']
+        if any(axis not in fixed_axes for axis in axes):
+            raise ValueError(f"Axes {axes} contain invalid axis names. Must be a subset of {fixed_axes}.")
+
+        # Convert native coordinates to full Cartesian coordinates
+        cartesian_coordinates = self.to_cartesian(coordinates)
+
+        # Extract the requested axes from the Cartesian coordinates
+        grid_coordinates = np.stack(
+            [cartesian_coordinates[..., fixed_axes.index(axis)] for axis in axes],
+            axis=-1
+        )
+
+        return grid_coordinates
+
     def to_file(self, file_obj, fmt: str = 'json'):
         """
         Save the coordinate system configuration to a file or group.

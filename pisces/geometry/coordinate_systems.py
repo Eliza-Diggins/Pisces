@@ -268,6 +268,11 @@ class SphericalCoordinateSystem(CoordinateSystem):
         r, theta = coordinates[...,0],coordinates[...,1]
         return r*np.sin(theta)
 
+    # noinspection PyMethodMayBeStatic
+    def shell_volume(self,radii: NDArray[np.floating]):
+        return 4*np.pi*radii**2
+
+
 class PolarCoordinateSystem(CoordinateSystem):
     r"""
         2 Dimensional Polar coordinate system.
