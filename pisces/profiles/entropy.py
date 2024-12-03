@@ -1,6 +1,6 @@
 import numpy as np
 
-from profiles.base import FixedProfile
+from pisces.profiles.base import FixedProfile
 
 
 class RadialEntropyProfile(FixedProfile):

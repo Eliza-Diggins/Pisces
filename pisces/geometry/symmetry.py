@@ -1001,7 +1001,7 @@ class Symmetry:
             self.divergence_component(axis, basis=basis) for axis in active_axes
         )
     def laplacian(self,active_axes: Optional[List[int]] = None) -> 'Symmetry':
-        """
+        r"""
         Compute the invariance state of the Laplacian by calculating the divergence of the gradient
         in the contravariant basis.
 

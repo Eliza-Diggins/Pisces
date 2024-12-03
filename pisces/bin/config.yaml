@@ -26,13 +26,47 @@ logging:
     format: '%(name)-3s : [%(levelname)-9s] %(asctime)s %(message)s' # Logger's string format for output
     level: DEBUG    # Only logging passed to this level or higher are displayed.
     stream: stderr   # Can be STDERR or STDOUT.
-
+  code:
+    enabled: true
+    format: '%(name)-3s : [%(levelname)-9s] %(message)s' # Logger's string format for output
+    level: DEBUG     # Only logging passed to this level or higher are displayed.
+    stream: stderr   # Can be STDERR or STDOUT.
 
 #======================================================================================================================#
 physics:
   # -- The physics settings are basic user-configurable physical parameters -- #
   hydrogen_abundance: 0.76 # The primordial hydrogen abundance (0.76 generally accepted value)
-
+#======================================================================================================================#
+fields:
+  gclstr:
+    stellar_density:
+      units: 'Msun/kpc**3'
+      mass_field: 'stellar_mass'
+    density:
+      units: 'Msun/kpc**3'
+      mass_field: 'gas_mass'
+    total_density:
+      units: 'Msun/kpc**3'
+      mass_field: 'total_mass'
+    dark_matter_density:
+      units: 'Msun/kpc**3'
+      mass_field: 'dark_matter_mass'
+    stellar_mass:
+      units: 'Msun'
+    gas_mass:
+      units: 'Msun'
+    total_mass:
+      units: 'Msun'
+    dark_matter_mass:
+      units: 'Msun'
+    pressure:
+      units: 'atm'
+    gravitational_field:
+      units: 'm/s**2'
+    potential:
+      units: 'm**2/s**2'
+    temperature:
+      units: 'keV'
 #======================================================================================================================#
 plotting:
   # These are options for any of the default plots generated in cluster generator.

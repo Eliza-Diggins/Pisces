@@ -46,11 +46,11 @@ class LogDescriptor:
             _handler = logging.StreamHandler(
                 getattr(sys, pisces_params['logging.mylog.stream'])
             )
-            _handler.setFormatter(logging.Formatter(pisces_params.logging.code.format))
+            _handler.setFormatter(logging.Formatter(pisces_params['logging.code.format']))
             logger.addHandler(_handler)
-            logger.setLevel(pisces_params.logging.code.level)
+            logger.setLevel(pisces_params['logging.code.level'])
             logger.propagate = False
-            logger.disabled = not pisces_params.logging.code.enabled
+            logger.disabled = not pisces_params['logging.code.enabled']
 
         return logger
 

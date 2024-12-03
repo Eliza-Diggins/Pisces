@@ -511,7 +511,69 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
         for index in new_elements:
             super().__setitem__(index, None)
 
+    def values(self, dynamic_loading: bool = True):
+        """
+        Override the values() method to lazily load elements during iteration.
 
+        Parameters
+        ----------
+        dynamic_loading : bool, optional
+            If True, dynamically load and unload elements. If False, use current load state only.
+
+        Yields
+        ------
+        ItemType
+            The value corresponding to each key, loading the element if it's not already in memory.
+        """
+        state_cache = {key: (value is not None) for key, value in super().items()}
+
+        for key, was_loaded in state_cache.items():
+            yield self[key]  # This triggers loading if needed
+
+            # Unload if it was originally unloaded and dynamic loading is enabled
+            if dynamic_loading and not was_loaded:
+                self.unload_element(key)
+
+    def items(self, dynamic_loading: bool = True):
+        """
+        Override the items() method to lazily load elements during iteration.
+
+        Parameters
+        ----------
+        dynamic_loading : bool, optional
+            If True, dynamically load and unload elements. If False, use current load state only.
+
+        Yields
+        ------
+        Tuple[IndexType, ItemType]
+            The key-value pairs where the value is loaded lazily if necessary.
+        """
+        state_cache = {key: (value is not None) for key, value in super().items()}
+
+        for key, was_loaded in state_cache.items():
+            yield key, self[key]  # This triggers loading if needed
+
+            # Unload if it was originally unloaded and dynamic loading is enabled
+            if dynamic_loading and not was_loaded:
+                self.unload_element(key)
+
+    def keys(self, dynamic_loading: bool = True):
+        """
+        Override the keys() method. No need for lazy loading here since it's just returning the keys.
+
+        Returns
+        -------
+        Iterator[IndexType]
+            An iterator over the keys of the container.
+        """
+        state_cache = {key: (value is not None) for key, value in super().items()}
+
+        for key, was_loaded in state_cache.items():
+            yield key
+
+            # Unload if it was originally unloaded and dynamic loading is enabled
+            if dynamic_loading and not was_loaded:
+                self.unload_element(key)
 
 
 

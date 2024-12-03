@@ -560,7 +560,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return result_array
 
     def jacobian(self, coordinates):
-        """
+        r"""
         Compute the Jacobian determinant for the given coordinate system at specified points.
 
         The Jacobian is calculated as the product of the Lame coefficients across all axes at each
@@ -643,7 +643,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
             \tilde{J}_k = \prod_{i \in \{j|\lambda_k \notin {\rm Inv}_{q^j}\}} \lambda_i.
 
-        Then,
+        Then,_
 
         .. math::
 
@@ -666,7 +666,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return np.prod(self.compute_lame_coefficients(coordinates, active_axes=active_axes), axis=0)
 
     def surface_element(self, coordinates: NDArray, axis: int) -> NDArray:
-        """
+        r"""
         Compute the surface element along a specified axis for the given coordinate system at specified points.
 
         The surface element represents the area scaling factor for a surface normal to the specified axis, computed
@@ -1481,75 +1481,46 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         pass
 
-    def from_grid(self, coordinates: NDArray, axes: Optional[List[str]] = None) -> NDArray:
+    def index_reorder_axes(self, axes: List[str]) -> NDArray[np.int_]:
         """
-        Convert Cartesian grid coordinates to the native coordinate system.
+        Compute the index array to reorder a list of axes to match the expected order of the coordinate system.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of Cartesian coordinates with shape ``(..., len(axes))``.
-        axes : Optional[List[str]], optional
-            List of axes corresponding to the coordinates provided. If None, assumes
-            the first `len(axes)` axes of the Cartesian coordinate system (e.g., ['x', 'y', 'z'][:len(coordinates.shape[-1])]).
+        axes : List[str]
+            A subset of axes to reorder. Each axis must be a valid axis in the coordinate system.
 
         Returns
         -------
-        NDArray
-            Array of coordinates in this system's native coordinate system, with shape ``(..., NDIM)``.
-        """
-        fixed_axes = ['x', 'y', 'z']
-        # Determine the axes if not provided
-        if axes is None:
-            axes = ['x', 'y', 'z'][:coordinates.shape[-1]]
+        NDArray[np.int_]
+            An array of indices such that `axes[index_array]` will reorder `axes` to match the order in `self.AXES`.
 
+        Raises
+        ------
+        ValueError
+            If any axis in `axes` is not valid for this coordinate system.
+
+        Notes
+        -----
+        This method ensures that the axes are reordered according to the order defined in the `AXES` attribute
+        of the coordinate system. Only the provided axes are considered, and their relative order is determined
+        by their order in `self.AXES`.
+
+        Examples
+        --------
+        >>> from pisces.geometry.coordinate_systems import CartesianCoordinateSystem
+        >>> cs = CartesianCoordinateSystem()
+        >>> cs.index_reorder_axes(['y', 'x'])
+        array([1, 0])
+        """
         # Validate input axes
-        if any(axis not in fixed_axes for axis in axes):
-            raise ValueError(f"Axes {axes} contain invalid axis names. Must be a subset of {fixed_axes}.")
+        invalid_axes = [ax for ax in axes if ax not in self.AXES]
+        if invalid_axes:
+            raise ValueError(f"Invalid axes {invalid_axes}. Allowed axes: {self.AXES}.")
 
-        # Create a full Cartesian coordinate array with missing axes filled with zeros
-        full_coordinates = np.zeros((*coordinates.shape[:-1], len(fixed_axes)))
-        for i, axis in enumerate(axes):
-            full_coordinates[..., fixed_axes.index(axis)] = coordinates[..., i]
-
-        # Convert to the native coordinate system
-        return self.from_cartesian(full_coordinates)
-
-    def to_grid(self, coordinates: NDArray, axes: Optional[List[str]] = None) -> NDArray:
-        """
-        Convert native coordinates in this coordinate system to a Cartesian grid with specified axes.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinates in this system's native format, with shape ``(..., NDIM)``.
-        axes : Optional[List[str]], optional
-            List of axes for the output Cartesian grid. If None, assumes the first `NDIM` axes of the Cartesian coordinate system.
-
-        Returns
-        -------
-        NDArray
-            Array of Cartesian coordinates in the specified axes, with shape ``(..., len(axes))``.
-        """
-        # Determine the axes if not provided
-        if axes is None:
-            axes = self.AXES[:self.NDIM]
-
-        # Validate input axes
-        fixed_axes = ['x', 'y', 'z']
-        if any(axis not in fixed_axes for axis in axes):
-            raise ValueError(f"Axes {axes} contain invalid axis names. Must be a subset of {fixed_axes}.")
-
-        # Convert native coordinates to full Cartesian coordinates
-        cartesian_coordinates = self.to_cartesian(coordinates)
-
-        # Extract the requested axes from the Cartesian coordinates
-        grid_coordinates = np.stack(
-            [cartesian_coordinates[..., fixed_axes.index(axis)] for axis in axes],
-            axis=-1
-        )
-
-        return grid_coordinates
+        # Determine the indices for reordering
+        ordered_indices = np.array([self.AXES.index(ax) for ax in axes], dtype=int)
+        return ordered_indices
 
     def to_file(self, file_obj, fmt: str = 'json'):
         """

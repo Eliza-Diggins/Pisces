@@ -215,7 +215,7 @@ def integrate_in_shells(
         radii: NDArray[np.floating],
         coordinate_system: Optional['CoordinateSystem'] = None
 ) -> NDArray[np.floating]:
-    """
+    r"""
     Perform volume integration of a function within spherical shells up to a given radius.
 
     Parameters
@@ -281,7 +281,7 @@ def integrate(
         x_0: Optional[float] = None,
         minima: bool = False
 ) -> NDArray[np.floating]:
-    """
+    r"""
     Perform definite integration of a function from each value in `x` to `x_0`.
 
     Parameters
@@ -326,7 +326,7 @@ def integrate_toinf(
         function: Callable[[float], float],
         x: NDArray[np.floating]
 ) -> NDArray[np.floating]:
-    """
+    r"""
     Perform definite integration of a function from each value in `x` to infinity.
 
     Parameters

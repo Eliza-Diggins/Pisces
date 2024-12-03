@@ -1,8 +1,9 @@
 from pisces.profiles.base import FixedProfile
+import numpy as np
 
 class RadialTemperatureProfile(FixedProfile):
-    axes = ["r"]
-    units = "keV"
+    AXES = ["r"]
+    UNITS = "keV"
 
 
 class VikhlininTemperatureProfile(RadialTemperatureProfile):
@@ -55,7 +56,7 @@ class IsothermalTemperatureProfile(RadialTemperatureProfile):
 
     @staticmethod
     def FUNCTION(r, T_0):
-        return T_0
+        return T_0*np.ones_like(r)
 
 
 class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
