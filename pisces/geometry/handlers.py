@@ -1,3 +1,16 @@
+"""
+Utilities for computations under symmetry constraints.
+
+This module provides utilities for managing geometrical operations, symmetry,
+and coordinate systems in multi-dimensional spaces. It facilitates handling
+of complex geometrical structures, transformations, and operations such as
+gradients, divergences, and Laplacians in a consistent and efficient manner.
+
+The core focus is on enabling seamless integration of coordinate systems with
+invariance properties, often encountered in physical simulations and mathematical
+modeling. Symmetry management is a key feature, allowing users to optimize
+computations by leveraging axis invariance.
+"""
 from typing import Optional, List, Collection, Any, Union, Callable
 
 from pisces.geometry.base import CoordinateSystem
@@ -13,25 +26,130 @@ import h5py
 # noinspection PyProtectedMember
 @dataclass
 class GeometryHandler:
-    """
-    GeometryHandler class to manage symmetry, coordinate systems, and grid handling for various geometric operations.
+    r"""
+    Core class for managing computations in specific coordinate systems with a given
+    symmetry.
 
-    This class provides methods to handle coordinate transformations, fill missing axes based on symmetry, and
-    compute gradient terms for scalar fields in specified coordinate systems.
+    Effectively, the :py:class:`GeometryHandler` class combines the :py:class:`~pisces.geometry.symmetry.Symmetry` and
+    :py:class:`~pisces.geometry.base.CoordinateSystem` classes into a single self-consistent operation handler. Thus,
+    the geometry handler manages the array manipulations and symmetry implications for any operations performed
+    behind the scenes in Pisces.
 
     Attributes
     ----------
-    coordinate_system : CoordinateSystem
-        The coordinate system associated with the geometry.
-    symmetry : Optional[Symmetry], optional
+    coordinate_system : :py:class:`~pisces.geometry.base.CoordinateSystem`
+        The coordinate system associated with the geometry. All array operations performed by the
+        :py:class:`GeometryHandler` are handled by this coordinate system.
+    symmetry : :py:class:`~pisces.geometry.symmetry.Symmetry`, optional
         Symmetry associated with the coordinate system, which determines invariance across specific axes.
         If None, an empty symmetry is assigned by default.
     fill_values : NDArray[float], default=0.0
-        Default values used to fill missing coordinates in the case of symmetry-imposed absence. The user should
-        supply ``NDIM_SIM`` values (``symmetry.NDIM_SIM``) corresponding to the fill values for each of the symmetry axes.
+        Default values for the symmetric axes of the coordinate system. If provided, these should be an array
+        with length equal to ``symmetry``'s :py:attr:`~pisces.geometry.symmetry.Symmetry.NDIM_SIM` attribute. When
+        a computation is performed, the symmetric axes (which are not provided in the coordinates) are generated
+        using these fill values.
 
-        .. warning::
-            Non-symmetric axes are required in the coordinate arrays and will not be filled automatically.
+        .. note::
+
+            These should be provided in the order that the axes appear in ``coordinate_system``.
+
+        By default, ``fill_values`` is ``0.0``, which will cause every missing axis to be filled by ``0``.
+
+    Examples
+    --------
+
+    For this example, we will utilize a set of oblate homoeoidal coordinates with radial symmetry to perform a set
+    of basic vector calculations. The first things to do is initialize the symmetry and the coordinate system:
+
+    >>> from pisces.geometry import Symmetry, OblateHomoeoidalCoordinateSystem
+    >>> cs = OblateHomoeoidalCoordinateSystem(ecc = 0.7)
+    >>> sym = Symmetry(['phi','theta'],coordinate_system=cs)
+
+    With the symmetry prepared, we're ready to create the :py:class:`GeometryHandler` object:
+
+    >>> handler = GeometryHandler(cs,sym)
+    >>> handler
+    <GeometryHandler(axes={1, 2},cs=<OblateHomoeoidalCoordinateSystem(ecc=0.7)>)>
+
+    Let's put this to the test! Let's assume that we have a function :math:`f(r) = r^2`. If we attempt to compute the
+    gradient of this function using the :py:class:`~pisces.geometry.base.CoordinateSystem`, we get an error:
+
+    >>> r = np.linspace(0,1,100)
+    >>> func = lambda x: x**2
+    >>> y = handler.coordinate_system.compute_function_gradient_term(r,func,axis=0) # doctest: +SKIP
+
+    .. code-block:: shell
+
+        File "pisces/geometry/handlers.py", line 79, in GeometryHandler
+        Failed example:
+            y = handler.coordinate_system.compute_function_gradient_term(r,func,axis=0)
+        Exception raised:
+            Traceback (most recent call last):
+              File "<doctest GeometryHandler[7]>", line 1, in <module>
+                y = handler.coordinate_system.compute_function_gradient_term(r,func,axis=0)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              File "/pisces/geometry/base.py", line 826, in compute_function_gradient_term
+                raise ValueError(f"coordinates have shape `{coordinates.shape}`"
+            ValueError: coordinates have shape `(100,)` [ndim=1, end_size=100], but expected shape like `(...,3)` [ndim=4, end_size=3].
+
+    What this is telling us is that our coordinates (which were just an array of 100 radii) aren't a valid grid
+    shape for the coordinate system because the coordinate system expects a grid with a shape like ``(N_r,N_theta,N_phi,3)``
+    instead. Obviously, it's a painful endeavour to fill in those arrays every time we want to do something. As such, the handler
+    does it for us! Let's try it with the **handler** instead of the **coordinate system**:
+
+    >>> r = np.linspace(0,1,100)
+    >>> func = lambda x: x**2
+    >>> y = handler.compute_function_gradient_term(r,func,axis=0) # doctest: +SKIP
+
+    .. code-block:: shell
+
+        Error
+        **********************************************************************
+        File "/pisces/geometry/handlers.py", line 102, in GeometryHandler
+        Failed example:
+            y = handler.compute_function_gradient_term(r,func,axis=0)
+        Exception raised:
+              File "<doctest GeometryHandler[10]>", line 1, in <module>
+                y = handler.compute_function_gradient_term(r,func,axis=0)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+              File "/pisces/geometry/handlers.py", line 685, in compute_function_gradient_term
+                raise ValueError(f"Validation Failed: {e}") from e
+            ValueError: Validation Failed: Coordinate shape was neither the full coordinate dimension (3) or the reduced asymmetric dimension (2), thus the coordinate values could not be filled.
+
+    **It's still telling us we have the wrong number of dimensions!**
+
+    .. hint::
+
+        This is happening because the coordinate system breaks the symmetry when operating with the gradient! Let's see:
+
+        >>> handler.symmetry
+        <Symmetry: axes=[1, 2], cs=<OblateHomoeoidalCoordinateSystem(ecc=0.7)>>
+        >>> handler.symmetry.gradient(active_axes=[0])
+        <Symmetry: axes=[2], cs=<OblateHomoeoidalCoordinateSystem(ecc=0.7)>>
+
+        So we've lost our :math:`\theta` invariance. We'll need to provide :math:`\theta` coordinates as well!
+
+    **Let's give it a final go!**
+    This time, we're going to provide a grid of :math:`\theta` values on which to compute the gradient.
+
+    .. plot::
+        :include-source:
+
+        >>> import matplotlib.pyplot as plt
+        >>> from pisces.geometry import Symmetry,GeometryHandler, OblateHomoeoidalCoordinateSystem
+        >>> cs = OblateHomoeoidalCoordinateSystem(ecc = 0.7)
+        >>> sym = Symmetry(['phi','theta'],coordinate_system=cs)
+        >>> handler = GeometryHandler(cs,sym)
+        >>> func = lambda x: x**2
+        >>> coordinates = np.mgrid[0:1:100j,0:np.pi:100j]
+        >>> coordinates = np.moveaxis(coordinates, 0, -1)
+        >>> grad_r_field = handler.compute_function_gradient_term(coordinates,func,axis=0)
+        >>> im = plt.imshow(grad_r_field[0,...].T,extent=(0,np.pi,0,1),cmap='inferno')
+        >>> _ = plt.xlabel(r"$r$")
+        >>> _ = plt.ylabel(r"$\theta$")
+        >>> _ = plt.colorbar(im,orientation='horizontal', label=r"$\nabla(r^2)$")
+        >>> plt.show()
+
     """
     coordinate_system: 'CoordinateSystem'
     symmetry: Optional['Symmetry'] = None
@@ -53,6 +171,12 @@ class GeometryHandler:
             # noinspection PyTypeChecker
             self.fill_values = [self.fill_values] * self.symmetry.NDIM_SIM
         self.fill_values = np.array(self.fill_values).reshape((self.symmetry.NDIM_SIM,))
+
+    def __str__(self):
+        return f"<GeometryHandler(axes={self.symmetry.symmetry_axes},cs={self.coordinate_system})>"
+
+    def __repr__(self):
+        return self.__str__()
 
     def get_fill_values(self, symmetry: 'Symmetry') -> NDArray[np.floating]:
         """
@@ -581,7 +705,14 @@ class GeometryHandler:
         Parameters
         ----------
         coordinates : NDArray
-            Array of coordinates, shaped `(N, NDIM)`.
+            Array of coordinates, shaped ``(*, NDIM)``. The first ``N-1`` dimensions of the array
+            may be any specific shape; however, the final axis must have ``NDIM`` indices corresponding
+            to the ``NDIM`` coordinate variables.
+
+            .. hint::
+
+                This allows for both grid shapes and unstructured coordinates to be used.
+
         function : Callable[[NDArray], NDArray]
             Scalar function to evaluate at specified coordinates.
         axis : int
@@ -599,16 +730,111 @@ class GeometryHandler:
         -------
         NDArray
             Gradient term along `axis`, adjusted based on the selected basis.
+
+        Examples
+        --------
+
+        In this example, we'll compute the gradient of the function :math:`f(r,\theta) = \sin(\theta) / r` in
+        polar coordinates. First off, let's take a look at this function on a plot.
+
+        .. plot::
+            :include-source:
+
+            >>> from pisces.geometry import PolarCoordinateSystem, GeometryHandler
+            >>> import numpy as np
+            >>> coordinate_system = PolarCoordinateSystem()
+            >>> handler = GeometryHandler(coordinate_system=coordinate_system)
+            >>> handler
+            <GeometryHandler(axes=set(),cs=PolarCoordinateSystem())>
+
+            In this case, there is no symmetry in the handler. Let's now create the function:
+
+            >>> funct = lambda _r,_theta: np.sin(_theta)**2/_r
+
+            And now, we'll take a cartesian grid, convert it and evaluate the function:
+
+            >>> grid = np.mgrid[-1:1:100j,-1:1:100j]
+            >>> grid = np.moveaxis(grid, 0,-1)
+            >>> polar_grid = handler.from_cartesian(grid)
+            >>> Z = funct(*np.moveaxis(polar_grid,-1,0))
+
+            If we now look at the plot, we'll get an image of the function:
+
+            >>> import matplotlib.pyplot as plt
+            >>> im = plt.imshow(Z.T,vmax=5,vmin=0,extent=(-1,1,-1,1),cmap='inferno',origin='lower')
+            >>> _ = plt.colorbar(im, label=r"$\sin^2 \theta / r$")
+            >>> plt.show()
+
+        Now, in polar coordinates, the Lame coefficients are 1 and :math:`r`, so the gradient is
+
+        .. math::
+
+            \nabla \left(\frac{\sin^2 \theta}{r}\right) = \frac{2\sin \theta \cos \theta}{r^2} \hat{\theta} - \frac{\sin^2 \theta}{r^2} \hat{r}.
+
+        Let's see how we can do this numerically:
+
+        .. plot::
+            :include-source:
+
+            >>> from pisces.geometry import PolarCoordinateSystem, GeometryHandler
+            >>> import numpy as np
+            >>> coordinate_system = PolarCoordinateSystem()
+            >>> handler = GeometryHandler(coordinate_system=coordinate_system)
+            >>> handler
+            <GeometryHandler(axes=set(),cs=PolarCoordinateSystem())>
+
+            In this case, there is no symmetry in the handler. Let's now create the function:
+
+            >>> funct = lambda _r,_theta: np.sin(_theta)**2/_r
+
+            And now, we'll take a cartesian grid, convert it and evaluate the function:
+
+            >>> grid = np.mgrid[-1:1:100j,-1:1:100j]
+            >>> grid = np.moveaxis(grid, 0,-1)
+            >>> polar_grid = handler.from_cartesian(grid)
+            >>> grad_r = handler.compute_function_gradient_term(polar_grid,funct,0)
+            >>> grad_theta = handler.compute_function_gradient_term(polar_grid,funct,1)
+
+            If we now look at the plot, we'll get an image of the function:
+
+            >>> import matplotlib.pyplot as plt
+            >>> from matplotlib.colors import Normalize
+            >>> fig,axes = plt.subplots(2,2,sharex=True,sharey=True)
+            >>> _ = axes[0,0].imshow(grad_r[0,...].T,vmax=5,vmin=-5,extent=(-1,1,-1,1),cmap='seismic',origin='lower')
+            >>> _ = axes[0,0].text(-.9,0.8,r'$\nabla_r$ computed')
+            >>> _ = axes[0,1].imshow(grad_theta[0,...].T,vmax=5,vmin=-5, extent=(-1,1,-1,1),cmap='seismic',origin='lower')
+            >>> r,theta = polar_grid[...,0],polar_grid[...,1]
+            >>> _ = axes[0,1].text(-.9,0.8,r'$\nabla_\theta$ computed')
+            >>> grad_r_exp = -np.sin(theta)**2/r**2
+            >>> grad_theta_exp = (2*np.sin(theta)*np.cos(theta))/r**2
+            >>> _ = axes[1,0].imshow(grad_r_exp.T,vmax=5,vmin=-5,extent=(-1,1,-1,1),cmap='seismic',origin='lower')
+            >>> _ = axes[1,0].text(-.9,0.8,r'$\nabla_r$ expected')
+            >>> _ = axes[1,1].imshow(grad_theta_exp.T,vmax=5,vmin=-5, extent=(-1,1,-1,1),cmap='seismic',origin='lower')
+            >>> _ = axes[1,1].text(-.9,0.8,r'$\nabla_\theta$ expected')
+            >>> _ = plt.colorbar(plt.cm.ScalarMappable(Normalize(-5,5),cmap='seismic'),ax=axes)
+            >>> plt.show()
+
+
         """
         if __validate__:
             try:
                 _op_symmetry = self.symmetry.gradient_component(axis, basis)
                 coordinates = self.fill_missing_coordinates(coordinates, symmetry=_op_symmetry)
+
             except Exception as e:
                 raise ValueError(f"Validation Failed: {e}") from e
 
+        # Constructing the modified function to ensure that the function signature can take the correct
+        # number of dimensions. We assume that function matches the handler in its signature.
+        def wrapper_function(*args):
+            # Construct the modified coordinates. These are all of the coordinates in the system.
+            mod_coords = np.array(args)
+            nec_coords = mod_coords[~self.symmetry._invariance_array]
+
+            return function(*nec_coords)
+
         return self.coordinate_system.compute_function_gradient_term(
-            coordinates, function, axis, derivative=derivative, basis=basis, **kwargs
+            coordinates, wrapper_function, axis, derivative=derivative, basis=basis, **kwargs
         )
 
     def function_gradient(self,
@@ -650,8 +876,17 @@ class GeometryHandler:
             except Exception as e:
                 raise ValueError(f"Validation Failed: {e}") from e
 
+        # Constructing the modified function to ensure that the function signature can take the correct
+        # number of dimensions. We assume that function matches the handler in its signature.
+        def wrapper_function(*args):
+            # Construct the modified coordinates. These are all of the coordinates in the system.
+            mod_coords = np.array(args)
+            nec_coords = mod_coords[~self.symmetry._invariance_array]
+
+            return function(*nec_coords)
+
         return self.coordinate_system.function_gradient(
-            coordinates, function, derivatives=derivatives, basis=basis, **kwargs
+            coordinates, wrapper_function, derivatives=derivatives, basis=basis, **kwargs
         )
 
     def compute_function_divergence_term(self,
@@ -691,8 +926,17 @@ class GeometryHandler:
             except Exception as e:
                 raise ValueError(f"Validation Failed: {e}") from e
 
+        # Constructing the modified function to ensure that the function signature can take the correct
+        # number of dimensions. We assume that function matches the handler in its signature.
+        def wrapper_function(*args):
+            # Construct the modified coordinates. These are all of the coordinates in the system.
+            mod_coords = np.array(args)
+            nec_coords = mod_coords[~self.symmetry._invariance_array]
+
+            return vector_function(*nec_coords)
+
         return self.coordinate_system.compute_function_divergence_term(
-            coordinates, vector_function, axis, basis=basis, **kwargs
+            coordinates, wrapper_function, axis, basis=basis, **kwargs
         )
 
     def function_divergence(self,
@@ -729,8 +973,17 @@ class GeometryHandler:
             except Exception as e:
                 raise ValueError(f"Validation Failed: {e}") from e
 
+        # Constructing the modified function to ensure that the function signature can take the correct
+        # number of dimensions. We assume that function matches the handler in its signature.
+        def wrapper_function(*args):
+            # Construct the modified coordinates. These are all of the coordinates in the system.
+            mod_coords = np.array(args)
+            nec_coords = mod_coords[~self.symmetry._invariance_array]
+
+            return vector_function(*nec_coords)
+
         return self.coordinate_system.function_divergence(
-            coordinates, vector_function, basis=basis, active_axes=active_axes, **kwargs
+            coordinates, wrapper_function, basis=basis, active_axes=active_axes, **kwargs
         )
 
     def function_laplacian(self,
@@ -765,8 +1018,17 @@ class GeometryHandler:
             except Exception as e:
                 raise ValueError(f"Validation Failed: {e}") from e
 
+        # Constructing the modified function to ensure that the function signature can take the correct
+        # number of dimensions. We assume that function matches the handler in its signature.
+        def wrapper_function(*args):
+            # Construct the modified coordinates. These are all of the coordinates in the system.
+            mod_coords = np.array(args)
+            nec_coords = mod_coords[~self.symmetry._invariance_array]
+
+            return scalar_function(*nec_coords)
+
         return self.coordinate_system.function_laplacian(
-            coordinates, scalar_function, active_axes=active_axes, **kwargs
+            coordinates, wrapper_function, active_axes=active_axes, **kwargs
         )
 
     def from_cartesian(self, coordinates: NDArray, symmetry: Symmetry=None) -> NDArray:

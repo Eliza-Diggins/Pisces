@@ -145,8 +145,14 @@ def function_partial_derivative(
         The function of which to take the partial derivatives. This function must take ``NDIM`` arguments, where
         ``NDIM`` is the number of dimensions of the input arguments.
     coordinates : np.ndarray
-        Array of shape ``(N, NDIM)`` where ``N`` is the number of points and ``NDIM`` is
+        Array of shape ``(*GRID, NDIM)`` where ``*GRID`` is the grid shape and ``NDIM`` is
         the number of dimensions. Must match with ``func``'s call signature.
+
+        .. note::
+
+            The coordinates don't need to be a structured grid and could instead be ``(N,NDIM)``, the only
+            requirement is that at least ``2`` dimensions are present. The result will match the shape.
+
     axes : int or List[int]
         The axis or axes along which to compute the derivative.
     method : {'forward', 'backward', 'central'}, optional
@@ -157,7 +163,7 @@ def function_partial_derivative(
     Returns
     -------
     np.ndarray
-        Array of shape ``(N, len(axes))`` representing the partial derivatives at each point
+        Array of shape ``(*GRID, len(axes))`` representing the partial derivatives at each point
         along each specified axis.
 
     Examples
@@ -179,10 +185,11 @@ def function_partial_derivative(
     if coordinates.ndim == 1:
         coordinates = coordinates.reshape(1,-1)
     else:
-        coordinates = coordinates.T
+        coordinates = np.moveaxis(coordinates, -1,0)
+
 
     # Prepare an empty array for the outputs.
-    partial_derivatives = np.empty((coordinates.shape[1],axes.size))
+    partial_derivatives = np.empty((axes.size,*coordinates.shape[1:]))
 
     # Perform the differencing method and proceed.
     for i, axis in enumerate(axes):
@@ -191,88 +198,22 @@ def function_partial_derivative(
         backward_coords = np.copy(coordinates)
 
         # Adjust coordinates for forward and backward steps
-        forward_coords[axis,:] += h
-        backward_coords[axis, :] -= h
+        forward_coords[axis,...] += h
+        backward_coords[axis,...] -= h
 
         if method == 'forward':
             # Forward difference: f(x + h) - f(x) / h
-            partial_derivatives[:, i] = (func(*forward_coords) - func(*coordinates)) / h
+            partial_derivatives[i,...] = (func(*forward_coords) - func(*coordinates)) / h
         elif method == 'backward':
             # Backward difference: f(x) - f(x - h) / h
-            partial_derivatives[:, i] = (func(*coordinates) - func(*backward_coords)) / h
+            partial_derivatives[i,...] = (func(*coordinates) - func(*backward_coords)) / h
         elif method == 'central':
             # Central difference: (f(x + h) - f(x - h)) / (2 * h)
-            partial_derivatives[:, i] = (func(*forward_coords) - func(*backward_coords)) / (2 * h)
+            partial_derivatives[i,...] = (func(*forward_coords) - func(*backward_coords)) / (2 * h)
         else:
             raise ValueError("Unsupported method. Use 'forward', 'backward', or 'central'.")
 
     return partial_derivatives
-
-
-# noinspection PyUnresolvedReferences,PyTypeChecker
-def integrate_in_shells(
-        function: Callable[[NDArray[np.floating]], np.floating],
-        radii: NDArray[np.floating],
-        coordinate_system: Optional['CoordinateSystem'] = None
-) -> NDArray[np.floating]:
-    r"""
-    Perform volume integration of a function within spherical shells up to a given radius.
-
-    Parameters
-    ----------
-    function : Callable[[NDArray[np.floating]], np.floating]
-        The scalar function to integrate over shells.
-    radii : NDArray[np.floating]
-        Array of radii defining the upper bounds for integration. Must be non-negative.
-    coordinate_system : Optional['CoordinateSystem'], default=None
-        The coordinate system to use for volume elements. If provided, it must have
-        a `shell_volume` method. If not provided, assumes spherical coordinates with
-        a volume element of `4 * pi * r^2`.
-
-    Returns
-    -------
-    NDArray[np.floating]
-        Array of integrated values corresponding to the input `radii`.
-
-    Raises
-    ------
-    ValueError
-        If the `coordinate_system` does not have a `shell_volume` method.
-
-    Notes
-    -----
-    This function computes the integral:
-    .. math:: I(r) = \int_0^r f(r') V(r') dr'
-    where `V(r')` is the volume element.
-
-    Examples
-    --------
-    >>> from scipy.special import erf
-    >>> radii = np.linspace(0, 10, 100)
-    >>> function = lambda r: np.exp(-r**2)
-    >>> result = integrate_in_shells(function, radii)
-    """
-    if np.any(radii < 0):
-        raise ValueError("Radii must be non-negative.")
-
-    if coordinate_system is not None:
-        if not hasattr(coordinate_system, 'shell_volume'):
-            raise ValueError(
-                f"The provided coordinate system does not have a `shell_volume` method. "
-                f"Ensure it implements this method before integration."
-            )
-        volume_element = lambda _r: coordinate_system.shell_volume(_r)
-    else:
-        volume_element = lambda _r: 4 * np.pi * _r**2
-
-    func = lambda _r: function(_r) * volume_element(_r)
-    result = np.zeros_like(radii)
-
-    for i, r in enumerate(radii):
-        result[i] = quad(func, 0, r)[0]
-
-    return result
-
 
 # noinspection PyTypeChecker
 def integrate(
@@ -358,3 +299,10 @@ def integrate_toinf(
         result[i] = quad(function, _x, np.inf)[0]
 
     return result
+
+if __name__ == '__main__':
+    import numpy as np
+    x = np.linspace(-np.pi,np.pi/1000)
+    y = np.sin
+    dy = function_partial_derivative(y, x,0)
+    print(dy)

@@ -4,7 +4,7 @@ from typing import Union, List, Optional, Dict, TYPE_CHECKING
 import unyt
 from sympy.physics.units import femto
 
-from pisces.utilities.math import integrate_in_shells, integrate, integrate_toinf
+from pisces.utilities.math import integrate, integrate_toinf
 from pisces.utilities.config import pisces_params
 from pisces.utilities.physics import m_p, mu,G, mue
 from numpy._typing import ArrayLike, NDArray
@@ -14,6 +14,7 @@ from pisces.geometry import CoordinateSystem
 from pisces.io import HDF5_File_Handle
 from pisces.models.base import Model
 from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
+from pisces.geometry import GeometryHandler, Symmetry
 import numpy as np
 from pisces.models.solver import solver_checker,solver_process
 if TYPE_CHECKING:
@@ -41,7 +42,7 @@ class ClusterModel(Model):
     includes :py:class:`~pisces.models.spherical_coordinates.SphericalCoordinateSystem` as well as other similar coordinate
     systems.
     """
-    ALLOWED_COORDINATE_SYSTEMS = ['SphericalCoordinateSystem']
+    ALLOWED_COORDINATE_SYSTEMS = ['SphericalCoordinateSystem','OblateHomoeoidalCoordinateSystem']
     DEFAULT_COORDINATE_SYSTEMS = SphericalCoordinateSystem()
 
     @staticmethod
@@ -170,15 +171,22 @@ class ClusterModel(Model):
         -----
         This method initializes the model structure, grid, and profiles.
         """
+        # MANAGE the coordinate system: we need to both check that
+        # the coordinates are set and also validate them.
         if coordinate_system is None:
             coordinate_system = cls.DEFAULT_COORDINATE_SYSTEMS
+        cls._cls_validate_coordinate_system(coordinate_system)
 
+        # CORRECT the bounding box and the grid shape. This is necessary
+        # because we always have the principle octant in these models, so we
+        # don't need the user to tell us that.
         bbox = cls._correct_bbox(r_min, r_max)
         grid_shape = cls._correct_grid_shape(grid_shape, coordinate_system)
         if chunk_shape is not None:
             chunk_shape = cls._correct_grid_shape(chunk_shape, coordinate_system)
         scale = cls._correct_scale(scale)
 
+        # PASS to the skeleton builder.
         return super().build_skeleton(
             path,
             bbox=bbox,
@@ -233,13 +241,16 @@ class ClusterModel(Model):
         ClusterModel
             Constructed ClusterModel instance.
         """
-        # CONSTRUCT the skeleton including profile management.
+        # @@ CONSTRUCT SKELETON @@ #
         # This generates the necessary file structure and background
-        # data for the model.
+        # data for the model. All of the structure generation should
+        # be the same between coordinate systems.
         profiles = {'density': density, 'total_density': total_density}
         if extra_profiles:
             profiles.update(extra_profiles)
 
+        # build the skeleton for the system and initialize
+        # the model object.
         cls.build_skeleton(
             path,
             r_min=r_min,
@@ -252,11 +263,16 @@ class ClusterModel(Model):
         )
         obj = cls(path)
 
-        # RUN the object's pathway
+        # @@ RUN MODEL PATHWAY @@ #
+        # This now triggers the physics computations to generate
+        # the full model.
         if obj.coordinate_system.__class__.__name__ == 'SphericalCoordinateSystem':
             obj(pathway='spherical_dens_tden')
+        elif 'Homoeoidal' in obj.coordinate_system.__class__.__name__:
+            obj(pathway='homoeoidal_dens_tden')
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"The coordinate system {obj.coordinate_system.__class__.__name__} is an accepted coordinate"
+                                      f" system for {cls.__name__}, but there is no density / total density pipeline implemented.")
 
         return obj
 
@@ -301,13 +317,16 @@ class ClusterModel(Model):
         ClusterModel
             Constructed ClusterModel instance.
         """
-        # CONSTRUCT the skeleton including profile management.
+        # @@ CONSTRUCT SKELETON @@ #
         # This generates the necessary file structure and background
-        # data for the model.
+        # data for the model. All of the structure generation should
+        # be the same between coordinate systems.
         profiles = {'density': density, 'temperature': temperature}
         if extra_profiles:
             profiles.update(extra_profiles)
 
+        # build the skeleton for the system and initialize
+        # the model object.
         cls.build_skeleton(
             path,
             r_min=r_min,
@@ -320,22 +339,31 @@ class ClusterModel(Model):
         )
         obj = cls(path)
 
-        # RUN the object's pathway
+        # @@ RUN MODEL PATHWAY @@ #
+        # This now triggers the physics computations to generate
+        # the full model.
         if obj.coordinate_system.__class__.__name__ == 'SphericalCoordinateSystem':
             obj(pathway='spherical_dens_temp')
+        elif 'Homoeoidal' in obj.coordinate_system.__class__.__name__:
+            obj(pathway='homoeoidal_dens_temp')
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"The coordinate system {obj.coordinate_system.__class__.__name__} is an accepted coordinate"
+                                      f" system for {cls.__name__}, but there is no density / temperature pipeline implemented.")
 
         return obj
 
     # @@ CHECKERS @@ #
     @solver_checker('spherical_dens_temp')
     @solver_checker('spherical_dens_tden')
+    @solver_checker('homoeoidal_dens_tden')
+    @solver_checker('homoeoidal_dens_temp')
     def _check_pathways(self,pathway: str):
         # CHECKING geometry
         state = True
         if pathway.startswith('spherical'):
             state = state and (self.coordinate_system.__class__.__name__ == 'SphericalCoordinateSystem')
+        if pathway.startswith('homoeidal'):
+            state = state and ('Homoeoidal' in self.coordinate_system.__class__.__name__)
 
         # CHECKING profiles
         if pathway.endswith("dens_temp"):
@@ -353,6 +381,8 @@ class ClusterModel(Model):
     # various contexts within the ClusterModel class.
     @solver_process('spherical_dens_temp', step=0)
     @solver_process('spherical_dens_tden', step=0)
+    @solver_process('homoeoidal_dens_temp', step=0)
+    @solver_process('homoeoidal_dens_tden', step=0)
     def _dump_profiles_to_fields(self):
         """
         Transfer profiles into the model's fields.
@@ -376,6 +406,7 @@ class ClusterModel(Model):
             )
 
     @solver_process('spherical_dens_tden', step=1)
+    @solver_process('homoeoidal_dens_tden', step=1)
     @solver_process('spherical_dens_temp', step=5)
     def _compute_dm_density(self):
         """
@@ -398,6 +429,7 @@ class ClusterModel(Model):
         self.logger.debug("Field 'dark_matter_density' added.")
 
     @solver_process('spherical_dens_tden', step=2, kwargs=dict(fields=None))
+    @solver_process('homoeoidal_dens_tden', step=2, kwargs=dict(fields=None))
     @solver_process('spherical_dens_temp', step=6)
     def _get_masses_from_density(self, fields=None):
         """
@@ -425,7 +457,7 @@ class ClusterModel(Model):
             else:
                 raise ValueError(f"Density field '{field}' not found in FIELDS or profiles.")
 
-            shell_masses = integrate_in_shells(density_function, radius, self.coordinate_system)
+            shell_masses = self.coordinate_system.integrate_in_shells(radius, density_function)
             mass_units = unyt.Unit(density_units) * unyt.Unit(self.grid_manager.length_unit) ** 3
             mass_field = pisces_params[f'fields.gclstr.{field}.mass_field']
             target_units = pisces_params[f'fields.gclstr.{mass_field}.units']
@@ -527,26 +559,87 @@ class ClusterModel(Model):
         self.logger.debug("Field 'pressure' added.")
 
     @solver_process('spherical_dens_temp', step=2)
+    @solver_process('homoeoidal_dens_temp', step=2)
     def _compute_g_from_pressure(self):
+        # EXTRACT the necessary fields from the coordinate system.
         radius = unyt.unyt_array(self.grid_manager.get_coordinates(axes=['r']).ravel(),
                                  self.grid_manager.length_unit)
         pressure = self.FIELDS['pressure'][...]
         density = self.FIELDS['density'][...]
 
+        # CONSTRUCT the relevant geometry manager.
+        symmetry = Symmetry(['theta','phi'],self.coordinate_system)
+        handler = GeometryHandler(self.coordinate_system,symmetry)
+        grad_symmetry = symmetry.gradient_component(0,basis='covariant')
+        coordinates = self.grid_manager.get_coordinates(axes=grad_symmetry.get_asymmetric_coord_axes())
+
+        # CONSTRUCT the pressure spline and its derivative function.
+        # Then proceed to compute the gradient of the pressure.
         pspline = InterpolatedUnivariateSpline(radius.d, pressure.d)
-        _gravitational_field = pspline(radius.d,1)/density.d
+        dpsline = lambda coords: pspline(coords[...,0],1)
+        grad_p = handler.compute_function_gradient_term(coordinates,pspline,0,derivative=dpsline)
+
+        _gravitational_field = grad_p/density.d
         _gravitational_field = unyt.unyt_array(_gravitational_field, pressure.units/(density.units*radius.units))
         _gravitational_field = _gravitational_field.to(pisces_params['fields.gclstr.gravitational_field.units'])
 
         self.FIELDS.add_field(
             'gravitational_field',
-            axes=['r'],
+            axes=grad_symmetry.get_asymmetric_coord_axes(),
             units=_gravitational_field.units,
             data=_gravitational_field.d,
         )
         self.logger.debug("Field 'gravitational_field' added.")
 
+    @solver_process('homoeoidal_dens_temp', step=3)
+    @solver_process('spherical_dens_temp', step=8)
+    def _compute_phi_from_pressure(self):
+        # EXTRACT the necessary fields from the coordinate system.
+        radius = unyt.unyt_array(self.grid_manager.get_coordinates(axes=['r']).ravel(),
+                                 self.grid_manager.length_unit)
+        pressure = self.FIELDS['pressure'][...]
+        density = self.FIELDS['density'][...]
+
+        # CONSTRUCT splines
+        pspline = InterpolatedUnivariateSpline(radius.d, pressure.d)
+        dspline = InterpolatedUnivariateSpline(radius.d, density.d)
+
+        integrand = lambda r: pspline(r,1)/dspline(r)
+
+        # PERFORM the integration
+        _phi = integrate_toinf(integrand,radius.d)
+        _phi = unyt.unyt_array(_phi, radius.units*pressure.units/density.units)
+
+        self.FIELDS.add_field(
+            'gravitational_potential',
+            axes=['r'],
+            units=_phi.units,
+            data=_phi.d,
+        )
+        self.logger.debug("Field 'gravitational_potential' added.")
+
+    @solver_process('homoeoidal_dens_temp', step=4)
+    def _compute_dyn_density_from_phi(self):
+        # EXTRACT the necessary fields
+        radius = unyt.unyt_array(self.grid_manager.get_coordinates(axes=['r']).ravel(),
+                                 self.grid_manager.length_unit)
+        potential = self.FIELDS['gravitational_potential'][...]
+
+        # Get the grid of coordinates
+        coordinates = self.grid_manager.get_coordinates(axes=['r','theta'])
+
+        # construct the manager
+        symmetry = Symmetry(['theta','phi'],self.coordinate_system)
+        handler = GeometryHandler(self.coordinate_system,symmetry)
+        # construct the splines
+        pspline = InterpolatedUnivariateSpline(radius.d, potential.d)
+
+        lap_potential = handler.function_laplacian(coordinates,pspline,active_axes=[0])
+
+
+
     @solver_process('spherical_dens_temp',step=1,kwargs=dict(out='pressure'))
+    @solver_process('homoeoidal_dens_temp',step=1,kwargs=dict(out='pressure'))
     @solver_process('spherical_dens_tden', step=5)
     def _compute_from_eos(self, out='temperature'):
         """
@@ -615,3 +708,29 @@ class ClusterModel(Model):
             units=entropy.units,
             data=entropy.d,
         )
+
+
+
+if __name__ == '__main__':
+    from pisces.profiles import NFWDensityProfile, IsothermalTemperatureProfile
+    from pisces.geometry import SphericalCoordinateSystem, OblateHomoeoidalCoordinateSystem
+    d = NFWDensityProfile(rho_0=1e5,r_s=100)
+    td = NFWDensityProfile(rho_0=1e6,r_s=150)
+    t = IsothermalTemperatureProfile(T_0=5)
+
+    cs = SphericalCoordinateSystem()
+    cs_ho = OblateHomoeoidalCoordinateSystem(ecc=0.5)
+
+    model_hom = ClusterModel.from_dens_and_temp('test_hom.hdf5',1e-1,1e4,[500,500,500],d,t,coordinate_system=cs_ho,overwrite=True)
+    model = ClusterModel.from_dens_and_temp('test.hdf5',1e-1,1e4,[500,500,500],d,t,coordinate_system=cs,overwrite=True)
+
+    import matplotlib.pyplot as plt
+
+    radii_hom = model_hom.grid_manager.get_coordinates(axes=['r']).ravel()
+    radii_sph = model.grid_manager.get_coordinates(axes=['r']).ravel()
+    total_mass_sph = model.FIELDS['gravitational_potential'][...]
+    total_mass_hom = model_hom.FIELDS['gravitational_potential'][...]
+#
+    plt.loglog(radii_hom, -total_mass_hom)
+    plt.loglog(radii_sph, -total_mass_sph)
+    plt.show()

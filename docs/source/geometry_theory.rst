@@ -1,4 +1,5 @@
-"""
+.. _geometry_theory:
+
 Geometry Theory Overview
 ========================
 

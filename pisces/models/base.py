@@ -195,6 +195,7 @@ class Model(metaclass=_ModelMeta):
         # Set the solver
         self._solver = ModelSolver.from_hdf5(self)
         self.logger.debug("[LOAD] (4/4) Solver loaded successfully.")
+        self.logger.info("[LOAD] COMPLETE: %s",self.path)
 
     def _load_profiles(self):
         """
@@ -211,6 +212,29 @@ class Model(metaclass=_ModelMeta):
         except Exception as e:
             raise RuntimeError("Failed to load profile registry.") from e
 
+    @classmethod
+    def _cls_validate_coordinate_system(cls,cs: 'CoordinateSystem'):
+        """
+        Validate the coordinate system of the model.
+
+        Ensures the coordinate system matches allowed systems.
+
+        Parameters
+        ----------
+        cs: CoordinateSystem
+            The coordinate system to validate against.
+
+        Raises
+        ------
+        ValueError
+            If the coordinate system is not allowed.
+        """
+        if (cls.ALLOWED_COORDINATE_SYSTEMS is not None) and (
+                cs.__class__.__name__ not in cls.ALLOWED_COORDINATE_SYSTEMS):
+            raise ValueError(f"Invalid coordinate system for Model subclass {cls.__name__}: {cs}.\nThis error likely indicates"
+                             f" that you are trying to initialize a structure with a coordinate system which is not compatible"
+                             f" with the model.")
+
     def _validate_coordinate_system(self):
         """
         Validate the coordinate system of the model.
@@ -222,9 +246,7 @@ class Model(metaclass=_ModelMeta):
         ValueError
             If the coordinate system is not allowed.
         """
-        if (self.ALLOWED_COORDINATE_SYSTEMS is not None) and (
-                self.coordinate_system.__class__.__name__ not in self.ALLOWED_COORDINATE_SYSTEMS):
-            raise ValueError(f"Invalid coordinate system: {self.coordinate_system}")
+        return self._cls_validate_coordinate_system(self.coordinate_system)
 
     def __str__(self):
         return f"<{self.__class__.__name__}: path={self.path}>"

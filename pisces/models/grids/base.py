@@ -434,8 +434,7 @@ class ModelGridManager:
 
         coordinates = np.moveaxis(np.mgrid[*slices], 0, -1)
         coordinates[..., log_mask] = 10**coordinates[..., log_mask]
-        axes_indices = [self.coordinate_system.AXES.index(ax) for ax in axes]
-
+        axes_indices = [[ax for ax in self.coordinate_system.AXES if ax in axes].index(_ax) for _ax in axes]
         return coordinates[..., axes_indices]
 
     def iter_chunks(self, axes: Optional[List[str]] = None) -> Iterator[NDArray[np.int_]]:
@@ -823,7 +822,7 @@ class ModelField(unyt.unyt_array):
         shape = manager.GRID_SHAPE[axes_indices]
 
         if data is not None:
-            if data.shape != shape:
+            if not np.array_equal(data.shape,shape):
                 raise ValueError(f"Expected shape {shape} but received shape {data.shape}.")
 
         # Convert units and dtype if necessary

@@ -47,6 +47,7 @@
 
    {% block classes %}
    {% if classes %}
+
    .. rubric:: Classes
 
    .. autosummary::

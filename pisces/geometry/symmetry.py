@@ -2,10 +2,10 @@
 Symmetry Support Module for Pisces Geometry Handling
 ====================================================
 
-The cornerstone of symmetry management in the :py:mod:`geometry` module is the :py:class:`Symmetry` class, which
+The cornerstone of symmetry management in the :py:mod:`pisces.geometry` module is the :py:class:`Symmetry` class, which
 allows the user or developer to specify invariance relative to translations along a coordinate system's axes. This
 class provides the logic necessary for manipulating symmetries under various operations, enabling efficient calculations
- and optimizations.
+and optimizations.
 
 Symmetry
 --------
@@ -17,13 +17,13 @@ The :py:class:`Symmetry` class formalizes this by taking a list of axes over whi
 
     :py:class:`Symmetry` takes a list of **strings** representing axis names, not axis indices. This is because
     symmetries are **independent of a specific coordinate system** in their implementation. Thus, you specify the
-     name of the axes for which invariance holds, and the precise meaning of that will vary between the coordinate
-      systems it is applied to. This interplay is managed by the :py:class:`geometry.handlers.GeometryHandler` class.
+    name of the axes for which invariance holds, and the precise meaning of that will vary between the coordinate
+    systems it is applied to. This interplay is managed by the :py:class:`~pisces.geometry.handlers.GeometryHandler` class.
 
 The :py:class:`Symmetry` class is useful both on its own and in combination with a
-:py:class:`geometry.abc.CoordinateSystem` class, where it enables optimized handling of various geometric
- operations. The `Symmetry` class provides a structured framework for understanding and managing invariance,
-  including methods to calculate intersections, unions, and other logical operations between different symmetries.
+:py:class:`~pisces.geometry.base.CoordinateSystem` class, where it enables optimized handling of various geometric
+operations. The ``Symmetry`` class provides a structured framework for understanding and managing invariance,
+including methods to calculate intersections, unions, and other logical operations between different symmetries.
 
 Unified Symmetry and Invariance Management
 ------------------------------------------
@@ -36,7 +36,7 @@ physical and mathematical models.
 Key Operations
 --------------
 
-The `Symmetry` class supports a range of operations to facilitate efficient symmetry management:
+The ``Symmetry`` class supports a range of operations to facilitate efficient symmetry management:
 
 - **Intersection**: Compute the common axes of invariance between different symmetries.
 - **Union**: Combine the axes of invariance from multiple symmetries.
@@ -46,16 +46,106 @@ The `Symmetry` class supports a range of operations to facilitate efficient symm
 These operations provide a powerful means to incorporate symmetry into computational models, optimizing performance and enhancing code readability.
 """
 from typing import TYPE_CHECKING, Union, Iterable, Optional, List
-
 import numpy as np
-
 from pisces.geometry._typing import InvarianceArray
 
 if TYPE_CHECKING:
     from pisces.geometry.base import CoordinateSystem
 
 class Symmetry:
+    r"""
+    Class representing invariance under translation of specific coordinates or sets of coordinates.
+
+    The :py:class:`Symmetry` class provides a framework for managing invariance in geometrical
+    and physical models. Symmetry is defined as invariance along one or more axes of a coordinate system.
+    This class allows users to define, manipulate, and analyze symmetries, enabling optimizations and
+    simplifying calculations in systems with inherent invariance.
+
+    .. hint::
+
+        The most important purpose of this class is to figure out whether particular differential operations
+        applied to fields break the inherent symmetry of the progenitor field. This is a critical consideration
+        when performing physical computations in complex geometries.
+
+    Attributes
+    ----------
+    coordinate_system : CoordinateSystem
+        The associated coordinate system that provides context for the symmetry.
+    symmetry_axes : set[int]
+        A set of axis indices representing the invariant axes. Each axis is represented by an
+        integer corresponding to the axis index of the specified symmetry axis in the particular
+        ``coordinate_system``.
+
+        .. note::
+
+            Notably, this is a ``Set`` object, not a ``List``. We do not inherit a notion of
+            axis order in the symmetry axes.
+
+    _invariance_array : numpy.ndarray
+        A boolean array where each entry indicates whether the corresponding axis
+        is invariant (`True`) or not (`False`). This is primarily useful for complicated
+        array manipulations where it would impact efficiency to generate the mask on the
+        fly.
+
+    Examples
+    --------
+
+    In any application, the first task is to initialize the coordinate system of interest and then
+    proceed to generate a symmetry in that coordinate system. For this example, we'll consider a
+    homoeoidal oblate coordinate system (:py:class:`~pisces.geometry.coordinate_systems.OblateHomoeoidalCoordinateSystem`):
+
+    >>> from pisces.geometry.coordinate_systems import OblateHomoeoidalCoordinateSystem
+    >>> eccentricity = 0.7
+    >>> coordinate_system = OblateHomoeoidalCoordinateSystem(ecc=0.7)
+
+    Now that we have to coordinate system, we can initialize the symmetry. Let's assume
+    we have an astrophysical system with only radial dependence.
+
+    >>> symmetry = Symmetry(['phi','theta'],coordinate_system=coordinate_system)
+    >>> symmetry
+    <Symmetry: axes=[1, 2], cs=<OblateHomoeoidalCoordinateSystem(ecc=0.7)>>
+
+    As you can see from inspecting the symmetry, we have a symmetry object with the ``0``-th axis
+    symmetric in our intended coordinate system. Now, what happens if we take the gradient of some field
+    :math:`\phi(r)` in this coordinate system?
+
+    Well, (see :ref:`geometry_theory` for details), the gradient is
+
+    .. math::
+
+        \nabla \phi = \frac{1}{\lambda_r} \partial_r \phi {\bf e}^i.
+
+    Now, for this particular coordinate system, the Lame coefficient (:math:`\lambda_r`) is
+
+    .. math::
+
+        \lambda_r(\theta) = \sqrt{1 - \epsilon^2 \sin^2 \theta},
+
+    So we see that while :math:`\phi` is a function of :math:`r`, taking its gradient breaks the :math:`\theta` symmetry.
+    Handling these issues is the entire point of the symmetry class. Let's see how it does this:
+
+    >>> symmetry.gradient()
+    <Symmetry: axes=[2], cs=<OblateHomoeoidalCoordinateSystem(ecc=0.7)>>
+
+    As you can see, taking the gradient of the symmetry object has automatically detected that
+    the :math:`\theta` symmetry breaks and accounted for it.
+    """
+
     def __init__(self, symmetry_axes: Iterable[str|int], coordinate_system: 'CoordinateSystem'):
+        """
+        Initialize the symmetry manager.
+
+        Parameters
+        ----------
+        symmetry_axes : Iterable[str | int]
+            A list of axes along which the system or object is invariant. These can
+            be specified as axis names (strings) or indices (integers). The axis names
+            must correspond to the names defined in the associated coordinate system.
+        coordinate_system : CoordinateSystem
+            The coordinate system associated with the symmetry. This defines the context
+            and meaning of the axes specified in `symmetry_axes`.
+
+        """
         # Validate inputs and enforce type conventions
         self.symmetry_axes, self.coordinate_system = self._validate_args(symmetry_axes, coordinate_system)
 
@@ -195,6 +285,21 @@ class Symmetry:
         """
         return self.NDIM - self.NDIM_SIM
 
+    @property
+    def symmetry_mask(self) -> np.ndarray:
+        """
+        The symmetry mask for this instance.
+
+        The symmetry mask is the array (of the same length as the coordinate system dimension) containing
+        ``bools`` representing the symmetry status of each axis.
+
+        Returns
+        -------
+        NDArray[bool]
+            The symmetry mask for this instance.
+        """
+        return self._invariance_array[:]
+
     def is_symmetric(self, axis: str|int) -> bool:
         r"""
         Check if the symmetry includes the specified axis.
@@ -243,12 +348,20 @@ class Symmetry:
         """
         return axis in self
 
+    def get_symmetric_coord_axes(self):
+        return [ax for i,ax in enumerate(self.coordinate_system.AXES) if i in self.symmetry_axes]
+
+    def get_asymmetric_coord_axes(self):
+        return [ax for i,ax in enumerate(self.coordinate_system.AXES) if i not in self.symmetry_axes]
+
     def __repr__(self) -> str:
         r"""Provide a detailed string representation of the Symmetry instance."""
         return f"<Symmetry: axes={sorted(self.symmetry_axes)}, cs={self.coordinate_system}>"
+
     def __str__(self) -> str:
         r"""Provide a concise string representation of the Symmetry instance."""
         return f"Symmetry({sorted(self.symmetry_axes)})"
+
     def __eq__(self, other: Union[InvarianceArray, 'Symmetry']) -> bool:
         other = self._ensure_symmetry(other)
         return (self.symmetry_axes == other.symmetry_axes) and (self.coordinate_system == other.coordinate_system)
@@ -832,8 +945,8 @@ class Symmetry:
         >>> from pisces.geometry.coordinate_systems import CylindricalCoordinateSystem
         >>> cs = CylindricalCoordinateSystem()
         >>> sym = Symmetry(['rho', 'z'], cs)
-        >>> sym.gradient(basis='covariant')
-        <Symmetry: axes=[0,2], cs=CylindricalCoordinateSystem()>
+        >>> sym.gradient(basis='contravariant')
+        <Symmetry: axes=[0, 2], cs=CylindricalCoordinateSystem()>
 
         In the unit basis,
 
@@ -1082,9 +1195,9 @@ class Symmetry:
         >>> from pisces.geometry.symmetry import Symmetry
         >>> from pisces.geometry.coordinate_systems import CylindricalCoordinateSystem
         >>> cs = CylindricalCoordinateSystem()
-        >>> arr = InvarianceArray([True, False, True])
+        >>> arr = np.array([True, False, True],dtype='bool')
         >>> sym = Symmetry.from_array(arr, cs)
-        >>> print(sym)
+        >>> sym
         <Symmetry: axes=[0, 2], cs=CylindricalCoordinateSystem()>
         """
         return Symmetry(np.arange(len(array))[array], coordinate_system)
@@ -1113,7 +1226,7 @@ class Symmetry:
         >>> from pisces.geometry.coordinate_systems import CylindricalCoordinateSystem
         >>> cs = CylindricalCoordinateSystem()
         >>> full_sym = Symmetry.full_symmetry(cs)
-        >>> print(full_sym)
+        >>> full_sym
         <Symmetry: axes=[0, 1, 2], cs=CylindricalCoordinateSystem()>
         """
         return Symmetry(np.arange(coordinate_system.NDIM), coordinate_system)
@@ -1142,7 +1255,7 @@ class Symmetry:
         >>> from pisces.geometry.coordinate_systems import CylindricalCoordinateSystem
         >>> cs = CylindricalCoordinateSystem()
         >>> empty_sym = Symmetry.empty_symmetry(cs)
-        >>> print(empty_sym)
+        >>> empty_sym
         <Symmetry: axes=[], cs=CylindricalCoordinateSystem()>
         """
         return Symmetry([], coordinate_system)
@@ -1169,10 +1282,10 @@ class Symmetry:
         >>> from pisces.geometry.symmetry import Symmetry, InvarianceArray
         >>> from pisces.geometry.coordinate_systems import CylindricalCoordinateSystem
         >>> cs = CylindricalCoordinateSystem()
-        >>> array = InvarianceArray([True, False, True])
+        >>> array = np.array([True, False, True],dtype='bool')
         >>> sym = Symmetry([], cs)
         >>> ensured_sym = sym._ensure_symmetry(array)
-        >>> print(ensured_sym)
+        >>> ensured_sym
         <Symmetry: axes=[0, 2], cs=CylindricalCoordinateSystem()>
         """
         if isinstance(other, Symmetry):
@@ -1199,7 +1312,7 @@ class Symmetry:
         >>> cs = CylindricalCoordinateSystem()
         >>> sym = Symmetry([], cs)
         >>> full_sym = sym._full()
-        >>> print(full_sym)
+        >>> full_sym
         <Symmetry: axes=[0, 1, 2], cs=CylindricalCoordinateSystem()>
         """
         return self.full_symmetry(self.coordinate_system)
@@ -1222,7 +1335,7 @@ class Symmetry:
         >>> cs = CylindricalCoordinateSystem()
         >>> sym = Symmetry([], cs)
         >>> empty_sym = sym._empty()
-        >>> print(empty_sym)
+        >>> empty_sym
         <Symmetry: axes=[], cs=CylindricalCoordinateSystem()>
         """
         return self.empty_symmetry(self.coordinate_system)

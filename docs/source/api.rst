@@ -8,6 +8,8 @@ API
     :recursive:
     :template: module.rst
 
-    utilities
-    geometry
-    profiles
+    pisces.utilities
+    pisces.geometry
+    pisces.profiles
+    pisces.io
+    pisces.models

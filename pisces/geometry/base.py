@@ -7,7 +7,7 @@ Developer Notes
 ===============
 
 This module defines abstract base classes for constructing orthogonal coordinate systems and symmetry representations
-within the Pisces framework. These classes, :py:class:`CoordinateSystem` and :py:class:`Symmetry`, are intended as base classes for developers
+within the Pisces framework. These classes, :py:class:`CoordinateSystem` and :py:class:`pisces.geometry.symmetry.Symmetry`, are intended as base classes for developers
 to create custom coordinate systems and symmetries. Key elements include customizable Lame coefficient mappings,
 dependency matrices, and robust data storage methods supporting JSON, YAML, and HDF5 formats.
 
@@ -39,7 +39,7 @@ other coordinate system. This ensures that we can seamlessly convert between any
 
 .. note::
 
-    Under the hood, the logic for seeking the special ``.to_<coordinate_system_name>`` is built into the :py:class:`geometry.utils.CoordinateConverter` class.
+    Under the hood, the logic for seeking the special ``.to_<coordinate_system_name>`` is built into the :py:class:`pisces.geometry.utils.CoordinateConverter` class.
     When a conversion is created using :py:meth:`CoordinateSystem.convert_to`, it creates such a converter and returns it
     to handle the conversion on its own.
 
@@ -139,6 +139,7 @@ from typing import Any, List, Optional, Dict, TYPE_CHECKING, Collection, Callabl
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.integrate import quad
 
 from pisces.geometry._exceptions import ConversionError
 from pisces.geometry.utils import CoordinateConverter
@@ -249,6 +250,7 @@ class CoordinateSystemMeta(ABCMeta):
             matrix[i, :] = class_dict[lame_func].invariance
 
         return matrix
+
 class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     """
     Abstract base class representation of an orthogonal coordinate system.
@@ -277,6 +279,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     NDIM: int = 3
     AXES: list[str] = ['x', 'y', 'z']
 
+    # @@ DUNDER METHODS @@ #
     def __init__(self, *args, **kwargs):
         # Setup the basic arguments and kwargs.
         self._args, self._kwargs = args, kwargs
@@ -301,15 +304,15 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         str
             A string representing the instance.
         """
-        _args = ", ".join(self._args)
-        _kwargs = ", ".join([f"{k}={v}" for k, v in self._kwargs])
+        _args = ", ".join([str(k) for k in self._args])
+        _kwargs = ", ".join([f"{str(k)}={str(v)}" for k, v in self._kwargs])
 
         return f"{self.__class__.__name__}({_args},{_kwargs})"
 
     def __str__(self):
         _param_str = ""
         if len(self._args):
-            _param_str += ", ".join(self._args)
+            _param_str += ", ".join([str(k) for k in self._args])
         if len(self._kwargs):
             _param_str += ", ".join([f"{k}={v}" for k, v in self._kwargs])
 
@@ -350,6 +353,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     def __len__(self):
         return self.NDIM
 
+    # @@ PROPERTIES @@ #
+    # including lame coefficient management and special feature checks.
     @property
     def lame_coefficients(self) -> 'LameCoefficientMap':
         r"""
@@ -492,6 +497,11 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         return self.__class__._lame_invariance_matrix
 
+
+    # @@ GEOMETRY METHODS @@ #
+    # These methods each correspond to the differential properties
+    # of the coordinate system and are used frequently in differential calculations
+    # throughout the Pisces environment.
     def compute_lame_coefficients(
             self,
             coordinates: NDArray,
@@ -764,6 +774,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         partial_derivative : Used for computing derivatives along specified axes.
         gradient : Computes the full gradient vector for a scalar field across all axes.
         """
+        if coordinates.shape[-1] != self.NDIM:
+            raise ValueError("coordinates must have shape (NDIM,)")
+
         # Compute the relevant partial derivative if that is necessary.
         if derivative is None:
             derivative = partial_derivative(coordinates, values,axes=[axis], **kwargs) # S = (...,)
@@ -801,11 +814,14 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         Parameters
         ----------
         coordinates : NDArray
-            Array of coordinate points on a grid.
+            Array of coordinate points. The ``coordinates`` may be of any shape as long as the final axis
+            corresponds to each of the dimensions in the coordinate system and the preceding axes to
+            whatever grid structure is present.
         function : Callable[[NDArray], NDArray]
-            Scalar function to be differentiated.
+            Scalar function to be differentiated. This must have a call signature which takes ``coordinates.shape[-1]`` values
+            and returns a scalar value.
         axis : int
-            Index of the axis for gradient computation.
+            Index of the axis / axes for gradient computation.
         derivative : Optional[Callable[[NDArray], NDArray]], optional
             A precomputed derivative function for the specified axis. If None, it defaults to numerical differentiation.
         basis : {'unit', 'covariant', 'contravariant'}, optional
@@ -818,6 +834,11 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         NDArray
             Computed gradient term along the specified axis, adjusted based on the selected basis.
         """
+        if coordinates.shape[-1] != self.NDIM:
+            raise ValueError(f"coordinates have shape `{coordinates.shape}`"
+                             f" [ndim={coordinates.ndim}, end_size={coordinates.shape[-1]}], but expected shape like"
+                             f" `(...,{self.NDIM})` [ndim={self.NDIM+1}, end_size={self.NDIM}].")
+
         if derivative is None:
             derivative_result = function_partial_derivative(function, coordinates, axis, method='central',
                                                            h=epsilon)
@@ -908,12 +929,12 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             return np.stack([
                 self.compute_gradient_term(coordinates, values, axis, derivative=derivatives.take(axis,axis=-1), basis=basis,
                                            **kwargs) for axis in active_axes
-            ], axis=1)
+            ], axis=-1)
         else:
             return np.stack([
                 self.compute_gradient_term(coordinates, values, axis, derivative=None, basis=basis, **kwargs) for axis
                 in active_axes
-            ], axis=1)
+            ], axis=-1)
 
     def function_gradient(self,
                           coordinates: NDArray,
@@ -1354,6 +1375,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         return laplacian_values
 
+    # @@ COORDINATE CONVERSION @@ #
+    # These are handlers for converting between coordinate systems.
     def to_cartesian(self, coordinates) -> NDArray:
         """
         Convert native coordinates of this coordinate system to Cartesian coordinates.
@@ -1481,6 +1504,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         pass
 
+    # @@ UTILITIES @@ #
     def index_reorder_axes(self, axes: List[str]) -> NDArray[np.int_]:
         """
         Compute the index array to reorder a list of axes to match the expected order of the coordinate system.
@@ -1522,6 +1546,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         ordered_indices = np.array([self.AXES.index(ax) for ax in axes], dtype=int)
         return ordered_indices
 
+    # @@ IO OPERATIONS @@ #
     def to_file(self, file_obj, fmt: str = 'json'):
         """
         Save the coordinate system configuration to a file or group.
@@ -1716,3 +1741,90 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             tuple(self._args),
             tuple(sorted(self._kwargs.items()))
         ))
+
+class RadialCoordinateSystem(CoordinateSystem, ABC):
+    """
+    Special case of :py:class:`CoordinateSystem` for coordinate systems
+    which possess a radial coordinate of some sort.
+    """
+    NDIM: int = 3
+    AXES: list[str] = ['r', 'theta', 'phi']
+
+    @abstractmethod
+    def shell_volume(self,radii: NDArray[np.floating]) -> NDArray[np.floating]:
+        r"""
+        Calculate the volume of thin shells at specified radii in the coordinate system.
+
+        More precisely, for a given radius :math:`r`, the volume of a thin shell of constant :math:`r` and width
+        :math:`dr` is
+
+        .. math::
+
+            dV_{\rm shell} = V_{\rm shell}(r) dr,
+
+        where :math:`V_{\rm shell}` is the ``shell_volume`` function.
+
+        Parameters
+        ----------
+        radii : NDArray
+            An array of radii at which to compute the shell volumes. Each radius represents
+            the distance from the origin in the given coordinate system.
+
+        Returns
+        -------
+        NDArray
+            An array of volumes corresponding to the given radii. The output is in the same shape
+            as the input radii array.
+
+        Notes
+        -----
+
+        **Mathematical Definition**:
+
+        Formally, the 'physical' volume of a particular coordinate region :math:`R \subset \mathbb{R}^N` is
+
+        .. math::
+
+            V = \int_R J(x_1,\cdots,x_N) dx_1 \cdots dx_N,
+
+        where :math:`J` is the Jacobian (:py:meth:`CoordinateSystem.jacobian`):
+
+        .. math::
+
+            J(x_1,\cdots,X_N) = \prod_{i=1}^N \lambda_{x_i}(x_1,\cdots,X_N)
+
+        and :math:`\lambda` are the Lame coefficients.
+
+        In a radial coordinate system, a shell is a surface of constant :math:`r`, so the volume of a shell of infinitesmal width
+        is
+
+        .. math::
+
+            V_{\rm shell} = \int_{r=r_0} dS J({\bf x}) = dr \int_0^{2\pi} d\phi \int_0^{\pi} d\theta J(r,\phi,\theta).
+
+        Now, in cases of complex :math:`J`, this is as far as one can get; however, in most cases relevant to Pisces,
+
+        .. math::
+
+            J(r,\phi,\theta) = K(r)\Omega(\phi,\theta)
+
+        and we find
+
+        .. math::
+
+            V_{\rm shell} = K(r) dr \int_0^{2\pi} d\phi \int_0^\pi d\theta \Omega(\phi,\theta).
+
+        This is the value computed by this method when implemented.
+        """
+        pass
+
+    def integrate_in_shells(self, radii: NDArray[np.floating], function: Callable) -> NDArray[np.floating]:
+        # CONSTRUCT the integrand
+        func = lambda _r: function(_r) * self.shell_volume(_r)
+
+        # PERFORM the integration
+        result = np.zeros_like(radii)
+        for i, r in enumerate(radii):
+            result[i] = quad(func, 0, r)[0]
+
+        return result
