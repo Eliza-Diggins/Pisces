@@ -1,12 +1,11 @@
 """
 Utilities for geometry management.
 """
-from typing import TYPE_CHECKING, Union, List, Callable
-from pisces.geometry._exceptions import ConversionError
-import numpy as np
+from pisces.geometry.exceptions import ConversionError
+from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from pisces.geometry.base import CoordinateSystem
-    from pisces.geometry._typing import LameCoefficientFunction
 
 class CoordinateConverter:
     """
@@ -110,83 +109,4 @@ class CoordinateConverter:
         """
         return self._str
 
-def lame_coefficient(axis: int, axes: Union[str, List[int]] = 'all') -> Callable[['LameCoefficientFunction'], 'LameCoefficientFunction']:
-    """
-    Decorator to mark a function as a Lame coefficient calculator for a specified axis.
-
-    This decorator adds metadata to a function to indicate that it calculates a Lame
-    coefficient for a particular axis in a coordinate system. It also specifies which
-    other coordinate axes are required as inputs to compute this coefficient, allowing
-    for efficient use in systems with symmetries.
-
-    Parameters
-    ----------
-    axis : int
-        The axis for which this Lame coefficient function is defined. This should be an
-        integer between 0 and the total number of dimensions minus one, representing the
-        axis index in the coordinate system.
-    axes : {'all', List[int]}, optional
-        A list of axes required by this function to compute the Lame coefficient. The
-        default value is `'all'`, indicating that the function depends on all axes. If
-        specified as a list, it should contain integers representing the dependent axes.
-
-    Returns
-    -------
-    Callable
-        The decorated function, with added attributes `_is_lame`, `_lame_axis`, and `_axes`
-        for metadata purposes.
-
-    Notes
-    -----
-    Lame coefficients are scaling factors in non-Cartesian coordinate systems, typically
-    denoted as :math:`h_i`, where :math:`i` represents the coordinate axis. This decorator
-    marks a function as one that computes a specific Lame coefficient, associating it with
-    a specific axis and its dependencies. The `axes` parameter allows for efficient usage
-    by indicating which coordinate axes are required to compute the Lame coefficient.
-
-    Examples
-    --------
-    Decorate a function as a Lame coefficient calculator for the x-axis (axis=0), depending
-    on all axes:
-
-    >>> import numpy as np
-    >>> @lame_coefficient(axis=0)
-    ... def lame_x(coords):
-    ...     # Calculate Lame coefficient for x-axis
-    ...     return np.sqrt(1 + coords[:, 1] ** 2)
-
-    Decorate a function for the y-axis (axis=1), requiring only the y and z coordinates:
-
-    >>> @lame_coefficient(axis=1, axes=[1, 2])
-    ... def lame_y(coords):
-    ...     # Calculate Lame coefficient for y-axis
-    ...     return np.sin(coords[:, 2]) * coords[:, 1]
-
-    Raises
-    ------
-    TypeError
-        If `axis` is not an integer, or if `axes` is not a list of integers or the string `'all'`.
-    ValueError
-        If `axis` or any element in `axes` is out of the valid range for dimensions.
-    """
-    # Validate `axis`
-    if not isinstance(axis, int):
-        raise TypeError("`axis` must be an integer representing the axis index.")
-    if axis < 0:
-        raise ValueError("`axis` must be a non-negative integer.")
-
-    # Validate `axes`
-    if not (axes == 'all' or isinstance(axes, list) and all(isinstance(ax, int) for ax in axes)):
-        raise TypeError("`axes` must be 'all' or a list of integers representing axis indices.")
-    if isinstance(axes, list) and any(ax < 0 for ax in axes):
-        raise ValueError("`axes` must contain only non-negative integers.")
-
-    def _wrapper(func: 'LameCoefficientFunction') -> 'LameCoefficientFunction':
-        func._is_lame = True
-        func._lame_axis = axis
-        func.required_axes = axes
-
-        return func
-
-    return _wrapper
 

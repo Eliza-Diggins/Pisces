@@ -2,6 +2,8 @@ import h5py
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING
+from pisces.utilities.config import pisces_params
+from pisces.utilities.logging import devlog,mylog
 
 if TYPE_CHECKING:
     from pisces.models.base import Model
@@ -54,9 +56,11 @@ class ModelSolver:
         ValueError
             If no pathway is specified or the pathway is invalid.
         """
+        # VALIDATION: check if the solver is already solved and proceed accordingly.
         if self.is_solved and not overwrite:
             raise RuntimeError("Solver is already marked as solved. Use `overwrite=True` to override.")
 
+        # DETERMINE the relevant pathway or utilize the default.
         pathway = pathway or self.default
         if not pathway:
             raise ValueError("No pathway specified, and no default pathway is set.")
@@ -66,19 +70,33 @@ class ModelSolver:
         if not self.validate_pathway(pathway):
             raise ValueError(f"Pathway '{pathway}' validation failed.")
 
+        # SETUP the runtime: determine the number of steps and prepare to
+        # execute.
         steps = self.model._pathways[pathway]["processes"]
         total_steps = len(steps)
 
-        with logging_redirect_tqdm(loggers=[self.model.logger]):
-            with tqdm(total=total_steps, desc=f"Solving pathway '{pathway}'",leave=True) as pbar:
+        with logging_redirect_tqdm(loggers=[self.model.logger,devlog,mylog]):
+            with tqdm(total=total_steps,
+                      desc=f"[EXEC]",
+                      leave=True,
+                      disable=pisces_params['system.preferences.disable_progress_bars']) as pbar:
                 for step_number, process in sorted(steps.items()):
+                    # Determine the process and run it.
                     pname,pargs,pkwargs = process['name'],process['args'],process['kwargs']
                     process = getattr(self.model, pname)
-                    process(*pargs,**pkwargs)
-                    self.model.logger.info(f"[SLVR] COMPLETE: {pname}")
-                    pbar.set_description(f"Solving pathway '{pathway}', step: {pname}")
+                    self.model.logger.info(f"[EXEC] \t(%s/%s) START: `%s`.",step_number + 1, total_steps,pname)
+                    try:
+                        process(*pargs,**pkwargs)
+                    except Exception as e:
+                        self.model.logger.error(f"[EXEC] \t(%s/%s) FAILED: `%s`.", step_number + 1, total_steps,
+                                               pname)
+                        pbar.set_description(f"[EXEC] STATUS: FAILED")
+                        raise e
+                    self.model.logger.info(f"[EXEC] \t(%s/%s) COMPLETE: `%s`.", step_number + 1, total_steps,
+                                               pname)
+                    pbar.set_description(f"[EXEC] STEP: {pname}")
                     pbar.update(1)
-                pbar.set_description(f"Solving pathway '{pathway}', step: DONE")
+                pbar.set_description(f"[EXEC] STATUS: DONE")
         self.is_solved = True
 
     def list_pathways(self) -> List[str]:

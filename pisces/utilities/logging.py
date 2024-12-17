@@ -12,7 +12,7 @@ streams = dict(
     devlog=getattr(sys, pisces_params['logging.devlog.stream']),
 )
 _loggers = dict(
-    mylog=logging.Logger("cluster_generator"), devlog=logging.Logger("cg-development")
+    mylog=logging.Logger("Pisces"), devlog=logging.Logger("PISCES-DEV")
 )
 
 _handlers = {}
@@ -20,7 +20,8 @@ _handlers = {}
 for k, v in _loggers.items():
     # Construct the formatter string.
     _handlers[k] = logging.StreamHandler(streams[k])
-    _handlers[k].setFormatter(pisces_params[f'logging.{k}.format'])
+    _handlers[k].setFormatter(logging.Formatter(pisces_params[f'logging.{k}.format']))
+
     v.addHandler(_handlers[k])
     v.setLevel(pisces_params[f'logging.{k}.level'])
     v.propagate = False
@@ -29,10 +30,9 @@ for k, v in _loggers.items():
         v.disabled = not pisces_params[f'logging.{k}.enabled']
 
 mylog: logging.Logger = _loggers["mylog"]
-""":py:class:`logging.Logger`: The main logger for ``pyXMIP``."""
+""":py:class:`logging.Logger`: The main logger for ``Pisces``."""
 devlog: logging.Logger = _loggers["devlog"]
-""":py:class:`logging.Logger`: The development logger for ``pyXMIP``."""
-
+""":py:class:`logging.Logger`: The development logger for ``Pisces``."""
 
 class LogDescriptor:
     def __get__(self, instance: Instance, owner: Type[Instance]) -> logging.Logger:

@@ -2,6 +2,84 @@ from typing import Optional, Union
 
 import numpy as np
 from numpy.typing import NDArray
+import warnings
+import numpy as np
+
+class CoordinateArray(np.ndarray):
+    """
+    A subclass of numpy.ndarray that enforces dimensional consistency for coordinate arrays.
+    This class validates and reshapes the array to ensure compatibility with an NDIM coordinate system.
+
+    Parameters
+    ----------
+    input_array : array-like
+        The array data to be stored, expected to represent coordinates.
+    ndim : int, optional
+        The number of dimensions for the coordinate system. If not provided,
+        it is inferred based on the shape of the input array.
+
+    Notes
+    -----
+    - If the input array is 1D, it is interpreted as a single coordinate unless `ndim` is provided.
+    - If the input array shape is incompatible with the given or inferred `ndim`, an error is raised.
+    - This class outputs a regular ndarray when numpy operations are performed on it.
+    """
+
+    def __new__(cls, input_array, ndim=None):
+        # CONVERT to np array to avoid any type issues.
+        obj = np.asarray(input_array).view(cls)
+
+        # Validate or infer ndim
+        if ndim is None:
+            if obj.ndim == 1:
+                ndim = obj.shape[0]
+            elif obj.ndim > 1:
+                ndim = obj.shape[-1]
+        else:
+            ndim = int(ndim)
+
+        # Validate the shape of the array
+        if (obj.ndim == 1) and (ndim == 1):
+            # We've been given an array of points in a 1D coord space, -> (N,1)
+            obj = obj.reshape((obj.size,1))
+        elif (obj.ndim == 1) and (ndim > 1):
+            # We've been given a single point in an ND space. -> (1,N)
+            if obj.size != ndim:
+                raise ValueError(f"COORDINATE COERCION FAILED: got 1D array of length {obj.size}, but ndim={ndim} which is neither 1 or {obj.size}.")
+            obj = obj.reshape((1,obj.size))
+        elif obj.ndim > 1:
+            # We have a multidimensional object. We check the final dimension and the first dimension before
+            # moving forward.
+            if obj.shape[-1] == ndim:
+                return obj
+
+            # check if the first dimension matches
+            if obj.shape[0] == ndim:
+                warnings.warn(f"COORDINATE COERCION WARNING: got a {obj.shape} array, which seems to have the NDIM axis in position 0 instead"
+                                     " of at the end. This is corrected here, but is unsafe and should be fixed.")
+                return np.moveaxis(obj,0,-1)
+
+            raise ValueError(f"COORDINATE COERCION FAILED: Input array's first or last dimension must match ndim={ndim}. Got {obj.shape[-1]} instead.")
+        else:
+            raise ValueError("COORDINATE COERCION FAILED: Input array must be at least 1D.")
+
+        # Return the validated and reshaped object
+        return obj
+
+    def __array_finalize__(self, obj):
+        """
+        Finalize the array view, ensuring operations result in regular np.ndarray.
+
+        Parameters
+        ----------
+        obj : ndarray or None
+            The original array from which the new object was created.
+        """
+        if obj is None:
+            return  # Called during explicit construction, no additional setup needed
+        # Convert any sliced or operated result back to a plain np.ndarray
+        if type(self) is not CoordinateArray:
+            self.__class__ = np.ndarray
 
 
 def fill_missing_coord_axes(coordinates: NDArray[np.floating],
@@ -310,3 +388,7 @@ def get_grid_coordinates(bbox: NDArray[np.floating],
 
     return grid
 
+if __name__ == '__main__':
+    c = np.mgrid[-1:1:100j, -1:1:100j]
+    r = CoordinateArray(c,ndim=2)
+    print(r.shape)

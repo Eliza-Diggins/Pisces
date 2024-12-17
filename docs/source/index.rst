@@ -79,7 +79,7 @@ Resources
 
         +++
 
-        .. button-ref:: codes
+        .. button-ref:: reference
             :expand:
             :color: secondary
             :click-parent:

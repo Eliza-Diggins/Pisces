@@ -1,6 +1,7 @@
-from typing import Iterable
+from typing import Iterable, Union, List
 from pisces.io.hdf5 import IndexType,  HDF5ElementCache
 from pisces.profiles.base import Profile
+import numpy as np
 
 class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
     def load_element(self, index: str) -> Profile:
@@ -47,25 +48,45 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
     def remove_profile(self,index: str):
         del self[index]
 
-if __name__ == '__main__':
-    import h5py
-    f = h5py.File('test.hdf5','w')
-    f.close()
-    f = h5py.File('test.hdf5','r+')
+    def get_profile_summary(self) -> Union[str, List[List[str]]]:
+        """
+        Generate a summary of the profiles stored in the model.
 
-    q = HDF5ProfileRegistry(f)
+        This summary includes:
+        - Profile Name
+        - Profile Type (class name)
+        - Profile Parameters
 
-    from density import NFWDensityProfile
+        Returns
+        -------
+        Union[List[str], List[List[str]]]
+            If ``tabulate`` is installed, returns a formatted table as a string.
+            Otherwise, returns a nested list of profile information.
 
-    p = NFWDensityProfile(rho_0=1,r_s=2)
+        Notes
+        -----
+        - The method dynamically extracts the profile's parameters using its ``__dict__``.
+        - The summary will show profiles stored in the HDF5 profile registry.
+        """
+        # Import tabulate safely
+        try:
+            from tabulate import tabulate
+            _use_tabulate = True
+        except ImportError:
+            _use_tabulate = False
+            tabulate = None  # To trick the IDE
 
-    q['density'] = p
-    print(q)
+        # Construct the profile data
+        profile_info = []
+        for name, profile in self.items():
+            profile_type = profile.__class__.__name__
+            profile_params = ", ".join(
+                f"{k}={np.format_float_scientific(v,precision=3)}" for k, v in profile.parameters.items() if not k.startswith("_")
+            )
+            profile_info.append([name, profile_type, profile_params or "N/A", str(profile.axes), str(profile.units)])
 
-    q.unload_element('density')
-
-    print(q)
-
-    print(q['density'])
-
-    print(q)
+        # Handle output with or without tabulate
+        if not _use_tabulate:
+            return profile_info
+        else:
+            return tabulate(profile_info, headers=["Profile Name", "Type", "Parameters", "Axes", "Units"], tablefmt="grid")

@@ -148,11 +148,16 @@ See Also
 
 """
 from pisces.geometry.base import CoordinateSystem, RadialCoordinateSystem
-from pisces.geometry.utils import lame_coefficient
 from numpy.typing import NDArray
 from scipy.integrate import quad, dblquad
+from scipy.interpolate import InterpolatedUnivariateSpline
 import numpy as np
+import sympy as sp
+from typing import Callable, Union
+from pisces.utilities.logging import mylog
+from pisces.utilities.math import integrate
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CartesianCoordinateSystem(CoordinateSystem):
     r"""
     3 Dimensional Cartesian coordinate system.
@@ -224,7 +229,7 @@ class CartesianCoordinateSystem(CoordinateSystem):
         >>> grid = np.moveaxis(grid,0,-1) # fix the grid ordering to meet our standard
         >>> func = lambda x,y: np.cos(y)*np.sin(x*y)
         >>> Z = func(grid[...,0],grid[...,1])
-        >>> gradZ = coordinate_system.gradient(grid,Z)
+        >>> gradZ = coordinate_system.compute_gradient(Z,grid)
         >>> image_array = gradZ[:,:,1,0].T
         >>> plt.imshow(image_array,origin='lower',extent=(-1,1,-1,1),cmap='inferno') # doctest: +SKIP
         >>> plt.show()
@@ -232,6 +237,7 @@ class CartesianCoordinateSystem(CoordinateSystem):
     """
     NDIM = 3
     AXES = ['x', 'y', 'z']
+    PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         return coordinates  # Cartesian is already in native form
@@ -239,18 +245,16 @@ class CartesianCoordinateSystem(CoordinateSystem):
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         return coordinates  # Cartesian is already in native form
 
-    @lame_coefficient(0,axes=[])
-    def lame_0(self,coordinates):
-        return np.ones_like(coordinates[...,0])
+    def lame_0(x, y, z):
+        return 1
 
-    @lame_coefficient(1,axes=[])
-    def lame_1(self,coordinates):
-        return np.ones_like(coordinates[...,0])
+    def lame_1(x, y, z):
+        return 1
 
-    @lame_coefficient(2,axes=[])
-    def lame_2(self,coordinates):
-        return np.ones_like(coordinates[...,0])
+    def lame_2(x, y, z):
+        return 1
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CartesianCoordinateSystem1D(CoordinateSystem):
     r"""
     1 Dimensional Cartesian coordinate system.
@@ -277,6 +281,7 @@ class CartesianCoordinateSystem1D(CoordinateSystem):
     """
     NDIM = 1
     AXES = ['x']
+    PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         return coordinates  # Already Cartesian
@@ -284,10 +289,10 @@ class CartesianCoordinateSystem1D(CoordinateSystem):
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         return coordinates  # Already Cartesian
 
-    @lame_coefficient(0, axes=[])
-    def lame_0(self, coordinates):
-        return np.ones_like(coordinates[..., 0])
+    def lame_0(x):
+        return 1
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CartesianCoordinateSystem2D(CoordinateSystem):
     r"""
     2 Dimensional Cartesian coordinate system.
@@ -349,6 +354,7 @@ class CartesianCoordinateSystem2D(CoordinateSystem):
     """
     NDIM = 2
     AXES = ['x','y']
+    PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         return coordinates  # Already Cartesian
@@ -356,14 +362,13 @@ class CartesianCoordinateSystem2D(CoordinateSystem):
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         return coordinates  # Already Cartesian
 
-    @lame_coefficient(0, axes=[])
-    def lame_0(self, coordinates):
-        return np.ones_like(coordinates[..., 0])
+    def lame_0(x,y):
+        return 1
 
-    @lame_coefficient(1, axes=[])
-    def lame_1(self, coordinates):
-        return np.ones_like(coordinates[..., 1])
+    def lame_1(x,y):
+        return 1
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class SphericalCoordinateSystem(RadialCoordinateSystem):
     r"""
     3 Dimensional Spherical coordinate system.
@@ -380,7 +385,6 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
            \text{To Cartesian:} & \quad x = r \sin(\theta) \cos(\phi), \\
                                 & \quad y = r \sin(\theta) \sin(\phi), \\
                                 & \quad z = r \cos(\theta) \\
-
            \text{From Cartesian:} & \quad r = \sqrt{x^2 + y^2 + z^2}, \\
                                   & \quad \theta = \arccos\left(\frac{z}{r}\right), \\
                                   & \quad \phi = \arctan2(y, x)
@@ -400,6 +404,7 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
     +-------------------+------------------------------+
     | :math:`\phi`      | :math:`r \sin(\theta)`       |
     +-------------------+------------------------------+
+
     Examples
     --------
     The Spherical coordinate system is visualized with circles (constant r) and lines radiating from the origin (constant theta) on a 2D slice.
@@ -445,6 +450,7 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
     """
     NDIM = 3
     AXES = ['r', 'theta', 'phi']
+    PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         r, theta, phi = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
@@ -460,23 +466,74 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
         phi = np.arctan2(y, x)
         return np.stack((r, theta, phi), axis=-1)
 
-    @lame_coefficient(0,axes=[])
-    def lame_0(self,coordinates):
-        return np.ones_like(coordinates[...,0])
 
-    @lame_coefficient(1,axes=[0])
-    def lame_1(self,coordinates):
-        return coordinates[...,0]
+    def lame_0(r, theta, phi):
+        return 1
 
-    @lame_coefficient(2,axes=[0,1])
-    def lame_2(self,coordinates):
-        r, theta = coordinates[...,0],coordinates[...,1]
-        return r*np.sin(theta)
+    def lame_1(r, theta, phi):
+        return r
 
-    # noinspection PyMethodMayBeStatic
-    def shell_volume(self,radii: NDArray[np.floating]):
-        return 4*np.pi*radii**2
+    def lame_2(r, theta, phi):
+        return r*sp.sin(theta)
 
+    def integrate_in_shells(self,
+                            field: Union[np.ndarray,Callable],
+                            radii: np.ndarray):
+        r"""
+
+        Parameters
+        ----------
+        field
+        radii
+
+        Returns
+        -------
+
+        Examples
+        --------
+
+        Let's calculate the mass of a constant density sphere of density 1. To start, let's set up
+        the coordinate system and the arrays.
+
+        .. plot::
+            :include-source:
+
+            >>> import numpy as np
+            >>> from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
+            >>> cs = SphericalCoordinateSystem()
+            >>> r = np.linspace(0,1,1000)
+            >>> density = np.ones_like(r)
+
+            Now we can do the computation
+
+            >>> mass = cs.integrate_in_shells(density, r)
+
+            Now, the mass should go as
+
+            .. math::
+
+                M(<r) = 4\pi \int_0^r \rho r^2 dr = \frac{4}{3}\pi r^3 = \frac{4}{3}\pi r^3
+
+            >>> import matplotlib.pyplot as plt
+            >>> _ = plt.plot(r,mass)
+            >>> _ = plt.plot(r, (4/3)*np.pi*r**3)
+            >>> plt.show()
+
+
+        """
+        # Construct the integrand and the spline
+        if callable(field):
+            f = lambda r: field(r)*r**2
+        else:
+            f = InterpolatedUnivariateSpline(radii,field*radii**2)
+        return 4*np.pi*integrate(f,radii,radii[0],minima=True)
+
+    def integrate_to_infinity(self,
+                              field: Union[np.ndarray,Callable],
+                              radii: np.ndarray):
+        pass
+
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class PolarCoordinateSystem(CoordinateSystem):
     r"""
     2 Dimensional Polar coordinate system.
@@ -551,6 +608,7 @@ class PolarCoordinateSystem(CoordinateSystem):
         """
     NDIM = 2
     AXES = ['r', 'theta']
+    PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         r, theta = coordinates[..., 0], coordinates[..., 1]
@@ -564,14 +622,13 @@ class PolarCoordinateSystem(CoordinateSystem):
         theta = np.arctan2(y, x)
         return np.stack((r, theta), axis=-1)
 
-    @lame_coefficient(0,axes=[])
-    def lame_0(self,coordinates):
-        return np.ones_like(coordinates[...,0])
+    def lame_0(r,theta):
+        return 1
 
-    @lame_coefficient(1,axes=[0])
-    def lame_1(self,coordinates):
-        return coordinates[...,0]
+    def lame_1(r,theta):
+        return r
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CylindricalCoordinateSystem(CoordinateSystem):
     r"""
     3 Dimensional Cylindrical coordinate system.
@@ -605,7 +662,7 @@ class CylindricalCoordinateSystem(CoordinateSystem):
     +-----------------+----------------------------+
     | :math:`\phi`    | :math:`\rho`               |
     +-----------------+----------------------------+
-    | :math:`z`        | :math:`1`                 |
+    | :math:`z`       |  :math:`1`                 |
     +-----------------+----------------------------+
 
     Examples
@@ -653,6 +710,7 @@ class CylindricalCoordinateSystem(CoordinateSystem):
         """
     NDIM = 3
     AXES = ['rho', 'phi', 'z']
+    PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         rho, phi, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
@@ -666,19 +724,18 @@ class CylindricalCoordinateSystem(CoordinateSystem):
         phi = np.arctan2(y, x)
         return np.stack((rho, phi, z), axis=-1)
 
-    @lame_coefficient(0,axes=[])
-    def lame_0(self,coordinates):
-        return np.ones_like(coordinates[...,0])
 
-    @lame_coefficient(1,axes=[0])
-    def lame_1(self,coordinates):
-        return coordinates[...,0]
+    def lame_0(rho,phi,z):
+        return 1
 
-    @lame_coefficient(2,axes=[])
-    def lame_2(self,coordinates):
-        return np.ones_like(coordinates[...,0])
 
-# noinspection DuplicatedCode
+    def lame_1(rho,phi,z):
+        return rho
+
+    def lame_2(rho,phi,z):
+        return 1
+
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
     r"""
     A generalized coordinate system that replaces the standard Euclidean norm with
@@ -693,16 +750,38 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
 
     **Conversion to and from Cartesian coordinates**:
 
+    Because the angular coordinates are the same as in spherical coordinates, the same basic transformations may
+    be used; however, an additional scaling is necessary because :math:`r` is no longer the physical distance. Given
+    :math:`(r,\theta,\phi)`, the unit vector in the correct direction has the form
+
+    .. math::
+
+        \hat{r} = \begin{pmatrix}\sin(\theta)\cos(\phi)\\\sin(\theta)\sin(\phi)\\\cos(\theta)\end{pmatrix}
+
+    Now, the effective radius of this vector is
+
+    .. math::
+
+        r(\hat{r})^2 = \eta_x^2 \sin^2\theta \cos^2\phi + \eta_y^2 \sin^2\theta \sin^2\phi + \eta_z^2 \cos^2\theta = \Omega^2(\theta,\phi).
+
+    The relevant scaling is then :math:`r/r(\hat{r})`, so the conversions are as follows:
+
     .. math::
 
        \begin{aligned}
-           \text{To Cartesian:} & \quad x = \frac{r}{\eta_x} \sin(\theta) \cos(\phi), \\
-                                & \quad y = \frac{r}{\eta_y} \sin(\theta) \sin(\phi), \\
-                                & \quad z = \frac{r}{\eta_z} \cos(\theta), \\
+           \text{To Cartesian:} & \quad x = \frac{r}{\Omega(\theta,\phi)} \sin(\theta) \cos(\phi), \\
+                                & \quad y = \frac{r}{\Omega(\theta,\phi)} \sin(\theta) \sin(\phi), \\
+                                & \quad z = \frac{r}{\Omega(\theta,\phi)} \cos(\theta), \\
            \text{From Cartesian:} & \quad r = \sqrt{\eta_x^2 x^2 + \eta_y^2 y^2 + \eta_z^2 z^2}, \\
-                                  & \quad \theta = \arccos\left(\frac{z}{r}\right), \\
-                                  & \quad \phi = \arctan2(y, x).
+                                  & \quad \theta = \arccos\left(\frac{z}{d}\right), \\
+                                  & \quad \phi = \arctan2(y, x),
        \end{aligned}
+
+    where
+
+    .. math::
+
+        d^2 = x^2 + y^2 + z^2.
 
     **Mathematical Background**:
 
@@ -710,21 +789,7 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
 
     .. math::
 
-        d^2 = x^2 + y^2 + z^2 = r^2 \left[\frac{\cos^2\phi \sin^2\theta}{\eta_x^2}
-        + \frac{\sin^2\phi \sin^2\theta}{\eta_y^2} + \frac{\cos^2\theta}{\eta_z^2}\right].
-
-    We define the *angular scale* function:
-
-    .. math::
-
-        d^2 = r^2 \Omega(\phi, \theta)^2,
-
-    where:
-
-    .. math::
-
-        \Omega(\phi, \theta) = \sqrt{\frac{\cos^2\phi \sin^2\theta}{\eta_x^2}
-        + \frac{\sin^2\phi \sin^2\theta}{\eta_y^2} + \frac{\cos^2\theta}{\eta_z^2}}.
+        d^2 = x^2 + y^2 + z^2 = \frac{r^2}{\Omega(\theta,\phi)^2}.
 
     **Lamé Coefficients**:
 
@@ -732,50 +797,52 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
 
     .. math::
 
-        {\bf r} = r \Omega(\phi, \theta) \hat{r}.
+        {\bf r} = \frac{r}{\Omega(\phi, \theta)} \hat{r}.
 
     1. **Radial Component**:
        The radial Lamé coefficient is:
 
        .. math::
 
-           \lambda_r = \left|\frac{\partial {\bf r}}{\partial r}\right| = \Omega(\phi, \theta).
+           \lambda_r = \left|\frac{\partial {\bf r}}{\partial r}\right| = \frac{1}{\Omega(\phi, \theta)}.
 
     2. :math:`\theta` **Component**:
-       The Lamé coefficient for :math:`\theta` is more complex and involves both :math:`\Omega` and its derivative:
+       The Lamé coefficient for :math:`\theta` is more complex and involves both :math:`\Omega` and its derivative. Because
+       :math:`\partial_\theta \hat{r} = \hat{\theta}`, we may express this as
 
        .. math::
 
-           \begin{aligned}
-            \left| \frac{\partial {\bf r}}{\partial \theta} \right| &=
-           r \Omega\sqrt{\frac{\sin^2\theta \cos^2\theta}{\Omega^4} \left(
-           \frac{\cos^2\phi}{\eta_x^2} + \frac{\sin^2\phi}{\eta_y^2} - \frac{1}{\eta_z^2}
-           \right)^2 + 1}, \\
-           \text{where} \quad \partial_\theta \Omega &= \frac{\cos\theta \sin\theta}{\Omega}
-           \left[\left(\frac{\cos^2\phi}{\eta_x^2} + \frac{\sin^2\phi}{\eta_y^2}\right)
-           - \frac{1}{\eta_z^2}\right].
-           \end{aligned}
+            \lambda_\theta = \left| \frac{\partial {\bf r}}{\partial \theta} \right| = \frac{r}{\Omega}\left[1 + \frac{1}{\Omega^2}\left(\frac{\partial \Omega}{\partial \theta}\right)^2\right]^{1/2}
+
+       where
+
+       .. math::
+
+            \frac{\partial \Omega}{\partial \theta} = \frac{1}{\Omega}\sin \theta \cos \theta \left[\eta_x^2\cos^2\phi + \eta_y^2\sin^2\phi - \eta_z^2\right].
 
        .. note::
 
            In the special case :math:`\eta_x=\eta_y=\eta_z`, :math:`\Omega = 1` and :math:`\partial_\theta \Omega = 0`, so
-           the entire left hand term under the radical is zero and we get
+           the entire right hand term under the radical is zero and we get
 
            .. math::
                \left|\frac{\partial {\bf r}}{\partial \theta} \right| = r.
 
-       We further note that the lame coefficient is precisely this scale factor.
 
     3. :math:`\phi` **Component**:
 
-       The Lamé coefficient for :math:`\phi` involves a similar structure:
+       Because :math:`\partial_\phi \hat{r} = \sin\theta \hat{\phi}`, we may express this as
 
        .. math::
 
-            \left| \frac{\partial {\bf r}}{\partial \phi} \right| =
-           r \Omega \sin \theta \sqrt{\frac{\sin^2\theta\cos^2 \phi \sin^2 \phi}{\Omega^4} \left(
-           \frac{1}{\eta_y^2} - \frac{1}{\eta_x^2}
-           \right)^2 + 1}
+            \lambda_\phi = \left| \frac{\partial {\bf r}}{\partial \phi} \right| = \frac{r}{\Omega}\left[\sin^2\theta + \frac{1}{\Omega^2}\left(\frac{\partial \Omega}{\partial \phi}\right)^2\right]^{1/2}
+
+       where
+
+       .. math::
+
+            \frac{\partial \Omega}{\partial \phi} = \frac{1}{\Omega}\sin^2 \theta \cos \phi \sin \phi \left[\eta_y^2 - \eta_x^2\right].
+
 
     **Shell Coefficient**
 
@@ -819,194 +886,131 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
     the scaling factors :math:`\eta_x`, :math:`\eta_y`, and :math:`\eta_z`.
     """
     NDIM = 3
-    AXES = ['r', 'phi', 'theta']
+    AXES = ['r','theta','phi']
+    PARAMETERS = {'scale_x':1, 'scale_y':1, 'scale_z':1}
+    _SKIP_LAMBDIFICATION = ['jacobian']
 
-    def __init__(self, scale_x: float,scale_y: float,scale_z: float):
+    def __init__(self, scale_x: float = 1,scale_y: float = 1,scale_z: float = 1):
         # BASIC SETUP
         self.scale_x = scale_x
         self.scale_y = scale_y
         self.scale_z = scale_z
         self.scales = np.array([scale_x, scale_y, scale_z])
 
-        super().__init__(scale_x,scale_y,scale_z)
+        super().__init__(scale_x=scale_x,scale_y=scale_y,scale_z=scale_z)
 
+        # COMPUTING special attributes
+        # For these coordinate systems, we need the flux factor and the shell factor,
+        # each of which must be computed by quadrature after symbolic reduction.
+        # These are already found symbolically vis-a-vis _derive_symbolic_attributes.
+        self.shell_parameter = self._compute_shell_coefficient()
+        self.flux_parameter = self._compute_flux_coefficient()
 
-    def omega(self, coordinates: NDArray) -> NDArray:
-        theta,phi = coordinates[..., 1], coordinates[..., 2]
-        st,ct,cp,sp = np.sin(theta),np.cos(theta),np.cos(phi),np.sin(phi)
+    def _compute_shell_coefficient(self):
+        func = self.get_derived_attribute_function('r_shell_element')
+        integrand = lambda theta, phi: func(1, theta, phi)
 
-        return np.sqrt((self.scale_x * st * cp) ** 2 + (self.scale_y * st * sp) ** 2 + (self.scale_z * ct) ** 2)
+        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0*x, lambda x: 0*x + 2*np.pi)[0]
 
-    # noinspection DuplicatedCode
-    def domega_dtheta(self, coordinates: NDArray) -> NDArray:
-        theta, phi = coordinates[..., 1], coordinates[..., 2]
-        st, ct, cp, sp = np.sin(theta), np.cos(theta), np.cos(phi), np.sin(phi)
+    def _compute_flux_coefficient(self):
+        func = self.get_derived_attribute_function('r_surface_element')
+        integrand = lambda theta, phi: func(1, theta, phi)
 
-        # Compute Omega
-        omega = self.omega(coordinates)
+        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0*x, lambda x: 0*x + 2*np.pi)[0]
 
-        # Compute the derivative
-        factor = cp ** 2 / self.scale_x ** 2 + sp ** 2 / self.scale_y ** 2 - 1 / self.scale_z ** 2
-        return (ct * st / omega) * factor
+    def _derive_symbolic_attributes(self):
+        # PERFORM the standard ones.
+        super()._derive_symbolic_attributes()
+        self._symbolic_attributes['omega'] = sp.simplify(self._omega(*self.SYMBAXES,**self.SYMBPARAMS).subs(self.parameters))
+        mylog.debug(f"\t [COMPLETE] Derived  omega...")
 
-    def domega_dphi(self, coordinates: NDArray) -> NDArray:
-        theta, phi = coordinates[..., 1], coordinates[..., 2]
-        st, ct, cp, sp = np.sin(theta), np.cos(theta), np.cos(phi), np.sin(phi)
+        # COMPUTING the r surface element.
+        r_surf_element_symbol = (self.get_lame_symbolic('theta')*self.get_lame_symbolic('phi'))/(self.get_lame_symbolic('r')*self.SYMBAXES[0]**2)
+        r_surf_element_symbol = sp.simplify(r_surf_element_symbol.subs(self.parameters))
+        self._symbolic_attributes['r_surface_element'] = sp.simplify(r_surf_element_symbol)
+        mylog.debug(f"\t [COMPLETE] Derived  r_surface_element...")
 
-        # Compute Omega
-        omega = self.omega(coordinates)
+        # COMPUTING the shell element.
+        shell_element = (self.get_derived_attribute_symbolic('jacobian')/self.SYMBAXES[0]**2)
+        shell_element = sp.simplify(shell_element.subs(self.parameters))
+        self._symbolic_attributes['r_shell_element'] = sp.simplify(shell_element)
+        mylog.debug(f"\t [COMPLETE] Derived  r_shell_element...")
 
-        # Compute the derivative
-        factor = 1 / self.scale_y ** 2 - 1 / self.scale_x ** 2
-        return (cp * sp * st ** 2 / omega) * factor
+    @staticmethod
+    def _omega(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
+        return sp.sqrt(
+            (scale_x*sp.sin(theta)*sp.cos(phi))**2 +
+            (scale_y*sp.sin(theta)*sp.sin(phi))**2 +
+            (scale_z*sp.cos(theta))**2
+        )
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         # PULL the coordinates out of the coordinate arrays.
-        r, theta, phi = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-
-        # COMPUTE the radial scales
-        st,ct,cp,sp = np.sin(theta),np.cos(theta),np.cos(phi),np.sin(phi)
+        omega = self._eval_der_attr_func('omega',coordinates)
+        r,theta, phi = coordinates[...,0], coordinates[..., 1], coordinates[..., 2]
+        st, ct, cp, sp = np.sin(theta), np.cos(theta), np.cos(phi), np.sin(phi)
 
         # COMPUTE inversion
-        x = r * st * cp / self.scale_x
-        y = r * st * sp / self.scale_y
-        z = r * ct / self.scale_z
+        x = r * st * cp / omega
+        y = r * st * sp / omega
+        z = r * ct / omega
         return np.stack((x, y, z), axis=-1)
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
         xi = np.sqrt((self.scale_x*x)**2 + (self.scale_y*y)**2 + (self.scale_z*z)**2)
-        theta = np.arccos(z / xi)
+        r = np.sqrt(x**2+y**2+z**2)
+        theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return np.stack((xi, theta, phi), axis=-1)
 
-    def _lame_0_unscaled(self, coordinates) -> NDArray:
-        return self.omega(coordinates)
-
-    def _lame_1_unscaled(self, coordinates) -> NDArray:
-        r"""
-        Compute the unscaled Lamé coefficient for the theta component.
-
-        This is given by:
-
-        .. math::
-            \lambda_\theta = \Omega(\phi, \theta) \cdot \sqrt{\Omega^2 + \left(\frac{\partial \Omega}{\partial \theta}\right)^2}.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinates with shape (..., 3).
-
-        Returns
-        -------
-        NDArray
-            Unscaled Lamé coefficient for the theta component.
-        """
-        omega = self.omega(coordinates)
-        domega_dtheta = self.domega_dtheta(coordinates)
-        return omega * np.sqrt(omega ** 2 + domega_dtheta ** 2)
-
-    def _lame_2_unscaled(self, coordinates) -> NDArray:
-        r"""
-        Compute the unscaled Lamé coefficient for the phi component.
-
-        This is given by:
-
-        .. math::
-            \lambda_\phi = \sin(\theta) \cdot \Omega(\phi, \theta)
-                           \cdot \sqrt{\Omega^2 + \left(\frac{\partial \Omega}{\partial \phi}\right)^2}.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinates with shape (..., 3).
-
-        Returns
-        -------
-        NDArray
-            Unscaled Lamé coefficient for the phi component.
-        """
-        theta = coordinates[..., 1]
-        omega = self.omega(coordinates)
-        domega_dphi = self.domega_dphi(coordinates)
-        return np.sin(theta) * omega * np.sqrt(omega ** 2 + domega_dphi ** 2)
-
-    def _unscaled_radial_jacobian(self, coordinates: NDArray) -> NDArray:
-        r"""
-        Compute the unscaled Jacobian at the specified coordinates.
-
-        The unscaled Jacobian is given by the product of the Lamé coefficients:
-
-        .. math::
-            J_{\text{unscaled}} = \lambda_r \cdot \lambda_\theta \cdot \lambda_\phi.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinates of shape (..., 3), where the final axis contains (r, theta, phi).
-
-        Returns
-        -------
-        NDArray
-            The unscaled Jacobian at the specified points.
-        """
-        lam_r = self._lame_0_unscaled(coordinates)
-        lam_theta = self._lame_1_unscaled(coordinates)
-        lam_phi = self._lame_2_unscaled(coordinates)
-
-        return lam_r * lam_theta * lam_phi
-
-    def compute_shell_coefficient(self):
-        r"""
-        Compute the integral of the unscaled Jacobian over angular coordinates :math:`(\phi, \theta)`.
-
-        Mathematically, this computes:
-
-        .. math::
-        sy
-            C = \int_0^\pi d\theta \int_0^{2\pi} d\phi J_{\text{unscaled}}(0, \phi, \theta)
-
-        where :math:`J_{\text{unscaled}}` is the product of the unscaled Lamé coefficients:
-
-        .. math::
-            J_{\text{unscaled}} = \tilde{\lambda}_r \cdot \tilde{\lambda}_\theta \cdot \tilde{\lambda}_\phi.
-
-        Returns
-        -------
-        float
-            The computed shell coefficient, which is used as a scaling factor for the shell volume.
-        """
-
-        def integrand(theta, phi):
-            coordinates = np.array([[0, theta, phi]])  # Single row for (r=0, theta, phi)
-            return self._unscaled_radial_jacobian(coordinates)
-
-        # Perform the integration over phi [0, 2π] and theta [0, π]
-        result, _ = dblquad(
-            integrand,  # Function to integrate
-            0, 2 * np.pi,  # Limits for phi
-            lambda _: 0,  # Lower limit for theta
-            lambda _: np.pi  # Upper limit for theta
+    def lame_0(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
+        _o = sp.sqrt(
+            (scale_x*sp.sin(theta)*sp.cos(phi))**2 +
+            (scale_y*sp.sin(theta)*sp.sin(phi))**2 +
+            (scale_z*sp.cos(theta))**2
         )
-        return result
+        return 1/_o
 
-    def shell_volume(self, radii: NDArray[np.floating]) -> NDArray[np.floating]:
-        return self._shell_coefficient * radii ** 2
+    def lame_1(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
+        _o = sp.sqrt(
+            (scale_x*sp.sin(theta)*sp.cos(phi))**2 +
+            (scale_y*sp.sin(theta)*sp.sin(phi))**2 +
+            (scale_z*sp.cos(theta))**2
+        )
 
-    @lame_coefficient(0,axes=[1,2,3])
-    def lame_0(self,coordinates):
-        return self._lame_0_unscaled(coordinates)
+        return r*sp.sqrt((sp.diff(1/_o,theta)**2 + (1/_o)**2))
 
-    @lame_coefficient(1,axes=[1,2,3])
-    def lame_1(self,coordinates):
-        r = coordinates[..., 0]
-        return r*self._lame_1_unscaled(coordinates)
+    def lame_2(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
+        _o = sp.sqrt(
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
+            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
+            (scale_z * sp.cos(theta)) ** 2
+        )
 
-    @lame_coefficient(2,axes=[1,2,3])
-    def lame_2(self,coordinates):
-        r = coordinates[..., 0]
-        return r * self._lame_2_unscaled(coordinates)
+        return r * sp.sqrt((sp.diff(1 / _o, phi) ** 2 + (sp.sin(theta) / _o) ** 2))
 
+    def jacobian(self,coordinates: NDArray) -> NDArray:
+        return np.prod(self.eval_lame(coordinates),axis=-1)
+
+    def integrate_in_shells(self,
+                            field: Union[np.ndarray,Callable],
+                            radii: np.ndarray):
+        # Interpolate the integrand
+        if callable(field):
+            f = lambda r: field(r)*r**2
+        else:
+            f = InterpolatedUnivariateSpline(radii,field*radii**2)
+
+        return self.shell_parameter*integrate(f,radii,x_0=radii[0],minima=True)
+
+    def integrate_to_infinity(self,
+                              field: Union[np.ndarray,Callable],
+                              radii: np.ndarray):
+        pass
+
+
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding,PyMethodOverriding
 class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
     r"""
     3-dimensional coordinate system with level surfaces forming concentric homoeoidal
@@ -1024,33 +1028,48 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
         \eta = \sqrt{1-\epsilon^2}.
 
+    In this case, :math:`\Omega` takes the form
+
+    .. math::
+
+        \Omega^2(\theta,\phi) = \eta^2 \sin^2\theta + \cos^2\theta = \cos^2\theta - \epsilon^2 \sin^2\theta.
+
+
     Thus, the transformation is
 
     .. math::
 
        \begin{aligned}
-           \text{To Cartesian:} & \quad x = \frac{r}{\sqrt{1-\epsilon^2}} \sin(\theta) \cos(\phi), \\
-                                & \quad y = \frac{r}{\sqrt{1-\epsilon^2}} \sin(\theta) \sin(\phi), \\
+           \text{To Cartesian:} & \quad x = \frac{r}{\Omega} \sin(\theta) \cos(\phi), \\
+                                & \quad y = \frac{r}{\Omega} \sin(\theta) \sin(\phi), \\
                                 & \quad z = r \cos(\theta), \\
            \text{From Cartesian:} & \quad r = \sqrt{(1-\epsilon^2)(x^2 + y^2) + z^2}, \\
-                                  & \quad \theta = \arccos\left(\frac{z}{r}\right), \\
+                                  & \quad \theta = \arccos\left(\frac{z}{d}\right), \\
                                   & \quad \phi = \arctan2(y, x).
        \end{aligned}
+
+    where
+
+    .. math::
+
+        d^2 = x^2 + y^2 + z^2
 
     Notes
     -----
 
     The Lame coefficients in this coordinate system are as follows:
 
-    +---------------+-------------------------------------------------------------------------------------+
-    | Axis          | Lame Coefficient                                                                    |
-    +===============+=====================================================================================+
-    | :math:`r`     | :math:`\sqrt{1-\epsilon^2\sin^2\theta}`                                             |
-    +---------------+-------------------------------------------------------------------------------------+
-    | :math:`\theta`| :math:`r\left[\epsilon^2\left(\epsilon^2 -2\right)\sin^2\theta + 1\right]^{1/2}`    |
-    +---------------+-------------------------------------------------------------------------------------+
-    | :math:`\phi`  | :math:`r\sin\theta \sqrt{1-\epsilon^2\sin^2\theta}`                                 |
-    +---------------+-------------------------------------------------------------------------------------+
+    +---------------+------------------------------------------------------------------------------------------+
+    | **Axis**      | **Lamé Coefficient**                                                                     |
+    +===============+==========================================================================================+
+    | :math:`r`     | :math:`\frac{1}{\sqrt{1 - \epsilon^2 \sin^2 \theta}}`                                    |
+    +---------------+------------------------------------------------------------------------------------------+
+    | :math:`\theta`| :math:`\frac{r}{\sqrt{1 - \epsilon^2 \sin^2 \theta}} \sqrt{1 + \frac{\epsilon^4 \sin^2\  |
+    |               | \theta \cos^2 \theta}{(1 - \epsilon^2 \sin^2 \theta)^2}}`                                |
+    +---------------+------------------------------------------------------------------------------------------+
+    | :math:`\phi`  | :math:`r \sin \theta \cdot \sqrt{1 - \epsilon^2 \sin^2 \theta}`                          |
+    +---------------+------------------------------------------------------------------------------------------+
+
 
     **Mathematical Background**:
 
@@ -1083,25 +1102,7 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
         r^2 = (1-\epsilon^2)(x^2 + y^2) + z^2
 
-    For a point :math:`(r, \phi, \theta)` in the pseudo-spherical coordinate system, its Cartesian distance is:
-
-    .. math::
-
-        d^2 = x^2 + y^2 + z^2 = r^2 \left[(1-\epsilon^2)\sin^2\theta + \cos^2 \theta\right] = r^2\left[1-\epsilon^2\sin^2\theta\right].
-
-    Simplifying
-
-    .. math::
-
-        d^2 = r^2\left(1-\epsilon^2\sin^2 \theta\right)
-
-    We define the *angular scale* function:
-
-    .. math::
-
-        d^2 = r^2 \Omega(\phi, \theta)^2,
-
-    where:
+    In this coordinate system,
 
     .. math::
 
@@ -1113,24 +1114,36 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     .. math::
 
-        {\bf r} = r \Omega(\phi, \theta) \hat{r}.
+        {\bf r} = \frac{r}{\Omega(\phi, \theta)} \hat{r}.
 
     1. **Radial Component**:
        The radial Lamé coefficient is:
 
        .. math::
 
-           \lambda_r = \left|\frac{\partial {\bf r}}{\partial r}\right| = \Omega(\phi, \theta).
+           \lambda_r = \left|\frac{\partial {\bf r}}{\partial r}\right| = \frac{1/\Omega(\phi, \theta)}.
 
     2. :math:`\theta` **Component**:
-       The Lamé coefficient for :math:`\theta` is more complex and involves both :math:`\Omega` and its derivative:
+       The Lamé coefficient for :math:`\theta` is more complex and involves both :math:`\Omega` and its derivative. Because
+       :math:`\partial_\theta \hat{r} = \hat{\theta}`, we may express this as
 
        .. math::
 
-          \begin{aligned}
-          \left|\frac{\partial {\bf r}}{\partial \theta}\right| &= r\left|\frac{\partial \Omega}{\partial \theta} \hat{r} + \Omega \hat{\theta}\right|\\
-          &= r\left[\epsilon^2\left(\epsilon^2 -2\right)\sin^2\theta + 1\right]^{1/2}
-          \end{aligned}
+            \lambda_\theta = \left| \frac{\partial {\bf r}}{\partial \theta} \right| = \frac{r}{\Omega}\left[1 + \frac{1}{\Omega^2}\left(\frac{\partial \Omega}{\partial \theta}\right)^2\right]^{1/2}
+
+       where
+
+       .. math::
+
+            \frac{\partial \Omega}{\partial \theta} = -\frac{\epsilon^2 \sin \theta \cos \theta}{\Omega}
+
+       .. note::
+
+           In the special case :math:`\eta_x=\eta_y=\eta_z`, :math:`\Omega = 1` and :math:`\partial_\theta \Omega = 0`, so
+           the entire right hand term under the radical is zero and we get
+
+           .. math::
+               \left|\frac{\partial {\bf r}}{\partial \theta} \right| = r.
 
     3. :math:`\phi` **Component**:
 
@@ -1139,8 +1152,8 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
        .. math::
 
           \begin{aligned}
-          \left|\frac{\partial {\bf r}}{\partial \phi}\right| &= r\left|\Omega \sin(\theta) \hat{\phi}\right|\\
-          &= r\Omega \sin(\theta)
+          \left|\frac{\partial {\bf r}}{\partial \phi}\right| &= r\left|\frac{1}{\Omega} \sin(\theta) \hat{\phi}\right|\\
+          &= \frac{r}{\Omega}\sin(\theta)
           \end{aligned}
 
     Examples
@@ -1189,87 +1202,51 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['r', 'phi', 'theta']
+    AXES = ['r', 'theta','phi']
+    PARAMETERS = {'ecc': 0.0}
 
-    def __init__(self, ecc=0.0):
-        """
-        Initialize the Oblate Homoeoidal coordinate system.
-
-        Parameters
-        ----------
-        ecc: float
-            The eccentricity of the coordinate system. This should be a value between 0 and 1.
-            Values of ``0`` correspond to spherical coordinates.
-
-        """
-        # Perform the standard initialization for the coordinate system.
+    def __init__(self, ecc: float = 0.0):
         self.ecc = ecc
         self.scale_x = self.scale_y = np.sqrt(1 - ecc ** 2)
         self.scale_z = 1
         super(PseudoSphericalCoordinateSystem,self).__init__(ecc=self.ecc)
 
-        # GENERATE the shell volume constant
-        self._shell_coefficient = self.compute_shell_coefficient()
+        # COMPUTING special attributes
+        # For these coordinate systems, we need the flux factor and the shell factor,
+        # each of which must be computed by quadrature after symbolic reduction.
+        # These are already found symbolically vis-a-vis _derive_symbolic_attributes.
+        self.shell_parameter = self._compute_shell_coefficient()
+        self.flux_parameter = self._compute_flux_coefficient()
 
-    def compute_shell_coefficient(self):
-        r"""
-        Compute the shell parameter for the coordinate system.
+    def _compute_shell_coefficient(self):
+        func = self.get_derived_attribute_function('r_shell_element')
+        integrand = lambda theta: func(1,theta,0)
 
-        The shell parameter is an integral that captures the scaling behavior
-        of the Lamé coefficients across the angular coordinate, which is necessary
-        for determining the volume of a spherical shell.
+        return 2*np.pi*quad(integrand, 0,np.pi)[0]
 
-        For the given homoeoidal coordinate system, the integral is defined as:
+    def _compute_flux_coefficient(self):
+        func = self.get_derived_attribute_function('r_surface_element')
+        integrand = lambda theta: func(1, theta, 0)
 
-        .. math::
+        return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
-            S = \int_0^\pi h_0(\theta) h_1(\theta) h_2(\theta) \sin(\theta) d\theta
+    @staticmethod
+    def _omega(r,theta,phi,ecc=0.0):
+        return sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
 
-        Where:
-            - :math:`h_0(\theta)` is the radial Lamé coefficient,
-            - :math:`h_1(\theta)` is the angular Lamé coefficient in the polar direction,
-            - :math:`h_2(\theta)` is the azimuthal Lamé coefficient.
+    def lame_0(r, theta, phi, ecc=0.0):
+        _o = sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
+        return 1/_o
 
-        Returns
-        -------
-        float
-            The computed shell parameter for this coordinate system.
-        """
-        # Compute the relevant coefficients
-        coef = self.ecc ** 2 * (self.ecc ** 2 - 2)
-        lame_0_comp = lambda theta: np.sqrt(1 - (self.ecc * np.sin(theta) ** 2))
-        lame_1_comp = lambda theta: np.sqrt(coef * np.sin(theta) ** 2 + 1)
-        lame_2_comp = lambda theta: np.sin(theta) * lame_1_comp(theta)
+    def lame_1(r, theta, phi, ecc=0.0):
+        _o = sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
 
-        integrand = lambda theta: lame_0_comp(theta) * lame_2_comp(theta) * lame_1_comp(theta)
+        return r*sp.sqrt((sp.diff(1/_o,theta)**2 + (1/_o)**2))
 
-        # Perform the integration
-        return 2*np.pi*quad(integrand, 0, np.pi)[0]
+    def lame_2(r, theta, phi, ecc=0.0):
+        _o = sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
 
-    def omega(self, coordinates: NDArray) -> NDArray:
-        theta = coordinates[..., 1]
-        return np.sqrt(1 - (self.ecc*np.sin(theta)**2))
-
-
-    @lame_coefficient(0,axes=[1])
-    def lame_0(self,coordinates):
-        return self.omega(coordinates)
-
-    @lame_coefficient(1,axes=[0,1])
-    def lame_1(self,coordinates):
-        r,theta = coordinates[..., 0], coordinates[..., 1]
-        st = np.sin(theta)
-
-        coef = self.ecc**2 * (self.ecc**2 - 2)
-
-        return r*np.sqrt(coef*st**2 + 1)
-
-    @lame_coefficient(2,axes=[0,1])
-    def lame_2(self,coordinates):
-        r, theta = coordinates[..., 0], coordinates[..., 1]
-        omega = self.omega(coordinates)
-
-        return r *omega*np.sin(theta)
+        return r * sp.sqrt((sp.diff(1 / _o, phi) ** 2 + (sp.sin(theta) / _o) ** 2))
 
     def __str__(self):
         return f"<{self.__class__.__name__}(ecc={self.ecc})>"
@@ -1277,6 +1254,7 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
     def __repr__(self):
         return self.__str__()
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
     r"""
     3-dimensional coordinate system with level surfaces forming concentric homoeoidal
@@ -1311,15 +1289,17 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     The Lame coefficients in this coordinate system are as follows:
 
-    +---------------+-------------------------------------------------------------------------------------+
-    | Axis          | Lame Coefficient                                                                    |
-    +===============+=====================================================================================+
-    | :math:`r`     | :math:`\sqrt{1-\epsilon^2\cos^2\theta}`                                             |
-    +---------------+-------------------------------------------------------------------------------------+
-    | :math:`\theta`| :math:`r\left[\epsilon^2\left(\epsilon^2 -2\right)\cos^2\theta + 1\right]^{1/2}`    |
-    +---------------+-------------------------------------------------------------------------------------+
-    | :math:`\phi`  | :math:`r\sin\theta \sqrt{1-\epsilon^2\cos^2\theta}`                                 |
-    +---------------+-------------------------------------------------------------------------------------+
+    +---------------+------------------------------------------------------------------------------------------+
+    | **Axis**      | **Lamé Coefficient**                                                                     |
+    +===============+==========================================================================================+
+    | :math:`r`     | :math:`\sqrt{1 - \epsilon^2 \cos^2 \theta}`                                              |
+    +---------------+------------------------------------------------------------------------------------------+
+    | :math:`\theta`| :math:`\frac{r}{\sqrt{1 - \epsilon^2 \cos^2 \theta}} \sqrt{1 + \frac{\epsilon^4 \sin^2\  |
+    |               | \theta \cos^2 \theta}{(1 - \epsilon^2 \cos^2 \theta)^2}}`                                |
+    +---------------+------------------------------------------------------------------------------------------+
+    | :math:`\phi`  | :math:`r \sin \theta \cdot \sqrt{1 - \epsilon^2 \cos^2 \theta}`                          |
+    +---------------+------------------------------------------------------------------------------------------+
+
 
     **Mathematical Background**:
 
@@ -1352,26 +1332,6 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
         r^2 = x^2 + y^2 +  (1-\epsilon^2)z^2
 
-    For a point :math:`(r, \phi, \theta)` in the pseudo-spherical coordinate system, its Cartesian distance is:
-
-    .. math::
-
-        d^2 = x^2 + y^2 + z^2 = r^2 \left[\sin^2\theta + (1-\epsilon^2)\cos^2 \theta\right] = r^2\left[1-\epsilon^2\cos^2\theta\right].
-
-    Simplifying
-
-    .. math::
-
-        d^2 = r^2\left(1-\epsilon^2\cos^2 \theta\right)
-
-    We define the *angular scale* function:
-
-    .. math::
-
-        d^2 = r^2 \Omega(\phi, \theta)^2,
-
-    where:
-
     .. math::
 
         \Omega(\phi, \theta) = \sqrt{1-\epsilon^2\cos^2\theta}.
@@ -1382,24 +1342,36 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     .. math::
 
-        {\bf r} = r \Omega(\phi, \theta) \hat{r}.
+        {\bf r} = \frac{r}{\Omega(\phi, \theta)} \hat{r}.
 
     1. **Radial Component**:
        The radial Lamé coefficient is:
 
        .. math::
 
-           \lambda_r = \left|\frac{\partial {\bf r}}{\partial r}\right| = \Omega(\phi, \theta).
+           \lambda_r = \left|\frac{\partial {\bf r}}{\partial r}\right| = \frac{1/\Omega(\phi, \theta)}.
 
     2. :math:`\theta` **Component**:
-       The Lamé coefficient for :math:`\theta` is more complex and involves both :math:`\Omega` and its derivative:
+       The Lamé coefficient for :math:`\theta` is more complex and involves both :math:`\Omega` and its derivative. Because
+       :math:`\partial_\theta \hat{r} = \hat{\theta}`, we may express this as
 
        .. math::
 
-          \begin{aligned}
-          \left|\frac{\partial {\bf r}}{\partial \theta}\right| &= r\left|\frac{\partial \Omega}{\partial \theta} \hat{r} + \Omega \hat{\theta}\right|\\
-          &= r\left[\epsilon^2\left(\epsilon^2 -2\right)\cos^2\theta + 1\right]^{1/2}
-          \end{aligned}
+            \lambda_\theta = \left| \frac{\partial {\bf r}}{\partial \theta} \right| = \frac{r}{\Omega}\left[1 + \frac{1}{\Omega^2}\left(\frac{\partial \Omega}{\partial \theta}\right)^2\right]^{1/2}
+
+       where
+
+       .. math::
+
+            \frac{\partial \Omega}{\partial \theta} = \frac{\epsilon^2 \sin \theta \cos \theta}{\Omega}
+
+       .. note::
+
+           In the special case :math:`\eta_x=\eta_y=\eta_z`, :math:`\Omega = 1` and :math:`\partial_\theta \Omega = 0`, so
+           the entire right hand term under the radical is zero and we get
+
+           .. math::
+               \left|\frac{\partial {\bf r}}{\partial \theta} \right| = r.
 
     3. :math:`\phi` **Component**:
 
@@ -1408,8 +1380,8 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
        .. math::
 
           \begin{aligned}
-          \left|\frac{\partial {\bf r}}{\partial \phi}\right| &= r\left|\Omega \sin(\theta) \hat{\phi}\right|\\
-          &= r\Omega \sin(\theta)
+          \left|\frac{\partial {\bf r}}{\partial \phi}\right| &= r\left|\frac{1}{\Omega} \sin(\theta) \hat{\phi}\right|\\
+          &= \frac{r}{\Omega}\sin(\theta)
           \end{aligned}
 
     Examples
@@ -1450,7 +1422,7 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
         ...     cartesian = coordinate_system._convert_native_to_cartesian(coords)
         ...     _ = plt.plot(cartesian[:, 0], cartesian[:, 2], 'k-', lw=0.5)
 
-        >>> _ = plt.title('Oblate Homoeoidal Coordinate System')
+        >>> _ = plt.title('Prolate Homoeoidal Coordinate System')
         >>> _ = plt.xlabel('x')
         >>> _ = plt.ylabel('z')
         >>> _ = plt.axis('equal')
@@ -1458,78 +1430,55 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['r', 'phi', 'theta']
+    AXES = ['r', 'theta','phi']
+    PARAMETERS = {'ecc': 0.0}
 
-    def __init__(self, ecc=0.0):
+    def __init__(self, ecc: float = 0.0):
         self.ecc = ecc
         self.scale_x = self.scale_y = 1
         self.scale_z = np.sqrt(1 - ecc ** 2)
-        super(PseudoSphericalCoordinateSystem, self).__init__(ecc=self.ecc)
+        super(PseudoSphericalCoordinateSystem,self).__init__(ecc=self.ecc)
 
-        # GENERATE the shell volume constant
-        self._shell_coefficient = self.compute_shell_coefficient()
+        # COMPUTING special attributes
+        # For these coordinate systems, we need the flux factor and the shell factor,
+        # each of which must be computed by quadrature after symbolic reduction.
+        # These are already found symbolically vis-a-vis _derive_symbolic_attributes.
+        # COMPUTING special attributes
+        # For these coordinate systems, we need the flux factor and the shell factor,
+        # each of which must be computed by quadrature after symbolic reduction.
+        # These are already found symbolically vis-a-vis _derive_symbolic_attributes.
+        self.shell_parameter = self._compute_shell_coefficient()
+        self.flux_parameter = self._compute_flux_coefficient()
 
-    def compute_shell_coefficient(self):
-        r"""
-        Compute the shell parameter for the coordinate system.
+    def _compute_shell_coefficient(self):
+        func = self.get_derived_attribute_function('r_shell_element')
+        integrand = lambda theta: func(1, theta, 0)
 
-        The shell parameter is an integral that captures the scaling behavior
-        of the Lamé coefficients across the angular coordinate, which is necessary
-        for determining the volume of a spherical shell.
+        return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
-        For the given homoeoidal coordinate system, the integral is defined as:
+    def _compute_flux_coefficient(self):
+        func = self.get_derived_attribute_function('r_surface_element')
+        integrand = lambda theta: func(1, theta, 0)
 
-        .. math::
+        return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
-            S = \int_0^\pi h_0(\theta) h_1(\theta) h_2(\theta) \sin(\theta) d\theta
+    @staticmethod
+    def _omega(r,theta,phi,ecc=0.0):
+        return sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
 
-        Where:
-            - :math:`h_0(\theta)` is the radial Lamé coefficient,
-            - :math:`h_1(\theta)` is the angular Lamé coefficient in the polar direction,
-            - :math:`h_2(\theta)` is the azimuthal Lamé coefficient,
+    def lame_0(r, theta, phi, ecc=0.0):
+        _o = sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
+        return 1/_o
 
-        and each of the Lame coefficients has had any :math:`r` dependence removed.
+    def lame_1(r, theta, phi, ecc=0.0):
+        _o = sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
 
+        return r*sp.sqrt((sp.diff(1/_o,theta)**2 + (1/_o)**2))
 
-        Returns
-        -------
-        float
-            The computed shell parameter for this coordinate system.
-        """
-        # Compute the relevant coefficients
-        coef = self.ecc ** 2 * (self.ecc ** 2 - 2)
-        lame_0_comp = lambda theta: np.sqrt(1 - (self.ecc * np.cos(theta) ** 2))
-        lame_1_comp = lambda theta: np.sqrt(coef * np.cos(theta) ** 2 + 1)
-        lame_2_comp = lambda theta: np.sin(theta)*lame_1_comp(theta)
+    def lame_2(r, theta, phi, ecc=0.0):
+        _o = sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
 
-        integrand = lambda theta: lame_0_comp(theta) * lame_2_comp(theta) * lame_1_comp(theta)
-
-        # Perform the integration
-        return 2*np.pi*quad(integrand,0,np.pi)[0]
-
-    def omega(self, coordinates: NDArray) -> NDArray:
-        theta = coordinates[..., 1]
-        return np.sqrt(1 - (self.ecc * np.cos(theta) ** 2))
-
-    @lame_coefficient(0, axes=[1])
-    def lame_0(self, coordinates):
-        return self.omega(coordinates)
-
-    @lame_coefficient(1, axes=[0, 1])
-    def lame_1(self, coordinates):
-        r, theta = coordinates[..., 0], coordinates[..., 1]
-        ct = np.cos(theta)
-
-        coef = self.ecc ** 2 * (self.ecc ** 2 - 2)
-
-        return r * np.sqrt(coef * ct ** 2 + 1)
-
-    @lame_coefficient(2, axes=[0, 1])
-    def lame_2(self, coordinates):
-        r, theta = coordinates[..., 0], coordinates[..., 1]
-        omega = self.omega(coordinates)
-
-        return r * omega * np.sin(theta)
+        return r * sp.sqrt((sp.diff(1 / _o, phi) ** 2 + (sp.sin(theta) / _o) ** 2))
 
     def __str__(self):
         return f"<{self.__class__.__name__}(ecc={self.ecc})>"
@@ -1537,6 +1486,7 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
     def __repr__(self):
         return self.__str__()
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class OblateSpheroidalCoordinateSystem(CoordinateSystem):
     r"""
     3 Dimensional Oblate Spheroidal coordinate system.
@@ -1630,10 +1580,11 @@ class OblateSpheroidalCoordinateSystem(CoordinateSystem):
     """
     NDIM = 3
     AXES = ['mu', 'nu', 'phi']
+    PARAMETERS = {'a': 1.0}
 
-    def __init__(self, a: float):
+    def __init__(self, a: float = 1.0):
         self.a = a
-        super().__init__(a)
+        super().__init__(a=a)
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         mu, nu, phi = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
@@ -1644,27 +1595,23 @@ class OblateSpheroidalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        r2 = x ** 2 + y ** 2 + z ** 2
-        mu = np.arccosh(np.sqrt(r2 + self.a ** 2) / (2 * self.a))
-        nu = np.arcsin(z / (self.a * np.sinh(mu)))
+        rho = np.sqrt(x**2 + y**2)
+        d1_2,d2_2 = (rho+self.a)**2 + z**2, (rho-self.a)**2 + z**2
+        mu = np.arccosh((np.sqrt(d1_2)+np.sqrt(d2_2)) / (2 * self.a))
+        nu = np.arccos((np.sqrt(d1_2)-np.sqrt(d2_2)) / (2 * self.a))
         phi = np.arctan2(y, x)
         return np.stack((mu, nu, phi), axis=-1)
 
-    @lame_coefficient(0, axes=[0,1])
-    def lame_0(self, coordinates):
-        mu, nu = coordinates[..., 0], coordinates[..., 1]
-        return self.a * np.sqrt(np.sinh(mu) ** 2 + np.sin(nu) ** 2)
+    def lame_0(mu,nu,phi,a=1.0):
+        return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    @lame_coefficient(1, axes=[0,1])
-    def lame_1(self, coordinates):
-        mu, nu = coordinates[..., 0], coordinates[..., 1]
-        return self.a * np.sqrt(np.sinh(mu) ** 2 + np.sin(nu) ** 2)
+    def lame_1(mu,nu,phi,a=1.0):
+        return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    @lame_coefficient(2, axes=[0, 1])
-    def lame_2(self, coordinates):
-        mu, nu = coordinates[..., 0], coordinates[..., 1]
-        return self.a * np.cosh(mu) * np.cos(nu)
+    def lame_2(mu,nu,phi,a=1.0):
+        return a * sp.cosh(mu) * sp.cos(nu)
 
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class ProlateSpheroidalCoordinateSystem(CoordinateSystem):
     r"""
     3 Dimensional Prolate Spheroidal coordinate system.
@@ -1756,10 +1703,11 @@ class ProlateSpheroidalCoordinateSystem(CoordinateSystem):
     """
     NDIM = 3
     AXES = ['mu', 'nu', 'phi']
+    PARAMETERS = {'a': 1.0}
 
-    def __init__(self, a: float):
+    def __init__(self, a: float = 1.0):
         self.a = a
-        super().__init__(a)
+        super().__init__(a=a)
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         mu, nu, phi = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
@@ -1770,27 +1718,23 @@ class ProlateSpheroidalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        r2 = x ** 2 + y ** 2 + z ** 2
-        mu = np.arccosh(np.sqrt(r2 - self.a ** 2) / (2 * self.a))
-        nu = np.arccos(z / (self.a * np.cosh(mu)))
+        rho = np.sqrt(x**2 + y**2)
+        d1_2,d2_2 = (rho)**2 + (z+self.a)**2, (rho)**2 + (z-self.a)**2
+        mu = np.arccosh((np.sqrt(d1_2)+np.sqrt(d2_2)) / (2 * self.a))
+        nu = np.arccos((np.sqrt(d1_2)-np.sqrt(d2_2)) / (2 * self.a))
         phi = np.arctan2(y, x)
         return np.stack((mu, nu, phi), axis=-1)
 
-    @lame_coefficient(0, axes=[0,1])
-    def lame_0(self, coordinates):
-        mu, nu = coordinates[..., 0], coordinates[..., 1]
-        return self.a * np.sqrt(np.sinh(mu) ** 2 + np.sin(nu) ** 2)
+    def lame_0(mu,nu,phi,a=1.0):
+        return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    @lame_coefficient(1, axes=[0,1])
-    def lame_1(self, coordinates):
-        mu, nu = coordinates[..., 0], coordinates[..., 1]
-        return self.a * np.sqrt(np.sinh(mu) ** 2 + np.sin(nu) ** 2)
+    def lame_1(mu,nu,phi,a=1.0):
+        return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    @lame_coefficient(2, axes=[0,1])
-    def lame_2(self, coordinates):
-        mu, nu = coordinates[..., 0], coordinates[..., 1]
-        return self.a * np.sinh(mu) * np.sin(nu)
+    def lame_2(mu,nu,phi,a=1.0):
+        return a * sp.sinh(mu) * sp.sin(nu)
 
 if __name__ == '__main__':
-    h = PseudoSphericalCoordinateSystem(1,1,1)
-    print(h.compute_shell_coefficient()-(4*np.pi))
+    q = OblateHomoeoidalCoordinateSystem(ecc=0.0)
+    print(q.get_derived_attribute_symbolic('r_shell_element'))
+    print(q.flux_parameter/(4*np.pi))

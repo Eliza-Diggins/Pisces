@@ -16,7 +16,7 @@ from ruamel.yaml import (
 )
 from unyt import unyt_array, unyt_quantity
 
-config_directory = os.path.join(Path(__file__).parents[1], "bin", "config.yaml")
+config_directory = os.path.join(Path(__file__).parents[1], "bin")
 """ str: The system directory where the ``cluster_generator`` configuration is stored.
 
 The underlying ``.yaml`` file may be altered by the user to set configuration values.
@@ -349,5 +349,5 @@ class YAMLConfig:
         _ = self.config  # Re-load configuration
 
 
-pisces_params: YAMLConfig = YAMLConfig(config_directory)
+pisces_params: YAMLConfig = YAMLConfig(os.path.join(config_directory,'config.yaml'))
 """ YAMLConfig: The ``Pisces`` configuration object."""

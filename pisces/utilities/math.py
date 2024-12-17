@@ -125,11 +125,15 @@ def partial_derivative(coordinates: np.ndarray,
     if spacing is None:
         spacing = compute_grid_spacing(coordinates, axes=axes)
 
+
     # Handle np.gradient call for partial derivatives along specified axes
-    return np.gradient(field, *spacing, axis=axes, **kwargs)
+    if len(axes) > 1:
+        return np.stack(np.gradient(field, *spacing, axis=axes, **kwargs),axis=-1)
+    else:
+        return np.gradient(field, *spacing, axis=axes, **kwargs)
 
 def function_partial_derivative(
-        func: Callable[[np.ndarray],np.ndarray],
+        func: Callable[[np.ndarray,...],np.ndarray],
         coordinates: np.ndarray,
         axes: Union[int, List[int]],
         method: Literal['forward', 'backward', 'central'] = 'central',

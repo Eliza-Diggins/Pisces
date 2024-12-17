@@ -1,3 +1,6 @@
+"""
+Base classes for grid management in Pisces models.
+"""
 from pathlib import Path
 from typing import Union, Optional, List, Iterable, Iterator, Tuple, Callable, TYPE_CHECKING, Any, Dict
 
@@ -5,87 +8,75 @@ import numpy as np
 import unyt
 from numpy.typing import NDArray, ArrayLike
 from tqdm.auto import tqdm
-from pisces.geometry import GeometryHandler, Symmetry
+from pisces.geometry import GeometryHandler
 from pisces.geometry.coordinate_systems import CoordinateSystem
 from pisces.io import HDF5_File_Handle, HDF5ElementCache
 from pisces.models.grids.structs import BoundingBox, DomainDimensions
 
 if TYPE_CHECKING:
     from pisces.profiles.base import Profile
+    from pisces.geometry._typing import AxisAlias
 
 ChunkIndex = Union[int, Tuple[int, ...], NDArray[np.int_]]
-AxesSpecifier = Optional[Iterable[str]]
+AxesSpecifier = Iterable['AxisAlias']
 AxesMask = NDArray[np.bool_]
 
 class ModelGridManager:
-    """
-    Manager class for :py:class:`ModelGrid` objects.
+    r"""
+    Manager class for :py:class:`ModelField` objects; underlies all :py:class:`~pisces.models.base.Model` class
+    structures.
 
-    This class forms the backend of all Pisces :py:class:`pisces.models.base.Model` instances and
-    links the underlying HDF5 file to the grid logic.
-
-    It provides functionality for creating and managing a multi-dimensional
-    grid with specified bounding boxes, chunk shapes, and coordinate systems. It
-    supports operations like computing bounding boxes and cell-centered coordinates
-    for specific chunks and axes.
+    Effectively, the :py:class:`~pisces.models.grid.ModelGridManager` class manages all of the ``fields`` in a
+    particular model class, including the number of dimensions and coordinate systems relevant to each.
 
     Attributes
     ----------
     path : Path
-        The path to the HDF5 file managed by this instance. It can point to either an existing file
-        or a new file created when the `ModelGridManager` is initialized.
+        The path to the HDF5 file managed by this instance.
 
     handle : HDF5_File_Handle
-        The file handle for the HDF5 file. This is used for reading and writing grid data and metadata.
+        The file handle for the HDF5 file. This :py:class:`pisces.io.HDF5File_Handle` instance is simply a live reference
+        to the underlying HDF5 file structure which ensures safe closure of the file when this object is deleted.
 
     BBOX : BoundingBox
-        The global bounding box of the grid, defining the spatial extent of the grid in physical coordinates.
-        Represented as a 2D array with shape `(2, NDIM)`, where the first row is the minimum coordinates
-        and the second row is the maximum coordinates along each axis.
+        The bounding box describing the limits of the physical grid. The ``BBOX`` for the manager is a
+        ``(2,NDIM)`` array containing the minimum and maximum values of the grid along each of the axes of
+        the coordinate space. For specific :py:class:`ModelField` instances within the manager, only a subset of
+        these grid axes are necessarily present; however, they will always fill the ``BBOX`` in their relevant dimensions.
 
     GRID_SHAPE : DomainDimensions
         The shape of the entire grid, given as the number of cells along each axis.
-        For example, `[100, 100, 100]` represents a 3D grid with 100 cells along each axis.
+
+        .. note::
+
+            As an example, a grid shape of ``(100,100,1)`` would place 100 cells along each of the first
+            two axes and then a single point along the third axis.
 
     CHUNK_SHAPE : DomainDimensions
-        The shape of each chunk, representing the number of cells along each axis within a chunk.
-        Must evenly divide `GRID_SHAPE` along each axis.
+        The shape of each chunk. By default, this is the same as ``GRID_SHAPE`` and therefore corresponds to a single
+        chunk; however, this may be changed to enable chunked operations where useful.
 
     NCHUNKS : NDArray[np.int_]
-        The number of chunks along each axis, computed as `GRID_SHAPE // CHUNK_SHAPE`.
+        The number of chunks along each axis. This is an ``(NDIM,)`` array of integers.
 
     scale : List[str]
-        The scaling for each axis, either `'linear'` or `'log'`. Determines how the bounding box
+        The scaling for each axis, either ``'linear'`` or ``'log'``. Determines how the bounding box
         and coordinates are interpreted and computed for each axis.
 
     length_unit : str
-        The physical unit for lengths in the grid. For example, `'kpc'`, `'m'`, or `'cm'`.
+        The physical unit for lengths in the grid. For example, ``'kpc'``, ``'m'``, or ``'cm'``.
 
     coordinate_system : CoordinateSystem
         The coordinate system associated with the grid (e.g., Cartesian, cylindrical, or spherical).
         Defines the axes and their names.
 
-    _log_mask : NDArray[np.bool_]
-        A boolean mask indicating which axes use logarithmic scaling. Computed based on the `scale` attribute.
-
-    _scaled_bbox : NDArray[np.float64]
-        The bounding box of the grid with scaling applied. Logarithmic axes are stored in log-transformed coordinates.
-
     CHUNK_SIZE : NDArray[np.float64]
         The size of each chunk in scaled coordinates along each axis. Computed as
-        `(_scaled_bbox[1] - _scaled_bbox[0]) / num_chunks`.
+        ``(_scaled_bbox[1] - _scaled_bbox[0]) / num_chunks``.
 
     CELL_SIZE : NDArray[np.float64]
         The size of each cell in scaled coordinates along each axis. Computed as
-        `CHUNK_SIZE / CHUNK_SHAPE`.
-
-    _fields : ModelFieldContainer
-        A container for managing the fields (data arrays) associated with the grid. Each field
-        is stored in the HDF5 file under the `FIELDS` group.
-
-    FIELDS : ModelFieldContainer
-        A user-facing property for accessing the `_fields` attribute, which manages all fields
-        associated with the grid. Fields can be accessed or added using dictionary-like syntax.
+        ``CHUNK_SIZE / CHUNK_SHAPE``.
 
     Notes
     -----
@@ -93,26 +84,55 @@ class ModelGridManager:
 
     The grid and associated metadata are stored in an HDF5 file with the following structure:
 
-    ```
-    <root>
-    ├── CSYS/
-    │   ├── ...  (Coordinate system metadata)
-    ├── FIELDS/
-    │   ├── field_1
-    │   ├── field_2
-    │   ├── ...
-    ├── <Attributes>
-        ├── BBOX           (Bounding box: min/max coordinates of the grid)
-        ├── GRID_SHAPE     (Global grid shape in number of cells along each axis)
-        ├── CHUNK_SHAPE    (Chunk shape for each axis)
-        ├── LUNIT          (Unit of length for spatial dimensions)
-        ├── SCALE          (Scaling type for each axis: linear/log)
-    ```
+    .. code-block:: text
 
-    - `CSYS/`: Stores the coordinate system used by the grid.
-    - `FIELDS/`: Stores the data arrays (fields) associated with the grid.
-    - Attributes: Global grid metadata, including the bounding box (`BBOX`), the shape of the grid
-      (`GRID_SHAPE`), the size of chunks (`CHUNK_SHAPE`), and axis scaling (`SCALE`).
+        <root>
+        ├── CSYS/
+        │   ├── ...  (Coordinate system metadata)
+        ├── FIELDS/
+        │   ├── field_1
+        │   ├── field_2
+        │   ├── ...
+        ├── <Attributes>
+            ├── BBOX           (Bounding box: min/max coordinates of the grid)
+            ├── GRID_SHAPE     (Global grid shape in number of cells along each axis)
+            ├── CHUNK_SHAPE    (Chunk shape for each axis)
+            ├── LUNIT          (Unit of length for spatial dimensions)
+            ├── SCALE          (Scaling type for each axis: linear/log)
+
+
+    - ``CSYS/``: Stores the coordinate system used by the grid.
+    - ``FIELDS/``: Stores the data arrays (fields) associated with the grid.
+    - ``Attributes``: Global grid metadata, including the bounding box (``BBOX``), the shape of the grid
+      (``GRID_SHAPE``), the size of chunks (``CHUNK_SHAPE``), and axis scaling (``SCALE``).
+
+    **Grid Representation**
+
+    The :py:class:`ModelGridManager` represents a very flexible grid over a specified domain using a set of core concepts:
+
+    - **Bounding Box** (``BBOX``):
+      Defines the physical limits of the grid along each axis as a ``(2, NDIM)`` array,
+      where ``NDIM`` is the number of dimensions. Each column corresponds to an axis,
+      and the two rows provide the minimum and maximum values along that axis.
+
+      Regardless of what symmetries are present in a particular field, the axes present in that field will
+      run from the minimum and maximum values of the grid along each axis as defined here.
+
+    - **Grid Shape** (``GRID_SHAPE``):
+      Specifies the total number of cells along each axis of the grid. In conjunction with the ``BBOX`` and ``SCALE``, these
+      parameters are sufficient to uniquely define the correct grid on which to perform any set of computations.
+
+    - **Scaling** (``SCALE``):
+      In many scenarios, a non-linear scaling is relevant in one or more of the axes present in a particular grid. To support this,
+      each of the axes in the coordinate system is also assigned a scale (``SCALE[index]``) which may be either ``'linear'`` or ``'log'``.
+      If the grid has a logarithmic scale along a particular axis, then the grid is evenly spaced using ``BBOX`` and ``GRID_SHAPE`` in log-space.
+
+      Behind the scenes, the manager keeps track of a ``scaled_bbox``, which logarithmically scales the relevant axes and
+      then provides a stencil for generating the grid.
+
+    In addition to the general grid, there are some cases in which loading a field into memory in its entirety is not feasible.
+    To handle this possibility, the manager allows for the parameter ``CHUNK_SHAPE``, which subdivides the grid into individual
+    chunks. These chunks can then be used discretely to perform operations.
     """
 
     def __init__(self,
@@ -132,21 +152,32 @@ class ModelGridManager:
         Parameters
         ----------
         path : Union[str, Path]
-            Path to the HDF5 file.
-        coordinate_system : CoordinateSystem, optional
-            The coordinate system for the grid (required if creating a new file).
+            Path to the HDF5 file. If the path exists, then an attempt is made to load it as a manager; otherwise,
+            a new manager is initialized in a new file of the same name.
+        coordinate_system : :py:class:`~pisces.geometry.base.CoordinateSystem`, optional
+            The coordinate system for the grid [*required if creating a new file*].
         bbox : NDArray[np.float64], optional
-            The bounding box of the grid in physical units (required if creating a new file).
+            The bounding box of the grid in physical units [*required if creating a new file*]. The bounding box
+            must be coerce-able to a valid :py:class:`~pisces.models.grids.structs.BoundingBox` instance with a total
+            number of dimensions matching the ``coordinate_system`` argument's number of dimensions.
+
+            .. note::
+
+                Generally, this can be provided as a list of the form ``[[x_00,x_01],...,[x_N0,x_N1]]``.
+
         grid_shape : NDArray[np.int64], optional
-            The shape of the grid (required if creating a new file).
+            The shape of the grid [*required if creating a new file*]. This should be a ``NDIM`` array-like of ``int`` containing
+            the number of cells to place along each of the axes in the coordinate system.
         chunk_shape : NDArray[np.int64], optional
-            The shape of the chunks (required if creating a new file).
+            The shape of a single chunk in the grid. If ``chunk_shape`` is not provided, then it is equal to ``grid_shape`` and
+            the grid contains only 1 chunk. If the ``chunk_shape`` is provided, it must match ``grid_shape`` in length and each
+            element of ``grid_shape`` must be divisible by the corresponding element in ``chunk_shape``.
         overwrite : bool, optional
-            Whether to overwrite the file if it exists. Default is False.
+            Whether to overwrite the file if it exists. Default is ``False``.
         length_unit : str, optional
-            The unit of length for the grid. Default is "kpc".
+            The unit of length for the grid. Default is ``"kpc"``.
         scale : Union[List[str], str], optional
-            The scaling for each axis ('linear' or 'log'). Default is "linear".
+            The scaling for each axis (``'linear'`` or ``'log'``). Default is ``"linear"``.
 
         Raises
         ------
@@ -155,21 +186,21 @@ class ModelGridManager:
         """
         # SETUP path and manage the overwrite procedure.
         self.path: Path = Path(path)
-
-        # If file exists and overwrite is requested, delete the file
         if self.path.exists() and overwrite:
             self.path.unlink()
 
-        # Create a new file if it doesn't exist
+        # MANAGE the setup of a new instance of one doesn't already exist.
+        #   If the path exists, this is skipped, and we just load; otherwise, we
+        #   attempt to generate a new instance using the skeleton builder.
         if not self.path.exists():
-            # Validate inputs for creating a new file
+            # enforce required arguments.
             if any(arg is None for arg in [bbox, grid_shape, coordinate_system]):
                 raise ValueError(
                     f"Cannot create new ModelGridManager at {path} because not all "
                     f"of `bbox`, `grid_shape`, and `coordinate_system` were provided."
                 )
 
-            # Create the HDF5 structure
+            # Build the skeleton
             self.handle = HDF5_File_Handle(self.path, mode='w')
             self.build_skeleton(
                 self.handle,
@@ -180,12 +211,16 @@ class ModelGridManager:
                 length_unit=length_unit,
                 scale=scale
             )
+            # Switch the handle so that we can read data as well.
             self.handle = self.handle.switch_mode('r+')
         else:
             # Open an existing file
             self.handle = HDF5_File_Handle(self.path, mode='r+')
 
-        # Load attributes and compute derived values
+        # LOAD and compute attributes.
+        #   These methods load the relevant attributes from the HDF5 file structure
+        #   and then compute derived attributes from them on the fly. They can be
+        #   safely reimplemented in subclasses.
         self._load_attributes()
         self._compute_secondary_attributes()
 
@@ -265,6 +300,56 @@ class ModelGridManager:
     # @@ UTILITY FUNCTIONS @@ #
     # These methods provide backend utilities for various processes
     # underlying chunk integration and operation management.
+    def make_fields_consistent(self, arrays: List[np.ndarray], axes: List[Union[List[str], set[str]]]) -> List[
+        np.ndarray]:
+        """
+        Add singleton dimensions to arrays to make them mutually broadcastable based on their axes.
+
+        This method ensures that all arrays in the provided list can be broadcast against one another
+        by aligning their axes and adding singleton dimensions where necessary.
+
+        Parameters
+        ----------
+        arrays : List[np.ndarray]
+            List of numpy arrays to be made broadcastable.
+        axes : List[Union[List[str], set[str]]]
+            List of axes associated with each array. Each entry corresponds to the axes of the
+            respective array in the `arrays` list.
+
+        Returns
+        -------
+        List[np.ndarray]
+            A list of numpy arrays with singleton dimensions added as necessary for broadcasting.
+
+        Raises
+        ------
+        ValueError
+            If the lengths of `arrays` and `axes` do not match.
+
+        """
+        # VALIDATE
+        if len(arrays) != len(axes):
+            raise ValueError("The number of arrays must match the number of axis specifications.")
+
+        # GRAB axes. We first identify all of the axes included in the inputs and then determine
+        # the ordering relative to the coordinate system.
+        current_axes = set().union(*axes)
+        if any(ax not in self.coordinate_system.AXES for ax in current_axes):
+            raise ValueError("The axes specified do not exist in the coordinate system.")
+
+        ordered_axes = [ax for ax in self.coordinate_system.AXES if ax in current_axes]
+
+        # RESTRUCTURE the arrays to make them self consistent.
+        consistent_arrays = []
+        for array, array_axes in zip(arrays, axes):
+            # Create a list of slices that will add singleton dimensions as needed
+            mask = np.array([ox in array_axes for ox in ordered_axes], dtype=bool)
+            new_shape = np.ones_like(mask,dtype=np.uint32)
+            new_shape[mask] = array.shape
+            reshaped_array = np.reshape(array, new_shape)
+            consistent_arrays.append(reshaped_array)
+
+        return consistent_arrays
 
     def _generate_axes_mask(self, axes: AxesSpecifier) -> AxesMask:
         """
@@ -285,10 +370,15 @@ class ModelGridManager:
         ValueError
             If any axis in `axes` is not a valid axis in the coordinate system.
         """
-        if any(ax not in self.coordinate_system.AXES for ax in axes):
-            raise ValueError(f"Invalid axes specified: {axes}. Valid axes are: {self.coordinate_system.AXES}.")
+        # convert the axes
+        try:
+            axes_indices = np.array([self.coordinate_system.ensure_axis_numeric(ax) for ax in axes])
+        except Exception as e:
+            raise ValueError(f"Grid manager with coordinate system {self.coordinate_system} failed to generate a "
+                             f"mask for axes {axes}: {e}.")
 
-        return np.array([ax in axes for ax in self.coordinate_system.AXES], dtype=bool)
+        return np.array([i in axes_indices for i in range(self.coordinate_system.NDIM)], dtype=bool)
+
 
     def _validate_chunk_index(self, chunk_index: ChunkIndex, axes_mask: AxesMask) -> NDArray[np.int_]:
         """
@@ -673,6 +763,7 @@ class ModelGridManager:
             **kwargs,
         )
 
+
     # @@ BUILDERS @@ #
     @classmethod
     def build_skeleton(cls,
@@ -680,7 +771,7 @@ class ModelGridManager:
                        coordinate_system: CoordinateSystem,
                        bbox: NDArray[np.floating],
                        grid_shape: NDArray[np.int_],
-                       chunk_shape: NDArray[np.int_],
+                       chunk_shape: Optional[NDArray[np.int_]] = None,
                        length_unit: str = 'kpc',
                        scale: Union[List[str] | str] = 'linear',
                        ) -> HDF5_File_Handle:
@@ -744,6 +835,100 @@ class ModelGridManager:
             raise AttributeError("Fields container has not been initialized. Ensure the grid manager is correctly initialized.")
         return self._fields
 
+    def get_grid_summary(self):
+        """
+        Generate a summary of the grid structure used in the model.
+
+        This summary includes:
+        - Axis Name
+        - Minimum and Maximum values on each axis
+        - Number of grid cells and chunks
+        - Grid cell size and chunk size
+        - Scaling type (linear or logarithmic)
+
+        Returns
+        -------
+        Union[List[List[Any]], str]
+            - If the ``tabulate`` library is installed, the summary is returned as a formatted table string.
+            - If ``tabulate`` is not available, the summary is returned as a nested list of grid information.
+
+        Notes
+        -----
+        - The ``BBOX`` attribute provides the bounding box for the grid.
+        - The ``GRID_SHAPE`` specifies the total number of grid cells along each axis.
+        - The ``CHUNK_SHAPE`` determines how the grid is split into chunks.
+        - The ``CELL_SIZE`` and ``CHUNK_SIZE`` attributes reflect the spatial size of each grid cell and chunk.
+        - Scaling type is either ``log`` (logarithmic) or ``lin`` (linear). If the scale is ``log``, values are adjusted to base-10 representation.
+
+        See Also
+        --------
+        pisces.models.grids.base.ModelGridManager : Manages grid structure and provides access to grid metadata.
+
+        Examples
+        --------
+        The output will look something like this when `tabulate` is installed:
+
+        .. code-block:: python
+
+            +------+---------+---------+-----+-----------+----------------+----------------+-------+
+            | Axis | Min.    | Max.    |  N  | N Chunks  | Cell Size      | Chunk Size     | Scale |
+            +------+---------+---------+-----+-----------+----------------+----------------+-------+
+            |   r  | 1.00e+00| 1.00e+03| 100 |     10    | 1.00e+00 - lin | 1.00e+01 - lin | lin   |
+            | theta| 0.00e+00| 3.14e+00|  50 |      5    | 6.28e-02 - lin | 3.14e-01 - lin | lin   |
+            |  phi | 0.00e+00| 6.28e+00|  72 |      9    | 8.73e-02 - lin | 5.24e-01 - lin | lin   |
+            +------+---------+---------+-----+-----------+----------------+----------------+-------+
+
+
+        If `tabulate` is not installed, the method will return raw data:
+
+        .. code-block:: python
+
+            [
+                ["r", "1.00e+00", "1.00e+03", 100, 10, "1.00e+00 - lin", "1.00e+01 - lin", "lin"],
+                ["theta", "0.00e+00", "3.14e+00", 50, 5, "6.28e-02 - lin", "3.14e-01 - lin", "lin"],
+                ["phi", "0.00e+00", "6.28e+00", 72, 9, "8.73e-02 - lin", "5.24e-01 - lin", "lin"]
+            ]
+
+        """
+        # Import the tabulate method that we need to successfully run this.
+        try:
+            from tabulate import tabulate
+            _use_tabulate = True
+        except ImportError:
+            _use_tabulate = False
+            tabulate = None  #! TRICK the IDE
+
+        axes_info = []
+        for axi, ax in enumerate(self.coordinate_system.AXES):
+            amin, amax = self.BBOX[0, axi], self.BBOX[1, axi]
+            Ngrid, Nchunk = self.GRID_SHAPE[axi], (self.GRID_SHAPE // self.CHUNK_SHAPE)[axi]
+            Sgrid, Schunk = self.CELL_SIZE[axi], self.CHUNK_SIZE[axi]
+            scale = self.scale[axi]
+
+            if scale == 'log':
+                amin, amax = np.format_float_scientific(float(10**amin), precision=3, unique=True), \
+                             np.format_float_scientific(float(10**amax), precision=3, unique=True)
+                Sgrid = f"{np.format_float_scientific(float(Sgrid), precision=2)} - log"
+                Schunk = f"{np.format_float_scientific(float(Schunk), precision=2)} - log"
+            else:
+                amin, amax = np.format_float_scientific(float(amin), precision=2), \
+                             np.format_float_scientific(float(amax), precision=2)
+                Sgrid = f"{np.format_float_scientific(float(Sgrid), precision=2)} - lin"
+                Schunk = f"{np.format_float_scientific(float(Schunk), precision=2)} - lin"
+
+            axes_info.append([
+                ax, amin, amax, Ngrid, Nchunk, Sgrid, Schunk, scale,
+            ])
+
+        if not _use_tabulate:
+            return axes_info
+        else:
+            return tabulate(axes_info, headers=["Axis", "Min.", "Max.", "N", "N Chunks",
+                                                "Cell Size", "Chunk Size", "Scale"], tablefmt="grid")
+
+
+
+
 class ModelField(unyt.unyt_array):
     """
     A ModelField is effectively an unyt array with some notion of its own geometry vis-a-vis a
@@ -773,11 +958,11 @@ class ModelField(unyt.unyt_array):
         # Create the object.
         obj = super().__new__(cls, [], units=units)
         obj._name = name
-        obj.units = _units
+        obj.units = unyt.Unit(_units)
         obj.dtype = dataset.dtype
         obj.buffer = dataset
         obj._manager = manager
-        obj._axes = axes
+        obj._axes = _axes
         obj._gh = None
 
         return obj
@@ -944,9 +1129,7 @@ class ModelField(unyt.unyt_array):
     def geometry_handler(self):
         if self._gh is None:
             # Construct the handler from the axes
-            _sym_axes = [ax for ax in self.coordinate_system.AXES if ax not in self._axes]
-            _sym = Symmetry(_sym_axes,self.coordinate_system)
-            self._gh = GeometryHandler(self.coordinate_system,_sym)
+            self._gh = GeometryHandler(self.coordinate_system,free_axes=self._axes)
 
         return self._gh
 
@@ -1012,4 +1195,80 @@ class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
 
         return field
 
+    def get_field_summary(self) -> Union[str, List[List[str]]]:
+        """
+        Generate a summary of all fields currently stored in the model.
 
+        This summary includes:
+        - Field name
+        - Units of the field
+        - Shape of the field data buffer
+        - Axes over which the field is defined
+        - Number of dimensions (ndim) of the field
+
+        Returns
+        -------
+        Union[str, List[List[str]]]
+            - If the `tabulate` library is installed, the summary is returned as a formatted table string.
+            - If `tabulate` is not available, the summary is returned as a list of lists containing field metadata.
+
+        Notes
+        -----
+        - Fields are stored within the grid manager's `FIELDS` container.
+        - Each field includes metadata such as its units, shape, and axes.
+        - If `tabulate` is installed, a formatted grid table is returned for better readability.
+        - If `tabulate` is unavailable, the raw summary data is returned for further processing.
+
+        Raises
+        ------
+        AttributeError
+            If a field does not have the expected attributes like `units`, `buffer`, or `_axes`.
+
+        See Also
+        --------
+        pisces.models.grids.base.ModelFieldContainer : Container for storing and managing grid fields.
+
+        Examples
+        --------
+        If `tabulate` is installed, the output will look like this:
+
+        .. code-block:: python
+
+            +-------------+--------+-------------+------------+-------+
+            | Field Name  | Units  | Shape       | Axes       | Ndim  |
+            +-------------+--------+-------------+------------+-------+
+            | density     | g/cm^3 | (100, 50)   | ['r', 'θ'] |   2   |
+            | temperature | K      | (100, 50)   | ['r', 'θ'] |   2   |
+            | pressure    | Pa     | (100, 50)   | ['r', 'θ'] |   2   |
+            +-------------+--------+-------------+------------+-------+
+
+
+        If `tabulate` is not installed, the method will return the following:
+
+        .. code-block:: python
+
+            [
+                ['density', 'g/cm^3', '(100, 50)', "['r', 'θ']", '2'],
+                ['temperature', 'K', '(100, 50)', "['r', 'θ']", '2'],
+                ['pressure', 'Pa', '(100, 50)', "['r', 'θ']", '2']
+            ]
+
+
+        """
+        # Import the tabulate method that we need to successfully run this.
+        try:
+            from tabulate import tabulate
+            _use_tabulate = True
+        except ImportError:
+            _use_tabulate = False
+            tabulate = None  #! TRICK the IDE
+
+        # Construct the field data
+        field_info = [
+            [_fn, _fv.units, str(_fv.buffer.shape), str(_fv._axes), str(_fv.buffer.ndim)] for _fn, _fv in self.items()
+        ]
+
+        if not _use_tabulate:
+            return field_info
+        else:
+            return tabulate(field_info, headers=["Field Name", "Units", "Shape", "Axes", "Ndim"], tablefmt="grid")

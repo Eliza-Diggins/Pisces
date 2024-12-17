@@ -1,263 +1,253 @@
+r"""
+Coordinate Systems for Pisces
+=============================
+
+This module contains the coordinate systems for the Pisces library. This includes various spheroidal
+coordinate systems, cartesian coordinate systems, cylindrical coordinate systems, and others. For each of
+these coordinate systems, structures have been generated to allow for differential operations and the tracking
+of symmetries through those operations.
+
+Mathematical Background
+=======================
+
+An orthogonal coordinate system is defined by a set of coordinate surfaces that intersect
+at right angles. Each coordinate axis has an associated Lame coefficient, :math:`h_i`, which
+scales differential elements along that axis. Orthogonal systems are useful in physics and
+engineering because they allow the calculation of differential operators (e.g., gradient,
+divergence, and Laplacian) based on Lame coefficients, simplifying the complexity of vector
+calculus in curved spaces.
+
+A more complete overview of the relevant theory may also be found here :ref:`geometry_theory`.
+
+Basis Vectors
+-------------
+
+Orthogonal coordinate systems feature a set of **basis vectors** for each point in space, which
+are tangent to the curves obtained by varying a single coordinate while holding others constant.
+Unlike in Cartesian coordinates where basis vectors are constant, these basis vectors vary across
+points in general orthogonal coordinates but remain mutually orthogonal.
+
+- **Covariant Basis** : The covariant basis vectors :math:`\mathbf{e}_i` align with the coordinate
+  curves and are derived as:
+
+  .. math::
+
+     \mathbf{e}_i = \frac{\partial \mathbf{r}}{\partial q^i}
+
+  where :math:`\mathbf{r}` is the position vector and :math:`q^i` represents the coordinates.
+  These vectors are not typically unit vectors and can vary in length.
+
+- **Unit Basis** : By dividing the covariant basis by their **scale factors**, the normalized
+  basis vectors :math:`\hat{\mathbf{e}}_i` are obtained:
+
+  .. math::
+
+     \hat{\mathbf{e}}_i = \frac{\mathbf{e}_i}{h_i}
+
+  .. note::
+
+      These **scale factors** are also referred to as **Lame Coefficients**. That is the term used
+      in Pisces. They are a critical component of all of the vector calculus computations that occur in
+      a given geometry.
+
+- **Contravariant Basis**: The contravariant basis vectors, denoted :math:`\mathbf{e}^i`, are reciprocal
+  to the covariant basis and provide a means to express vectors in a dual basis. In orthogonal systems, they are
+  simply related by reciprocal lengths to the covariant vectors:
+
+  .. math::
+
+     \mathbf{e}^i = \frac{\hat{\mathbf{e}}_i}{h_i} = \frac{\mathbf{e}_i}{h_i^2}
+
+  These satisfy the orthogonality condition:
+
+  .. math::
+
+     \mathbf{e}_i \cdot \mathbf{e}^j = \delta_i^j
+
+  where :math:`\delta_i^j` is the Kronecker delta.
+
+  .. hint::
+
+      For those with a mathematical background, the contravariant basis forms the **dual basis** to the
+      covariant basis at a given point. Thus, in some respects, these vectors actually live in entirely different
+      spaces; however, this detail is of minimal importance in this context.
+
+Differential Operators
+----------------------
+
+Let :math:`\phi` be a scalar field in a space equipped with a particular coordinate system. Evidently, the differential
+change in :math:`\phi` is
+
+.. math::
+
+    d\phi = \partial_i \phi dq^i
+
+The gradient is, by definition, an operator such that :math:`d\phi = \nabla \phi \cdot d{\rm r}`. Clearly,
+
+.. math::
+
+    d{\bf r} = \partial_i {\bf r} dq^i = {\bf e}_i dq^i,
+
+so
+
+.. math::
+
+    \nabla_k \phi \cdot d{\rm r} = \nabla_{kj} {\bf e}_j dq^j = \partial_k \phi dq^k.
+
+Thus,
+
+.. math::
+
+    \nabla_{kj} \phi = \partial_k \phi e^k \implies \nabla \phi \cdot d{\rm r} = \partial_k \phi dq^k e^k \cdot e_k = \partial_k \phi dq^k.
+
+As such, the general form of the gradient for a scalar field is
+
+.. math::
+
+   \nabla \phi = \sum_{i} \frac{\hat{\mathbf{e}}_i}{h_i} \frac{\partial \phi}{\partial q^i}
+
+More in-depth analysis is needed to understand the divergence, curl, and Laplacian; however, the results take the following form:
+
+- **Divergence of a vector field** : For a vector field :math:`\mathbf{F} = \sum_{i} F_i \hat{\mathbf{e}}_i`,
+  the divergence is computed as:
+
+  .. math::
+
+     \nabla \cdot \mathbf{F} = \frac{1}{\prod_k h_k} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{\prod_k h_k}{h_i}\mathbf{F}_i \right)
+
+- **Laplacian of a scalar field** : For a scalar field :math:`\phi`, the Laplacian is given by:
+
+  .. math::
+
+     \nabla^2 \phi = \frac{1}{\prod_k h_k} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{\frac{1}{\prod_k h_k}}{h_i^2} \frac{\partial \phi}{\partial q^i} \right)
+
+The notation may be made simpler by introducing the **Jacobian** determinant:
+
+.. math::
+
+    J = \prod_i h_i.
+
+In this case, we then find
+
+- **Divergence of a vector field** : For a vector field :math:`\mathbf{F} = \sum_{i} F_i \hat{\mathbf{e}}_i`,
+  the divergence is computed as:
+
+  .. math::
+
+     \nabla \cdot \mathbf{F} = \frac{1}{J} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{J}{h_i}\mathbf{F}_i \right)
+
+- **Laplacian of a scalar field** : For a scalar field :math:`\phi`, the Laplacian is given by:
+
+  .. math::
+
+     \nabla^2 \phi = \frac{1}{J} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{J}{h_i^2} \frac{\partial \phi}{\partial q^i} \right)
+
+See Also
+--------
+`Orthogonal coordinates <https://en.wikipedia.org/wiki/Orthogonal_coordinates>`_
+
 """
-Abstract base classes for Pisces geometry. In this module, the base class :py:class:`CoordinateSystem` is defined
-and its corresponding metaclass is also defined.
-
-
-Developer Notes
-===============
-
-This module defines abstract base classes for constructing orthogonal coordinate systems and symmetry representations
-within the Pisces framework. These classes, :py:class:`CoordinateSystem` and :py:class:`pisces.geometry.symmetry.Symmetry`, are intended as base classes for developers
-to create custom coordinate systems and symmetries. Key elements include customizable Lame coefficient mappings,
-dependency matrices, and robust data storage methods supporting JSON, YAML, and HDF5 formats.
-
-Coordinate Systems
-------------------
-
-The :py:class:`CoordinateSystem` class defines a flexible framework for modeling orthogonal coordinate systems. It introduces
-core attributes and methods to manage transformations, differential operations, and geometric properties specific
-to each coordinate system. The structure is highly modular, allowing each coordinate axis to be associated with a unique
-Lame coefficient function, thus supporting non-Cartesian geometries.
-
-**Core Features**:
-
-- Transformation rules to and from Cartesian coordinates.
-- Lame Coefficients for differential operations.
-- Dependence tracking for Lame Coefficients to ensure optimized differential operations.
-- Serialization: to HDF5, YAML, and JSON.
-
-Transformation Rules
-++++++++++++++++++++
-
-Every :py:class:`CoordinateSystem` class implements the :py:meth:`CoordinateSystem._convert_cartesian_to_native` and
-:py:meth:`CoordinateSystem._convert_native_to_cartesian`. These are then ported through the :py:meth:`CoordinateSystem.to_cartesian` and
-:py:meth:`CoordinateSystem.from_cartesian` methods (which should not be altered in subclasses) to provide core transformation rules.
-
-To convert between two coordinate systems, one of two things is done. If there is a built-in method with signature ``.to_<coordinate_system_name>``
-in the class, then a direct conversion link exists and is used. Otherwise, we convert to cartesian coordinates and then back to the
-other coordinate system. This ensures that we can seamlessly convert between any set of coordinate systems.
-
-.. note::
-
-    Under the hood, the logic for seeking the special ``.to_<coordinate_system_name>`` is built into the :py:class:`pisces.geometry.utils.CoordinateConverter` class.
-    When a conversion is created using :py:meth:`CoordinateSystem.convert_to`, it creates such a converter and returns it
-    to handle the conversion on its own.
-
-Lame Coefficients
-+++++++++++++++++
-
-In any :py:class:`CoordinateSystem`, Lame coefficients are essential scaling factors that adjust the differential
-operators to account for the local geometry of each axis. These coefficients, represented as functions, adapt differential
-operations to non-Cartesian coordinate systems. Each axis in an orthogonal coordinate system has a corresponding Lame
-coefficient function, which typically varies with position in space. For example, in spherical coordinates, the Lame
-coefficient for the radial coordinate is constant, while the coefficients for angular coordinates depend on the radial distance.
-
-Every CoordinateSystem subclass defines Lame coefficient methods using the :py:func:`geometry.utils.lame_coefficient` decorator, specifying
-which axis each function corresponds to. These methods are then automatically collected by the :py:class:`CoordinateSystemMeta`
-metaclass. The metaclass processes these methods and maps each to its respective axis, ensuring that each coordinate axis
-has a valid Lame coefficient function, which enables efficient and accurate differential calculations.
-
-The metaclass also initializes the ``_lame_dependence_matrix``, which is a binary matrix indicating the dependencies between
-Lame coefficients and coordinate axes. The method :py:meth:`CoordinateSystemMeta._solve_lame_dependence` computes this
-matrix based on the Lame coefficient functions' specified dependencies. This matrix optimizes the computational load by
-only including essential dependencies for each differential operation. For example, if a Lame coefficient depends on
-a single axis, computations involving that coefficient will exclude any unrelated axes.
-
-The :py:meth:`CoordinateSystem.compute_lame_coefficients` method retrieves the Lame coefficients for the specified coordinates
-and axes, enabling selective computation when only certain coefficients are needed. By default, all coefficients are
-computed, but users can specify active_axes to limit the calculations, which is particularly useful in symmetric coordinate systems.
-
-Implementation Examples
-++++++++++++++++++++++++
-
-As a first example, this is the implementation for a 3D cartesian coordinate system
-
-.. code-block::
-
-    class CartesianCoordinateSystem(CoordinateSystem):
-
-        NDIM = 3
-        AXES = ['x', 'y', 'z']
-
-        def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
-            return coordinates  # Cartesian is already in native form
-
-        def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
-            return coordinates  # Cartesian is already in native form
-
-        @lame_coefficient(0,axes=[])
-        def lame_0(self,coordinates):
-            return np.ones_like(coordinates[:,0])
-
-        @lame_coefficient(1,axes=[])
-        def lame_1(self,coordinates):
-            return np.ones_like(coordinates[:,0])
-
-        @lame_coefficient(2,axes=[])
-        def lame_2(self,coordinates):
-            return np.ones_like(coordinates[:,0])
-
-Here, the Lame coefficients are all 1, which makes things very simple. In spherical coordinates we instead have
-
-.. code-block:: python
-
-    class SphericalCoordinateSystem(CoordinateSystem):
-
-        NDIM = 3
-        AXES = ['r', 'theta', 'phi']
-
-        def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
-            r, theta, phi = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-            x = r * np.sin(theta) * np.cos(phi)
-            y = r * np.sin(theta) * np.sin(phi)
-            z = r * np.cos(theta)
-            return np.stack((x, y, z), axis=-1)
-
-        def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
-            x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-            r = np.sqrt(x**2 + y**2 + z**2)
-            theta = np.arccos(z / r)
-            phi = np.arctan2(y, x)
-            return np.stack((r, theta, phi), axis=-1)
-
-        @lame_coefficient(0,axes=[])
-        def lame_0(self,coordinates):
-            return np.ones_like(coordinates[...,0])
-
-        @lame_coefficient(1,axes=[0])
-        def lame_1(self,coordinates):
-            return coordinates[...,0]
-
-        @lame_coefficient(2,axes=[0,1])
-        def lame_2(self,coordinates):
-            r, theta = coordinates[...,0],coordinates[...,1]
-            return r*np.sin(theta)
-
-"""
-from abc import ABC, abstractmethod, ABCMeta
-from typing import Any, List, Optional, Dict, TYPE_CHECKING, Collection, Callable
+from abc import ABC, ABCMeta, abstractmethod
+from typing import Any, List, Dict, TYPE_CHECKING, Callable, Union, Optional
 
 import numpy as np
-from numpy.typing import NDArray
-from scipy.integrate import quad
+import sympy as sp
 
-from pisces.geometry._exceptions import ConversionError
+from pisces.geometry.exceptions import ConversionError
 from pisces.geometry.utils import CoordinateConverter
+from pisces.utilities.array_utils import CoordinateArray
 from pisces.utilities.general import find_in_subclasses
 from pisces.utilities.math import partial_derivative, function_partial_derivative
+from pisces.utilities.logging import mylog
 
 if TYPE_CHECKING:
-    from pisces.geometry._typing import LameCoefficientMap
+    from pisces.geometry._typing import AxisAlias
+
 
 # noinspection PyProtectedMember,PyUnresolvedReferences
 class CoordinateSystemMeta(ABCMeta):
-    """
-    Metaclass for CoordinateSystem that automatically gathers decorated Lame
-    coefficient methods and creates a mapping of coefficients to their axes.
+    # Meta class that composes the sympy components of the coordinate system
+    # class, simplifies, etc. to construct the relevant coordinate system.
+    _IGNORED = ['CoordinateSystem','RadialCoordinateSystem']
+    def __new__(mcs, name, bases, namespace, **kwargs):
+        if name not in mcs._IGNORED:
+            # @ SYMBOL CONSTRUCTION @ #
+            # The metaclass now processes the axes and parameters from the namespace to
+            # produce the relevant symbols in SYMBAXES and SYMBPARAMS
+            mcs._construct_axes_symbols(namespace)
+            mcs._construct_parameter_symbols(namespace)
 
-    This metaclass inspects all methods in a ``CoordinateSystem`` class, identifying
-    those marked with the ``@lame_coefficient`` decorator. It then builds a mapping
-    from each axis to the associated Lame coefficient function and validates that
-    all necessary Lame coefficients are defined.
+            # @ PROCESS LAME COEFFICIENT FUNCTIONS @ #
+            # We now process the lame functions. As it stands, they are functions of
+            # the symbols and return sympy expressions. We need to validate them and then
+            # process them to lambda functions in the namespace.
+            mcs._process_lame_coefficients(namespace)
 
-    Attributes
-    ----------
-    _cls_lame_map : Dict[int, str]
-        A dictionary mapping each axis index to its Lame coefficient function.
-    _lame_invariance_matrix : NDArray
-        A matrix indicating dependencies of each Lame coefficient on specific coordinates. More precisely,
-        the ``_lame_dependence_matrix`` is an ``(NDIM,NDIM)`` array such that the ``(i,j)`` element indicates if the
-        :math:`i`-th Lame coefficient depends on the :math:`j`-th coordinate.
+        return super().__new__(mcs, name, bases, namespace, **kwargs)
 
-    Notes
-    -----
-    Lame coefficients :math:`h_i` define scaling factors for a given coordinate axis ``i`` in an
-    orthogonal coordinate system. This metaclass allows subclasses of ``CoordinateSystem`` to
-    define coordinate-specific Lame coefficient functions.
-    """
-    _cls_lame_map: Dict[int, str] = {}
-    _lame_invariance_matrix: Optional[NDArray[bool]] = None
+    @classmethod
+    def _construct_axes_symbols(mcs, namespace):
+        # This private method constructs the symbols for each of the
+        # axes in the coordinate system. It should NOT be altered in
+        # subclasses.
+        if 'AXES' not in namespace:
+            raise ValueError("AXES not in namespace")
 
-    def __init__(cls, name, bases, class_dict):
-        # Initialize the standard object as normal.
-        super().__init__(name, bases, class_dict)
+        _axes = namespace['AXES']
+        namespace['SYMBAXES'] = [sp.Symbol(ax) for ax in _axes]
 
-        # ----------------------------------- #
-        # Constructing Lame Coefficients      #
-        # ----------------------------------- #
-        # Here we start initializing the lame coefficients. We ensure that
-        # they get registered and are accessible in the _lame_map and then
-        # construct the invariance matrix for the coefficients.
-        cls._cls_lame_map = {}
-        cls._lame_invariance_matrix = None
+    @classmethod
+    def _construct_parameter_symbols(mcs, namespace):
+        # This private method constructs the symbols for each of the
+        # parameters in the coordinate system. It should NOT be altered in
+        # subclasses.
+        if 'PARAMETERS' not in namespace:
+            raise ValueError("PARAMETERS not in namespace")
 
-        # LOCATING LAME COEFFICIENTS.
-        # Iterate through all of the class attributes to find objects with
-        # the lame marker and register them.
-        for attr_name, attr_value in class_dict.items():
-            if callable(attr_value) and getattr(attr_value, '_is_lame', False):
-                # We've identified a Lame Coefficient function, we now need to register its axis and set the invariance
-                # array for the method.
-                axis = attr_value._lame_axis  # The axis this Lame coefficient corresponds to.
-                required_axes = getattr(attr_value, 'required_axes', 'all')
+        _parameters = list(namespace['PARAMETERS'].keys())
+        namespace['SYMBPARAMS'] = {param: sp.Symbol(param) for param in _parameters}
 
-                if required_axes == 'all':
-                    required_axes = [i for i in range(class_dict['NDIM'])]
+    @classmethod
+    def _process_lame_coefficients(mcs, namespace):
+        # Identify the Lame Coefficient functions in the class. This could
+        # be modified to achieve a different scheme for identifying Lame coefficients.
+        #
+        # Currently, we seek out the lame coefficients based on name and raise
+        # errors if the function is missing from the class.
+        #
+        # Pull the number of dimensions so we know how many Lame coefficients there are.
+        try:
+            cs_ndim = namespace['NDIM']
+        except KeyError:
+            raise ValueError("Failed to determine `NDIM` while processing Lame coefficients. Did you"
+                             " forget to add NDIM to a subclass of CoordinateSystem?")
 
-                attr_value.invariance = np.array([i not in required_axes for i in range(class_dict['NDIM'])],dtype=bool)
+        # Start pulling the lame coefficients from the name space and sympifying them.
+        lame_coefficients = {}
 
-                del attr_value._lame_axis
-                del attr_value.required_axes
+        for dim in range(cs_ndim):
+            cf_attr = namespace.pop(f'lame_{dim}', None) # ! REMOVES lame_dim from the namespace.
+            if cf_attr is None:
+                raise ValueError(f"Failed to locate `lame_{dim}` while processing Lame coefficients. Did you"
+                                 f" forget to implement it for a subclass of CoordinateSystem?")
 
-                cls._cls_lame_map[axis] = attr_name
+            lame_coefficients[dim] = cf_attr
 
-        # VALIDATE LAME COEFFICIENTS
-        # If this isn't an abstract base class, we need to enforce that all of the
-        # Lame Coefficients are provided.
-        if not hasattr(cls, '__abstractmethods__') or not cls.__abstractmethods__:
-            required_axes = range(class_dict['NDIM'])
-            missing_axes = [axis for axis in required_axes if axis not in cls._cls_lame_map]
+        # obtain the relevant parameters and axes, then construct the _lame_symbolic attribute.
+        PARAMS = namespace['SYMBPARAMS']
+        AXES = namespace['SYMBAXES']
+        namespace['_lame_symbolic'] = {namespace['AXES'][dim]: sp.sympify(lcoeff_func(*AXES, **PARAMS)) for
+                                       dim, lcoeff_func in lame_coefficients.items()}
 
-            if missing_axes:
-                raise ValueError(
-                    f"Missing Lame coefficient functions for axes: {missing_axes}. "
-                    f"Each axis from 0 to {class_dict['NDIM'] - 1} must have a corresponding Lame coefficient."
-                )
-
-        # COMPUTE THE LAME DEPENDENCE MATRIX
-        cls._lame_invariance_matrix = cls._solve_lame_dependence(name, bases, class_dict)
-
-    def _solve_lame_dependence(cls, _, __, class_dict) -> np.ndarray:
-        """
-        Solve the dependency matrix for Lame coefficients, indicating if each Lame coefficient
-        depends on specific coordinate axes.
-
-        Returns
-        -------
-        np.ndarray
-            A matrix of shape ``(NDIM, NDIM)`` where ``matrix[i, j] = 1`` if the Lame coefficient
-            for axis ``i`` depends on the ``j``-th coordinate axis, and ``0`` otherwise.
-
-        Notes
-        -----
-        This really relies in the decorator used to mark the Lame coefficient functions. By default, the dependence
-        axes are ``"all"``, but they can (and should) be set in subclasses to ensure efficient runtime performance.
-        """
-        matrix = np.ones((class_dict['NDIM'], class_dict['NDIM']), dtype=bool)
-
-        for i, lame_func in cls._cls_lame_map.items():
-            # Get the required axes for this Lame coefficient function
-            matrix[i, :] = class_dict[lame_func].invariance
-
-        return matrix
-
+# noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker
 class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     """
     Abstract base class representation of an orthogonal coordinate system.
 
     This class serves as a base for specific orthogonal coordinate systems, defining key
     mathematical methods to compute differential operators, transformations, and basis
-    functions.
+    functions. It utilizes a ``sympy`` based backend to compute critical coefficients for differential
+    operators and then ``lambdify``-s them into numpy function for rapid execution.
 
     Attributes
     ----------
@@ -276,302 +266,153 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     divergence, and Laplacian) based on Lame coefficients.
 
     """
+    # @@ CLASS ATTRIBUTES @@ #
+    # DEVELOPERS: these should be set in any subclass of CoordinateSystem. The axes
+    #  should follow standard convention and the parameters and axes will become the
+    #  symbolic attributes of the class.
     NDIM: int = 3
-    AXES: list[str] = ['x', 'y', 'z']
+    AXES: list[str] = ['x','y','z']
+    PARAMETERS: Dict[str, Any] = {}
+    _SKIP_LAMBDIFICATION = []
 
-    # @@ DUNDER METHODS @@ #
-    def __init__(self, *args, **kwargs):
-        # Setup the basic arguments and kwargs.
-        self._args, self._kwargs = args, kwargs
+    # @@ DYNAMICALLY GENERATED ATTRIBUTES @@ #
+    # These attributes are generated dynamically in the metaclass
+    # and then populated based on other class methods.
+    #
+    # DEVELOPERS: If changes are made to the metaclass, new variables could be added here
+    #  to ensure that IntelliJ understands what's going on.
+    SYMBAXES: List[sp.Symbol] = None
+    SYMBPARAMS: Dict[str, sp.Symbol] = None
+    _lame_symbolic: Dict[str, sp.Basic] = None
 
-        # Initialize the Lame coefficients.
-        self._init_lame()
+    # @@ INITIALIZATION @@ #
+    # The initialization of the CoordinateSystem class is broken down into submethods
+    # to permit easy overwriting for developers. Subclasses may re-implement any of the
+    # methods below as needed.
+    def __init__(self, **kwargs):
+        # @ PARSE parameters @ #
+        # Convert kwargs to self.parameters attribute.
+        self._setup_parameters(**kwargs)
 
-    # noinspection PyProtectedMember
-    def _init_lame(self):
-        self._lame_map = {}
-        for k, v in self.__class__._cls_lame_map.items():
-            self._lame_map[k] = getattr(self, v)
+        # @ SETUP lame coefficients @ #
+        # This step converts the symbolic Lame coefficients to
+        # the equivalent numpy functions.
+        self._symbolic_attributes = {}
+        self._lambdified_attributes: Dict[str, Callable] = {}
+        self._setup_lame_coefficients()
 
-    def __repr__(self):
+        # @ DERIVED properties setup @ #
+        # The _derive_symbolic_attributes method now fills the symbolic
+        # attributes dictionary with the relevant symbolic components.
+        mylog.info(
+            f"Preparing derived attributes for {self.__class__.__name__} instance. This may take a few seconds...")
+        self._derive_symbolic_attributes()
+
+        # Lambdifying symbolic attributes
+        self._lambdify_derived_attributes()
+
+    def _setup_parameters(self, **kwargs):
+        self.parameters = self.__class__.PARAMETERS.copy()
+        self.parameters.update(kwargs)
+
+        if any(kwarg not in self.PARAMETERS for kwarg in self.parameters):
+            raise ValueError("Unknown parameter '%s'" % self.parameters)
+
+    def _setup_lame_coefficients(self):
         """
-        Return a string representation of the CoordinateSystem instance.
-
-        Provides a concise summary, including the class name and dimensionality.
-
-        Returns
-        -------
-        str
-            A string representing the instance.
+        Prepares the Lame coefficient functions by binding parameters and lambdifying.
+        Ensures that constants are converted to array-compatible expressions.
         """
-        _args = ", ".join([str(k) for k in self._args])
-        _kwargs = ", ".join([f"{str(k)}={str(v)}" for k, v in self._kwargs])
+        self._lame_functions = []
+        self._lame_inst_symbols = {}
 
-        return f"{self.__class__.__name__}({_args},{_kwargs})"
+        mylog.info(f"Preparing Lame Coefficients for {self.__class__.__name__} instance. This may take a few seconds...")
+        for ax in self.AXES:
+            mylog.debug(f"\t [COMPLETE] Axis {ax} finished.")
+            symbolic_lame_function = self.__class__._lame_symbolic[ax]
+            self._lame_inst_symbols[ax] = sp.simplify(symbolic_lame_function.subs(self.parameters))
+            self._lame_functions.append(self.lambdify_expression(symbolic_lame_function))
 
-    def __str__(self):
-        _param_str = ""
-        if len(self._args):
-            _param_str += ", ".join([str(k) for k in self._args])
-        if len(self._kwargs):
-            _param_str += ", ".join([f"{k}={v}" for k, v in self._kwargs])
+    def _derive_symbolic_attributes(self):
+        self._symbolic_attributes['jacobian'] = sp.simplify(sp.prod([self.get_lame_symbolic(ax) for ax in self.AXES]).subs(
+            self.parameters))
+        mylog.debug(f"\t [COMPLETE] Derived the jacobian...")
 
-        return f"{self.__class__.__name__}({_param_str})"
+    def _lambdify_derived_attributes(self):
+        mylog.info("Lambdifying attributes...")
+        for sym_attr_name, symb_attr_value in self._symbolic_attributes.items():
+            if sym_attr_name in self.__class__._SKIP_LAMBDIFICATION:
+                mylog.debug(f"\t [SKIP] Skipping {sym_attr_name}")
+                continue
 
-    def __eq__(self, other):
-        # Check that the two are both coordinate systems and that they are the
-        # same type of coordinate system.
-        if isinstance(other, CoordinateSystem):
-            if type(self) != type(other):
-                return False
-        else:
-            raise TypeError(f"Cannot check for equality between {type(self)} and {type(other)}.")
+            self._lambdified_attributes[sym_attr_name] = self.lambdify_expression(symb_attr_value)
+            mylog.debug(f"\t [COMPLETE] Lambdifyed attribute {sym_attr_name}...")
 
-        # Now check for equivalent args and kwargs.
-        if len(self._args) != len(other._args):
-            return False
-        else:
-            _s = all([sarg == oarg for sarg, oarg in zip(self._args, other._args)])
-            if not _s:
-                return False
-
-        # Now check the kwargs.
-        for k, v in self._kwargs.items():
-            if k not in other._kwargs:
-                return False
-            if v != other._kwargs[k]:
-                return False
-
-        return True
-
-    def __getitem__(self, item: int) -> str:
-        try:
-            return self.AXES[item]
-        except KeyError:
-            raise ValueError(f"No axis: {item}.")
-
-    def __len__(self):
-        return self.NDIM
-
-    # @@ PROPERTIES @@ #
-    # including lame coefficient management and special feature checks.
-    @property
-    def lame_coefficients(self) -> 'LameCoefficientMap':
-        r"""
-        Returns a dictionary mapping each axis to its corresponding Lame coefficient function.
-
-        Returns
-        -------
-        LameCoefficientMap
-            A mapping of axes to their respective Lame coefficient functions.
-
-        Notes
-        -----
-        In any orthogonal coordinate system, there is a set of *orthogonal* vectors :math:`{\bf e}_0, \cdots {\bf e}_N` such that,
-        at any point in the space, the :math:`i`-th basis vector points in the direction of increase for the corresponding coordinate
-        component. By definition, we call this set of basis vectors the covariant basis and define it as
-
-        .. math::
-
-            {\bf e}_i = \frac{\partial {\bf r}}{\partial q^i},
-
-        where :math:`{\bf r}` is the position in space and :math:`q^i` are the coordinates.
-
-        .. hint::
-
-            In cartesian coordinates, these are constant everywhere in space. That is not true in a general orthog. coord.
-            system.
-
-        These basis vectors are a self-consistent basis; however, they may or may not be unit vectors. Thus, we define
-        the unit basis as
-
-        .. math::
-
-            \hat{\bf e}_i = \frac{{\bf e}_i}{|{\bf e}_i|}.
-
-        This scaling factor is called the **Lame Coefficient** for that axis. It is generically a function of the entire space.
-
-        This method returns the Lame coefficient functions for each axis as functions of the space.
-
-        Examples
-        --------
-
-        To compute the Lame coefficients along the first axis of a set of points, we can proceed as follows:
-
-        .. code-block:: python
-
-            # Import the coordinate system you intend to use.
-            from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
-            import numpy as np
-
-            # Initialize the coordinate system. This is necessary because other
-            # (more complex) coordinate systems have arguments that would be
-            # passed here.
-            cs = SphericalCoordinateSystem()
-
-            # Get your array of points.
-            # In this case, a 100x100 grid of phi and theta.
-            phi,theta = np.mgrid[0:2*np.pi:100j, 0:np.pi:100j]
-            r = np.ones_like(phi)
-
-            coordinates = np.stack([r.ravel(),theta.ravel(),phi.ravel()],axis=1)
-
-            # Now we can compute the lame coefficients.
-            lame_r = cs.lame_coefficients[0](coordinates)
-
-        For systems like cylindrical coordinates, the Lame coefficients for the angular axis differ based on radius.
-        Here’s how to compute these in a custom cylindrical system:
-
-        .. code-block:: python
-
-            from pisces.geometry.coordinate_systems import CylindricalCoordinateSystem
-            import numpy as np
-
-            cs = CylindricalCoordinateSystem()
-            coordinates = np.array([[1.0, np.pi/4, 2.0], [2.0, np.pi/2, 3.0]])  # (r, theta, z)
-
-            # Compute the Lame coefficient for theta.
-            lame_theta = cs.lame_coefficients[1](coordinates)
-            print("Lame coefficient for theta:", lame_theta)
+    def lambdify_expression(self, expression: Union[str, sp.Basic]) -> Callable:
         """
-        return self._lame_map
-
-    # noinspection PyProtectedMember
-    @property
-    def lame_invariance_matrix(self) -> NDArray[bool]:
-        r"""
-        Returns a matrix indicating dependencies of each Lame coefficient on specific coordinates.
-
-        Returns
-        -------
-        NDArray[bool]
-            Matrix where ``matrix[i, j] = 1`` if the Lame coefficient for axis ``i`` depends on axis ``j``, and ``0`` otherwise.
-
-        Notes
-        -----
-
-        Let :math:`q^1,\cdots,q^N` be an :math:`N` dimension coordinate system. Let :math:`\phi: \mathbb{R}^N \to \mathbb{R}`
-        be a scalar field over the corresponding space. Generically, the coordinates may be partitioned into two groups, the
-        symmetric coordinates and the non-symmetric coordinates. Formally,
-
-        .. math::
-
-            Q(\phi) = \left\{q^k \;\forall k < N \in \mathbb{N} \mid \partial_k \phi_{\bf r} = 0\;\forall {\bf r} \in \mathbb{R}^N\right\}
-
-        is the **symmetric axis set** of :math:`\phi`. The **Lame invariance matrix**, is defined such that
-
-        .. math::
-
-            {\rm LIM}_{ij} = \begin{cases}1,&q^i \in Q(\lambda_j)\\0,&\text{otherwise.}\end{cases}
-
-        The LIM is useful for determining which terms in a differential expression should include a particular Lame coefficient.
-        For example, in spherical coordinates, the radial Lame coefficient depends only on the radial distance, while the angular
-        coefficients depend on both radial distance and angle, so the LIM helps exclude redundant terms in complex calculations.
-
-        Example
-        -------
-        To see the dependency structure of the Lame coefficients for a coordinate system, we can use a custom :py:class:`CoordinateSystem`
-        class, say :py:class:`~geometry.coordinate_systems.SphericalCoordinateSystem`:
-
-        .. code-block:: python
-
-            import numpy as np
-            from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
-
-            # Instantiate the coordinate system
-            cs = SphericalCoordinateSystem()
-
-            # Retrieve the Lame invariance matrix
-            lame_invariance_matrix = cs.lame_invariance_matrix
-            print("Lame invariance matrix:")
-            print(lame_invariance_matrix)
-
-        This matrix reveals which Lame coefficients depend on specific coordinates for the :py:class:`~geometry.coordinate_systems.SphericalCoordinateSystem`.
-        For instance, a 3x3 matrix for spherical coordinates would show ``True`` values in entries indicating dependencies (e.g., radial distance
-        might only impact angular coefficients), simplifying calculations by focusing on dependent coordinates only.
-
-        See Also
-        --------
-        CoordinateSystem.lame_coefficients : Returns the Lame coefficients themselves, which use this invariance matrix.
-        CoordinateSystem.compute_gradient_term : Demonstrates how to use the Lame invariance matrix to simplify calculations.
-        """
-        return self.__class__._lame_invariance_matrix
-
-
-    # @@ GEOMETRY METHODS @@ #
-    # These methods each correspond to the differential properties
-    # of the coordinate system and are used frequently in differential calculations
-    # throughout the Pisces environment.
-    def compute_lame_coefficients(
-            self,
-            coordinates: NDArray,
-            active_axes: Optional[Collection[int]] = None
-    ) -> NDArray:
-        """
-        Compute the Lame coefficients at specified coordinates for selective or all axes.
+        Convert an expression into a callable numpy function using the attributes and
+        coordinates of this coordinate system.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinate points with shape ``(..., NDIM)``.
-        active_axes : Optional[List[int]], optional
-            List of axis indices to include in the calculation. By default, all axes are computed.
-            Limiting to specific axes can improve efficiency, especially in systems with symmetries
-            that simplify computation by ignoring invariant coordinates.
+        expression: str or sp.Basic
+            The sympy expression or string corresponding to the function to be evaluated.
 
         Returns
         -------
-        NDArray
-            Array of Lame coefficients at each specified coordinate, shaped ``(..., NDIM)`` by default.
-            If ``active_axes`` is set, the shape is ``(..., len(active_axes))``.
+        Callable
+            The numpy function corresponding to the expression.
 
         Notes
         -----
-        Lame coefficients, :math:`h_i`, are critical in orthogonal coordinate systems. They scale
-        differential operators based on local geometry and vary depending on the coordinate system.
-        Specifying ``active_axes`` helps optimize calculations by excluding symmetrically invariant axes.
-
-        .. warning::
-
-            When using ``active_axes``, the result may not align with the axis indices directly.
-            Ensure that the returned array indices are matched to ``active_axes`` rather than the
-            full coordinate axes.
-
-        Examples
-        --------
-        Calculate Lame coefficients at specific points in a custom coordinate system:
-
-        .. code-block:: python
-
-            # Import the relevant coordinate system.
-            from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
-            import numpy as np
-
-            # Construct the coordinate array.
-            x = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
-
-            cs = SphericalCoordinateSystem()
-            lame_coeffs = cs.compute_lame_coefficients(x, active_axes=[0, 2])
-            print("Lame Coefficients for axes 0 and 2:", lame_coeffs)
-
-        See Also
-        --------
-        :py:meth:`lame_invariance_matrix` : Indicates dependencies between Lame coefficients and coordinate axes.
+        Errors will occur when the expression cannot be converted. This most often occurs because the input
+        expression contains variables which are not recognized / understood in the coordinate system.
         """
-        # Default to all axes if active_axes is None
-        if active_axes is None:
-            active_axes = range(self.NDIM)
+        # COERCE the expression to a sympy expression and then bind it to the constants.
+        expression = sp.sympify(expression)
+        bound_expression = expression.subs(self.parameters)
 
-        # Use list comprehension to build the array, one column per active axis
-        result_array = np.column_stack(
-            [self.lame_coefficients[axis](coordinates) for axis in active_axes]
-        )
+        # Handle the constant case by constructing a lambda function.
+        if bound_expression.is_constant():  # Check if the expression is constant
+            # Convert constant to a numerical value
+            constant_value = float(sp.simplify(bound_expression))
 
-        return result_array
+            # Create a lambda function returning an array of the same shape as the first argument
+            return lambda *args, cv=constant_value: np.full_like(args[0], cv)
+        else:
+            return sp.lambdify(self.SYMBAXES, bound_expression, 'numpy')
 
-    def jacobian(self, coordinates):
+    # @@ DERIVED ATTRIBUTE METHODS @@ #
+    # For each of the attributes in _derive_symbolic_attributes, the symbolic calculation
+    # should either occur directly in _derive_symbolic_attributes (if its unlikely to need changing)
+    # or in a seperate method below (if it might need to be changed).
+    #
+    # DEVELOPER NOTE: These generally do NOT need to be changed in subclasses, but may be changed
+    #  if the developer so needs.
+    def get_derived_attribute_symbolic(self, attribute_name: str) -> sp.Basic:
+        try:
+            return self._symbolic_attributes[attribute_name]
+        except KeyError:
+            raise ValueError(
+                f'Attribute `{attribute_name}` is not defined symbolically for class `{self.__class__.__name__}`.')
+
+    def get_derived_attribute_function(self, attribute_name: str) -> Callable:
+        try:
+            return self._lambdified_attributes[attribute_name]
+        except KeyError:
+            raise ValueError(
+                f'Attribute `{attribute_name}` is not defined symbolically for class `{self.__class__.__name__}`.')
+
+    def _eval_der_attr_func(self, attribute_name: str, coordinates: np.ndarray) -> np.ndarray:
+        coordinates = CoordinateArray(coordinates, self.NDIM)
+        coordinates = np.moveaxis(coordinates, -1, 0)
+
+        func = self.get_derived_attribute_function(attribute_name)
+        return func(*coordinates)
+
+    def jacobian(self, coordinates: np.ndarray) -> np.ndarray:
         r"""
-        Compute the Jacobian determinant for the given coordinate system at specified points.
+        Compute the Jacobian for the given coordinate system at specified points.
 
         The Jacobian is calculated as the product of the Lame coefficients across all axes at each
         point in the coordinate system, representing the volume scaling factor for the transformation
@@ -580,8 +421,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         Parameters
         ----------
         coordinates : NDArray
-            Array of coordinates, shape ``(P, N)``, where ``P`` is the number of points and ``N``
-            is the number of dimensions in the coordinate system.
+            Array of coordinates, shape ``(*, NDIM)``, where ``*`` may represent any generic array structure and
+            ``NDIM`` is the number of dimensions in the coordinate system.
 
         Returns
         -------
@@ -595,789 +436,816 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         Lame coefficients, :math:`h_1 h_2 \dots h_N`, where each :math:`h_i` is the Lame coefficient
         for the ``i``-th axis. The Jacobian determinant is critical in volume integrations and changes
         of variables in non-Cartesian coordinates.
-
-        Examples
-        --------
-        Calculate the Jacobian determinant at several points in a custom coordinate system:
-
-        >>> coords = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-        >>> cs = CoordinateSystem()  # Assume CoordinateSystem is defined with Lame coefficients
-        >>> jacobian = cs.jacobian(coords)
-        >>> print("Jacobian determinant:", jacobian)
-
         """
-        return np.prod(self.compute_lame_coefficients(coordinates), axis=0)
+        return self._eval_der_attr_func('jacobian', coordinates)
 
-    def effective_jacobian(self, coordinates, axis: int):
+    def get_symbolic_D_term(self, axis: 'AxisAxis', basis: str):
+        # VALIDATION: construct the axis index and the d_term name.
+        axis_index = self.ensure_axis_numeric(axis)
+        D_name = f"D_{axis_index}_{basis}"
+
+        # CONSTRUCT the symbol first.
+        if D_name not in self._symbolic_attributes:
+            _scale = dict(unit=-1, contravariant=-2, covariant=0)[basis]
+            _lame = self.get_lame_symbolic(axis)
+            J = self.get_derived_attribute_symbolic('jacobian')
+            D = sp.simplify((1 / J) * sp.diff((J / _lame ** _scale), self.SYMBAXES[axis_index]))
+            self._symbolic_attributes[D_name] = D
+
+        return self._symbolic_attributes[D_name]
+
+
+    def D_term(self, coordinates: np.ndarray, axis: 'AxisAlias', basis: str) -> np.ndarray:
         r"""
-        Compute the effective Jacobian determinant for the given coordinate system at specified points along a given axis.
-
-        The Jacobian is calculated as the product of the Lame coefficients across all axes at each
-        point in the coordinate system, representing the volume scaling factor for the transformation
-        from Cartesian coordinates to the current coordinate system. The effective Jacobian is constructed by
-        removing terms from the product which do not depend on a particular axis. It is useful primarily in calculations
-        of the divergence, curl, and Laplacian.
+        Computes the :math:`D`-term for the divergence along a given axis in a particular basis.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinates, shape ``(P, N)``, where ``P`` is the number of points and ``N``
-            is the number of dimensions in the coordinate system.
-        axis: int
-            The axis for which to construct the effective Jacobian determinant.
+        coordinates: NDArray
+            The coordinates at which to evaluate the :math:`D`-term. These should be ``(...,NDIM)`` in shape where
+            ``NDIM`` is the number of dimensions in the coordinate system.
+        axis: str or int
+            The axis (or index) for which to compute the :math:`D`-term.
+        basis: str
+            The basis in which to compute the :math:`D`-term. This may be ``"unit"``, ``"covariant"`` or ``"contravariant"``.
 
         Returns
         -------
         NDArray
-            The Jacobian determinant values at each specified point, with shape ``(P,)``. Each
-            value represents the volume scaling factor at that point.
+            The value of the :math:`D`-term at each point in the coordinates. This will be ``(...,)`` in shape.
 
         Notes
         -----
-        Generically, the Jacobian determinant is constructed as the product of the Lame Coefficients:
+
+        In orthogonal coordinates, the divergence of a vector field :math:`{\bf F}` is
 
         .. math::
 
-            J = \prod_i \lambda_i.
+            \nabla \cdot {\bf F} = \frac{1}{J}\partial_{k} \left(\frac{J}{\lambda_k} \hat{\bf F}_k\right),
 
-        In many calculations in geometry, the Jacobian appears. For example, the divergence is
-
-        .. math::
-
-            \nabla \cdot {\bf F} = \frac{1}{J}\sum_i \partial_i \left(J \hat{\bf F}_i\right).
-
-        Clearly, the components of the Jacobian product that are invariant under :math:`q^i` will actually cancel in
-        such an expression. Thus, we introduce the notion of the effective Jacobian determinant:
+        where :math:`\hat{\bf F}_k` is the **unit-basis** component of :math:`{\bf F}`. Employing the product rule,
 
         .. math::
 
-            \tilde{J}_k = \prod_{i \in \{j|\lambda_k \notin {\rm Inv}_{q^j}\}} \lambda_i.
+            \nabla \cdot {\bf F} = \underbrace{\frac{1}{J} \partial_k \left(\frac{J}{\lambda_k} \right)}_{\hat{D}_k} \hat{\bf F}_k + \frac{1}{\lambda k} \partial_k \hat{\bf F}_k,
 
-        Then,_
+        where :math:`\hat{D}` is the :math:`D`-term of the divergence in the unit basis. An equivalent (with additional scaling in the derivative) may be constructed
+        for each of the other bases. Thus, the divergence simplifies to
 
         .. math::
 
-            \nabla \cdot {\bf F} = \sum_i \frac{1}{\tilde{J}_i} \partial_i \left(\tilde{J}_i \hat{\bf F}_i\right).
-
-        From a numerical standpoint, this is a considerable improvement as it ensures that we are not forced to compute
-        derivatives on a (potentially complicated) Jacobian just to have them from back out of the equation again.
-
-        Examples
-        --------
-        Calculate the Jacobian determinant at several points in a custom coordinate system:
-
-        >>> coords = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-        >>> cs = CoordinateSystem()  # Assume CoordinateSystem is defined with Lame coefficients
-        >>> jacobian = cs.effective_jacobian(coords)
-        >>> print("Jacobian determinant:", jacobian)
+            \nabla \cdot {\bf F} = \hat{D}_k \hat{\bf F}_k + \lambda_k^{-1} \partial_k \hat{\bf F}_k.
 
         """
-        active_axes = np.arange(self.NDIM)[~self.lame_invariance_matrix[:, axis]]
-        return np.prod(self.compute_lame_coefficients(coordinates, active_axes=active_axes), axis=0)
+        axis_index = self.ensure_axis_numeric(axis)
+        D_name = f"D_{axis_index}_{basis}"
+        # CONSTRUCT the lambda function
+        if D_name not in self._lambdified_attributes:
+            self._lambdified_attributes[D_name] = self.lambdify_expression(self.get_symbolic_D_term(axis, basis))
+        return self._eval_der_attr_func(D_name, coordinates)
 
-    def surface_element(self, coordinates: NDArray, axis: int) -> NDArray:
+    def get_symbolic_L_term(self, axis: 'AxisAlias'):
+        return self.get_symbolic_D_term( axis, basis='contravariant')
+
+    def L_term(self, coordinates: np.ndarray, axis: 'AxisAlias') -> np.ndarray:
         r"""
-        Compute the surface element along a specified axis for the given coordinate system at specified points.
-
-        The surface element represents the area scaling factor for a surface normal to the specified axis, computed
-        as the product of the Lame coefficients for all other axes at each point in the coordinate system. This is
-        useful for integrations over surfaces in non-Cartesian coordinate systems.
+        Computes the :math:`L`-term for the Laplacian along a given axis.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinates, shape ``(P, N)``, where ``P`` is the number of points and ``N``
-            is the number of dimensions in the coordinate system.
-        axis : int
-            The index of the axis normal to the surface for which to compute the surface element.
-            This axis will be excluded from the computation, and the surface element will be calculated
-            from the Lame coefficients of all other axes.
+        coordinates: NDArray
+            The coordinates at which to evaluate the :math:`L`-term. These should be ``(...,NDIM)`` in shape where
+            ``NDIM`` is the number of dimensions in the coordinate system.
+        axis: str or int
+            The axis (or index) for which to compute the :math:`L`-term.
 
         Returns
         -------
         NDArray
-            The surface element values at each specified point, with shape ``(P,)``. Each
-            value represents the area scaling factor for the surface normal to the specified axis
-            at that point.
+            The value of the :math:`L`-term at each point in the coordinates. This will be ``(...,)`` in shape.
 
         Notes
         -----
-        In non-Cartesian coordinate systems, the surface element is the product of the Lame
-        coefficients for all axes except the specified axis. This can be expressed as:
+        The Laplacian of a scalar field :math:`f` in orthogonal coordinates is given by
 
         .. math::
-           dS = h_1 h_2 \dots h_{N-1}
 
-        where :math:`h_i` are the Lame coefficients for each axis excluding the specified axis.
+            \nabla^2 f = \frac{1}{\lambda_k^2} \partial_k^2 f + \underbrace{\frac{1}{J} \partial_k \left( \frac{J}{\lambda_k^2} \right)}_{L_k} \partial_k f,
+
+        where :math:`\lambda_k` is the Lame coefficient for the :math:`k`-th axis, and :math:`J` is the Jacobian determinant.
+        The :math:`L`-term, :math:`L_k`, is defined as
+
+        .. math::
+
+            L_k = \frac{1}{J} \partial_k \left( \frac{J}{\lambda_k^2} \right).
+
+        This term accounts for the contribution to the Laplacian from the coordinate system's geometry.
+
+        In practice, the Laplacian simplifies to:
+
+        .. math::
+
+            \nabla^2 f = L_k \partial_k f + \frac{1}{\lambda_k^2} \partial_k^2 f.
+
+        The :math:`L`-term is specific to the contravariant basis.
         """
-        _lame_coefficients = self.compute_lame_coefficients(coordinates)
-        _lame_coefficients = np.delete(_lame_coefficients, axis, axis=0)
-        return np.prod(_lame_coefficients, axis=0)
+        return self.D_term(coordinates, axis, 'contravariant')
 
-    def compute_gradient_term(self,
-                              coordinates: NDArray,
-                              values: NDArray,
-                              axis: int,
-                              /,
-                              derivative: NDArray = None,
-                              *,
-                              basis='unit',
-                              **kwargs):
+    # @@ DIFFERENTIAL OPERATORS @@ #
+    # These are the core methods for evaluating differential operations. They generally
+    # do not need to be altered.
+    def compute_derivative(self,
+                           field: Union[np.ndarray, Callable],
+                           coordinates: np.ndarray,
+                           axes: Union['AxisAlias',List['AxisAlias']],
+                           **kwargs) -> np.ndarray:
         r"""
-        Compute a single term of the gradient for a scalar field with respect to a specified axis.
-
-        This function calculates the partial derivative of a scalar field, ``values``, along a
-        specified axis in a coordinate system. The result is adjusted based on the provided ``basis`` parameter,
-        scaling the derivative with the appropriate Lame coefficient if necessary.
+        Compute the derivative of a scalar field along a specific axis.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinate points on a grid. This should be ``(*GRID,NDIM) = (N_0,...,N_NDIM,NDIM)`` in shape, where the first
-            ``NDIM`` dimensions in the array correspond to the number of grid points along that axis.
-        values : NDArray
-            Array of scalar field values at the specified coordinates, shaped ``(*GRID,)`` or ``(*GRID,1)``.
-        axis : int
-            Index of the axis along which to compute the gradient term.
-        derivative : Optional[NDArray], optional
-            Precomputed partial derivative along the specified axis, shaped ``(*GRID,)`` or ``(*GRID,1)``.
-            If not provided, it will be computed within the function.
-        basis : {'unit', 'covariant', 'contravariant'}, optional
-            Specifies the basis in which to compute the gradient term. Default is ``'unit'``:
-            - ``'unit'``: Returns derivatives scaled by the Lame coefficient.
-            - ``'covariant'``: Returns derivatives scaled by the square of the Lame coefficient.
-            - ``'contravariant'``: Returns unscaled derivatives, ignoring Lame coefficients.
+        field : Union[np.ndarray, Callable]
+            The field to differentiate:
+            - A numpy array for numerical input. This must be a ``(...,)`` array matching the shape of the
+              ``coordinates`` argument (up to the final dimension).
+            - A callable function returning a numpy array for functional input. This should have signature
+              ``f(x_0,...,x_1)`` and return an array of the same shape as each of the input coordinates.
+        coordinates : np.ndarray
+            Array of coordinates with shape ``(..., NDIM)``, where ``NDIM`` is the number of dimensions.
+        axes : str or int or List[str] or List[int]
+            The axes along which to compute the derivative. A single axis (or axis index) can be used or a
+            number of them may be provided.
         **kwargs
-            Additional keyword arguments passed to the ``partial_derivative`` function (if derivative is not provided),
-            such as ``edge_order``.
+            Additional keyword arguments for numerical differentiation.
 
         Returns
         -------
-        NDArray
-            Computed gradient term along the specified axis, adjusted based on the selected basis. Shaped
-            ``(*GRID,)``.
+        np.ndarray
+            The derivative of the field along the specified axis, with shape ``(...,len(axes))``.
 
         Notes
         -----
-        The choice of ``basis`` affects the scaling of the gradient term:
+        The derivative of a field :math:`f` along axis :math:`k` is defined as:
 
-        - **Unit basis**: Scales the partial derivative by the Lame coefficient, :math:`h_i`.
-        - **Covariant basis**: Scales by the square of the Lame coefficient, :math:`h_i^2`.
-        - **Contravariant basis**: Direct partial derivative, no scaling by Lame coefficient.
+        .. math::
 
-        In non-Cartesian coordinate systems, this distinction is crucial for accurate computation.
-        If no precomputed derivative is provided, ``partial_derivative`` will be invoked with the
-        specified axis to compute it.
+            \frac{\partial f}{\partial x_k}.
 
-        See Also
-        --------
-        partial_derivative : Used for computing derivatives along specified axes.
-        gradient : Computes the full gradient vector for a scalar field across all axes.
+        For callable fields, the derivative is computed using finite differences or an equivalent numerical method.
+        For numpy arrays, partial derivatives are computed directly based on the provided axis.
+
+        This function ensures compatibility with both array-like and callable field representations.
         """
-        if coordinates.shape[-1] != self.NDIM:
-            raise ValueError("coordinates must have shape (NDIM,)")
+        # Validate and reshape coordinates for numerical differentiation
+        coordinates = CoordinateArray(coordinates, self.NDIM) # (...,NDIM)
 
-        # Compute the relevant partial derivative if that is necessary.
-        if derivative is None:
-            derivative = partial_derivative(coordinates, values,axes=[axis], **kwargs) # S = (...,)
-
-        if basis == 'contravariant':
-            # In the contravariant basis, the lame coefficients don't appear and therefore
-            # we don't need to compute them. We just return the derivatives.
-            return derivative
-
-        # Compute the lame coefficients.
-        # shape = (N,1)
-        lame_coefficients = self.lame_coefficients[axis](coordinates)
-
-        # Return the other relevant basis options.
-        if basis == 'covariant':
-            # scaled by the square lame coefficients.
-            return derivative / lame_coefficients ** 2
-        elif basis == 'unit':
-            return derivative / lame_coefficients
+        # Determine the type of the field and validate inputs
+        if isinstance(field, np.ndarray):
+            field_type = 'array'
+        elif callable(field):
+            field_type = 'function'
         else:
             raise ValueError(
-                f"Unrecognized value for 'basis': {basis}. Expected one of 'unit', 'covariant', 'contravariant'.")
+                f"Unsupported field type: {type(field)}. Expected np.ndarray, or Callable.")
 
-    def compute_function_gradient_term(self,
-                                       coordinates: NDArray,
-                                       function: Callable[[NDArray], NDArray],
-                                       axis: int,
-                                       *,
-                                       derivative: Optional[Callable[[NDArray], NDArray]] = None,
-                                       basis='unit',
-                                       epsilon: float = 1e-5) -> NDArray:
+        # Convert axis to numeric if provided as a string
+        if not issubclass(axes, (tuple, list)):
+            axes = [axes]
+        axes_indices = [self.ensure_axis_numeric(axis) for axis in axes]
+
+        # Compute derivative for numerical fields (array or function)
+        if field_type == 'array':
+            return partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
+        elif field_type == 'function':
+            return function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+
+        # This return is redundant due to error checks, but added for clarity
+        raise RuntimeError("Unexpected execution path in `compute_derivative`.")
+
+    # @ GRADIENT @ #
+    def compute_gradient(self,
+                         field: Union[np.ndarray, Callable],
+                         coordinates: np.ndarray,
+                         /,
+                         axes: Union['AxisAlias', List['AxisAlias']] = None,
+                         *,
+                         derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+                         basis: str = 'unit',
+                         **kwargs) -> np.ndarray:
         r"""
-        Compute a single term of the gradient for a scalar function with respect to a specified axis.
+        Compute the gradient of a scalar field.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinate points. The ``coordinates`` may be of any shape as long as the final axis
-            corresponds to each of the dimensions in the coordinate system and the preceding axes to
-            whatever grid structure is present.
-        function : Callable[[NDArray], NDArray]
-            Scalar function to be differentiated. This must have a call signature which takes ``coordinates.shape[-1]`` values
-            and returns a scalar value.
-        axis : int
-            Index of the axis / axes for gradient computation.
-        derivative : Optional[Callable[[NDArray], NDArray]], optional
-            A precomputed derivative function for the specified axis. If None, it defaults to numerical differentiation.
+        field : Union[np.ndarray, Callable]
+            The scalar field to take the gradient of:
+            - A numpy array for numerical input. This must be a ``(...,)`` array matching the shape of the
+              ``coordinates`` argument (up to the final dimension).
+            - A callable function returning a numpy array for functional input. This should have signature
+              ``f(x_0,...,x_1)`` and return an array of the same shape as each of the input coordinates.
+
+            .. warning::
+
+                If derivatives are **not** provided explicitly, then fields passed as ``np.ndarray`` must have a more
+                stringent grid shape of ``(N_1,N_2,...,N_NDIM,)`` in order to compute the necessary derivatives.
+
+        coordinates : np.ndarray
+            Array of coordinates with shape ``(..., NDIM)``, where ``NDIM`` is the number of dimensions. If numerical
+            derivatives are necessary, then ``(..., NDIM)`` must be a grid with more stringent shape ``(N_1,...,N_NDIM,N_DIM)``,
+            where ``N_i`` may be any number of grid points.
+        axes : Union['AxisAlias', List['AxisAlias']]
+            The axes along which to compute the gradient.
+        derivatives : Union[np.ndarray,List[Callable]], optional
+            Known derivatives along specific axes to be used instead of numerical differentiation. If the ``field``
+            is specified as a ``callable``, then ``derivatives`` should be a ``list[Callable]`` providing each of the
+            derivatives to be computed (length of ``axes``). If the field is an array, ``derivatives`` should be an array
+            matching the shape of the ``coordinates`` up to the final axis and then having ``len(axes)`` elements in the final
+            index.
         basis : {'unit', 'covariant', 'contravariant'}, optional
-            Specifies the basis in which to compute the gradient term.
-        epsilon : float, optional
-            Step size for numerical differentiation.
-
-        Returns
-        -------
-        NDArray
-            Computed gradient term along the specified axis, adjusted based on the selected basis.
-        """
-        if coordinates.shape[-1] != self.NDIM:
-            raise ValueError(f"coordinates have shape `{coordinates.shape}`"
-                             f" [ndim={coordinates.ndim}, end_size={coordinates.shape[-1]}], but expected shape like"
-                             f" `(...,{self.NDIM})` [ndim={self.NDIM+1}, end_size={self.NDIM}].")
-
-        if derivative is None:
-            derivative_result = function_partial_derivative(function, coordinates, axis, method='central',
-                                                           h=epsilon)
-        else:
-            derivative_result = derivative(coordinates)
-
-        lame_coefficients = self.lame_coefficients[axis](coordinates)
-
-        if basis == 'unit':
-            return derivative_result / lame_coefficients
-        elif basis == 'covariant':
-            return derivative_result / lame_coefficients ** 2
-        elif basis == 'contravariant':
-            return derivative_result
-        else:
-            raise ValueError(f"Unrecognized basis '{basis}'. Expected one of 'unit', 'covariant', or 'contravariant'.")
-
-    def gradient(self,
-                 coordinates: NDArray,
-                 values: NDArray,
-                 /,
-                 derivatives: NDArray = None,
-                 *,
-                 basis='unit',
-                 active_axes: List[int] | None = None,
-                 **kwargs):
-        """
-        Compute the gradient of a scalar field with respect to coordinates in a specified basis.
-
-        This method calculates the gradient of ``values`` (a scalar field) with respect to ``coordinates``
-        in a given coordinate system, accounting for different bases: unit, covariant, or contravariant.
-        The gradient is scaled by the appropriate Lame coefficients if required by the basis.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Grid of coordinates with generic shape ``(...,NDIM)``, where the first ``NDIM`` axes correspond to the
-            grid structure and the final axis corresponds to each of the coordinate values.
-        values : NDArray
-            Array of scalar field values at the specified coordinates, with shape ``(...,)`` or ``(..., 1)``.
-        derivatives : Optional[NDArray], optional
-            Array of precomputed partial derivatives along all axes, with shape ``(..., NDIM)``. If ``None``,
-            the partial derivatives are calculated within the function.
-        basis : {'unit', 'covariant', 'contravariant'}, optional
-            Specifies the basis in which to compute the gradient. Default is ``'unit'``:
-            - ``'unit'``: Returns derivatives scaled by the Lame coefficients.
-            - ``'covariant'``: Returns derivatives scaled by the square of the Lame coefficients.
-            - ``'contravariant'``: Returns unscaled derivatives, ignoring Lame coefficients.
-        active_axes : Optional[List[int]], optional
-            List of active axis indices for which to compute the gradient. If ``None``, all axes are active.
-            This parameter allows for selective gradient computation, useful when certain axes can be
-            ignored due to symmetry, improving efficiency.
+            The basis in which to compute the gradient. Default is 'unit'.
         **kwargs
-            Additional keyword arguments passed to ``partial_derivatives_all_axes``, such as ``edge_order``.
+            Additional keyword arguments for numerical differentiation.
 
         Returns
         -------
-        NDArray
-            Array representing the gradient of ``values`` with respect to ``coordinates``, shaped ``(..., NDIM)``.
-            Each row represents the partial derivative along one axis, scaled according to the specified basis.
-            If ``active_axes`` is specified, then the return shape will be ``(...,len(active_axes))``.
+        np.ndarray
+            The gradient of the scalar field, with shape ``(..., NDIM)``.
 
         Notes
         -----
-        The gradient in a non-Cartesian coordinate system depends on the Lame coefficients :math:`h_i`
-        for each coordinate axis. The different bases adjust the gradient as follows:
+        The gradient of a scalar field :math:`f` in orthogonal coordinates is given by:
 
-        - **Contravariant basis**: Direct partial derivatives, ignoring Lame coefficients.
-        - **Unit basis**: Partial derivatives scaled by the Lame coefficients :math:`h_i`.
-        - **Covariant basis**: Partial derivatives scaled by :math:`h_i^2`.
+        .. math::
 
-        This flexibility allows for efficient and accurate gradient calculations, accounting for the
-        specific requirements of the coordinate system.
+            \nabla f = \left( \frac{\partial f}{\partial x_k} \right) \hat{\mathbf{e}}_k,
+
+        where :math:`\hat{\mathbf{e}}_k` are the basis vectors. Depending on the specified basis, scaling factors
+        from the Lame coefficients are applied:
+
+        - **Unit basis**: Scaling by :math:`\lambda_k`.
+        - **Covariant basis**: Scaling by :math:`\lambda_k^2`.
+        - **Contravariant basis**: No scaling.
+
+        The gradient components are returned in the specified basis.
+        """
+        # VALIDATE inputs.
+        # Coordinates are coerced to CoordinateArray, which ensures a shape at least of (...,NDIM).
+        # This does not enforce a grid shape -- must be done when derivatives are assessed.
+        coordinates = CoordinateArray(coordinates, self.NDIM)
+
+        # Construct the axes and their indices. Fill in if values are not provided.
+        if axes is None:
+            axes = self.AXES[:]
+        if not isinstance(axes, (list, tuple)):
+            axes = [axes]
+        axes = [self.ensure_axis_string(axis) for axis in axes]
+        axes_indices = [self.ensure_axis_numeric(axis) for axis in axes]
+
+        # The field type is determined based on type and then (if numpy array), we coerce the field further to
+        # match the shape of the coordinates.
+        if isinstance(field, np.ndarray):
+            field_type = 'array'
+
+            # checking that the field has the correct shape. This will ensure that
+            # (..., NDIM) matches the shape of the coordinates.
+            try:
+                field = field.reshape(coordinates.shape[:-1])
+            except Exception as e:
+                raise ValueError(f"Field (shape={field.shape}) does not match the shape of coordinates (shape={coordinates.shape}).\n"
+                                 f"The field should have had shape {coordinates.shape[:-1]}.\n"
+                                 f"ERROR={e}")
+
+        elif callable(field):
+            field_type = 'function'
+        else:
+            raise ValueError(
+                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable.")
+
+        # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
+        # need to be computed and we need to enforce further restrictions on the grid shape.
+        if derivatives is not None:
+            if field_type == 'function':
+                # validate that the derivatives are provided correctly and that we have as many as
+                # necessary.
+                if not isinstance(derivatives, (list, tuple)):
+                    raise ValueError(f"Field was specified as a function, but derivatives were provided with type {type(derivatives)}.\n"
+                                     "We always expect a list of derivative functions when `field` is a function.")
+
+                if len(derivatives) != len(axes):
+                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(derivatives)} derivatives, which doesn't match.")
+
+                # Coerce the coordinates and then evaluate them.
+                # The derivatives should now have shape (...,len(axes))
+                d_coords = np.moveaxis(coordinates,-1,0)
+                derivatives = np.stack([d(*d_coords) for d in derivatives], axis=-1)
+
+            # validate
+            if derivatives.shape != (*coordinates.shape[:-1], len(axes)):
+                raise ValueError(f"Derivatives were found to have shape {derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                                 f" Please ensure that you have provided the `derivatives` argument correctly. Consult the documentation for detailed information.")
+
+        else:
+            # The derivatives are not provided to us; they need to be computed which will require additional enforced
+            # structure on the grid.
+            if field_type == 'function':
+                derivatives = function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+            else:
+                # validate the grid shape.
+                if coordinates.ndim != self.NDIM + 1:
+                    raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
+                derivatives = partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
+
+        # FINISH the computation in the correct basis.
+        if basis == 'contravariant':
+            return derivatives
+        elif basis == 'unit':
+            return self.scale_by_lame(coordinates, derivatives, axes=axes, order=-1)
+        elif basis == 'covariant':
+            return self.scale_by_lame(coordinates, derivatives, axes=axes, order=-2)
+        else:
+            raise ValueError(f"Invalid basis '{basis}'. Expected 'unit', 'covariant', or 'contravariant'.")
+
+    # @ DIVERGENCE @ #
+    def compute_divergence(self,
+                           field: Union[np.ndarray, Callable],
+                           coordinates: Optional[np.ndarray],
+                           /,
+                           axes: Union['AxisAlias', List['AxisAlias']] = None,
+                           *,
+                           derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+                           basis: str = 'unit',
+                           **kwargs) -> np.ndarray:
+        r"""
+        Compute the divergence of a vector field in the coordinate system.
+
+        Parameters
+        ----------
+        field : Union[np.ndarray, Callable]
+            The vector field to compute the divergence of:
+            - A numpy array for numerical input. This must be a ``(...,axes)`` array matching the shape of the
+              ``coordinates`` argument (up to the final dimension) and then the number of axes specified.
+            - A callable function returning a numpy array for functional input. This should have signature
+              ``f(x_0,...,x_1)`` and return an array of shape ``(...,axes)`` as output.
+        coordinates : np.ndarray
+            The coordinates over which the divergence should be computed. In general, these may be ``(...,NDIM)`` in shape;
+            however, if ``derivatives = None`` and the ``field`` is an ``np.ndarray``, then the coordinates must be a proper
+            coordinate grid with generic shape ``(N_1,...,N_NDIM, NDIM)`` where each ``N_i`` may be any integer corresponding
+            to the number of points along the grid in that dimension.
+        axes : Union['AxisAlias', List['AxisAlias']]
+            The axes along which the field components are defined.
+        derivatives : Union[np.ndarray,List[Callable]], optional
+            Known derivatives along specific axes to be used instead of numerical differentiation. The following types
+            are supported:
+            - (``field`` is ``callable``) The derivatives must be specified as a ``list`` of ``callable`` functions,
+              each matching the signature of the ``field``, but returning a **SCALAR** array ``(...,)``. Each element in the
+              list should represent the derivative :math:`\partial_k F^k`. No cross terms should be provided.
+            - (``field`` is ``np.ndarray``) The derivatives must be specified as a ``np.ndarray`` of shape ``(...,axes)``,
+              with each of the final axes corresponding to the :math:`\partial_k F^k` along one of the ``axes``.
+        basis : {'unit', 'covariant', 'contravariant'}, optional
+            The basis in which the input field is defined. Default is 'unit'.
+        **kwargs
+            Additional keyword arguments for numerical differentiation.
+
+        Returns
+        -------
+        np.ndarray
+            The computed divergence as a scalar field with the same shape as the input field.
 
         Raises
         ------
         ValueError
-            If ``coordinates`` and ``values`` have mismatched shapes, or if ``coordinates`` and ``derivatives``
-            shapes mismatch, or if an unrecognized ``basis`` value is provided.
+            If required inputs are missing or invalid.
         """
-        # Construct the active axes so that, if they are not provided, we use
-        # all of the axes and get all of the components back.
-        if active_axes is None:
-            active_axes = np.arange(self.NDIM)
+        # VALIDATE inputs.
+        # Coordinates are coerced to CoordinateArray, which ensures a shape at least of (...,NDIM).
+        # This does not enforce a grid shape -- must be done when derivatives are assessed.
+        coordinates = CoordinateArray(coordinates, self.NDIM)
+        # Construct the axes and their indices. Fill in if values are not provided.
+        if axes is None:
+            axes = self.AXES[:]
+        if not isinstance(axes, (list, tuple)):
+            axes = [axes]
+        axes = [self.ensure_axis_string(axis) for axis in axes]
+        axes_indices = [self.ensure_axis_numeric(axis) for axis in axes]
 
-        # Compute the gradients term by term.
-        if derivatives is not None:
-            return np.stack([
-                self.compute_gradient_term(coordinates, values, axis, derivative=derivatives.take(axis,axis=-1), basis=basis,
-                                           **kwargs) for axis in active_axes
-            ], axis=-1)
+        # The field type is determined based on type and then (if numpy array), we coerce the field further to
+        # match the shape of the coordinates.
+        if isinstance(field, np.ndarray):
+            field_type = 'array'
+
+            # checking that the field has the correct shape. This will ensure that
+            # (..., NDIM) matches the shape of the coordinates.
+            try:
+                field = field.reshape((*coordinates.shape[:-1],len(axes)))
+            except Exception as e:
+                raise ValueError(
+                    f"Field (shape={field.shape}) does not match the shape of coordinates (shape={coordinates.shape}).\n"
+                    f"The field should have had shape ({coordinates.shape[:-1]},{len(axes)}).\n"
+                    f"ERROR={e}")
+
+        elif callable(field):
+            field_type = 'function'
         else:
-            return np.stack([
-                self.compute_gradient_term(coordinates, values, axis, derivative=None, basis=basis, **kwargs) for axis
-                in active_axes
-            ], axis=-1)
-
-    def function_gradient(self,
-                          coordinates: NDArray,
-                          function: Callable[[NDArray], NDArray],
-                          *,
-                          derivatives: Optional[List[Callable[[NDArray], NDArray]]] = None,
-                          basis='unit',
-                          active_axes: Optional[List[int]] = None,
-                          epsilon: float = 1e-5) -> NDArray:
-        """
-        Compute the gradient of a scalar function with respect to coordinates in a specified basis.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinate points.
-        function : Callable[[NDArray], NDArray]
-            Scalar function to compute the gradient for.
-        derivatives : Optional[List[Callable[[NDArray], NDArray]]], optional
-            A list of derivative functions for each axis. If None, numerical derivatives are used.
-        basis : {'unit', 'covariant', 'contravariant'}, optional
-            Basis for computing the gradient, default is 'unit'.
-        active_axes : List[int], optional
-            List of active axis indices to compute the gradient.
-        epsilon : float, optional
-            Step size for finite differences.
-
-        Returns
-        -------
-        NDArray
-            Gradient of the function in the specified basis.
-        """
-        if active_axes is None:
-            active_axes: List[int] = list(np.arange(self.NDIM))
-
-        gradients = []
-        for i, axis in enumerate(active_axes):
-            derivative_func = derivatives[i] if derivatives is not None else None
-            gradient_term = self.compute_function_gradient_term(
-                coordinates, function, axis=axis, derivative=derivative_func, basis=basis, epsilon=epsilon
-            )
-            gradients.append(gradient_term)
-
-        return np.stack(gradients, axis=-1)
-
-    def compute_divergence_term(self, coordinates: NDArray,
-                                vector_field: NDArray,
-                                axis: int,
-                                /,
-                                basis='unit',
-                                **kwargs):
-        r"""
-        Compute the contribution to the divergence from a single axis in a specified basis.
-
-        Given that the divergence takes the form
-
-        .. math::
-
-            \nabla \cdot {\bf F} = \frac{1}{J}\partial_i\left(\frac{J}{h_i}\hat{F}_i\right),
-
-        this method computes a single term of that sum corresponding to ``axis``.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinate points with shape ``(..., NDIM)``, where ``...`` is the number of points
-            and ``NDIM`` is the number of dimensions.
-        vector_field : NDArray
-            Array of vector field components at each coordinate point, with shape ``(..., NDIM)``.
-        axis : int
-            The index of the axis along which the divergence term is computed.
-        basis : {'unit', 'covariant', 'contravariant'}, optional
-            Specifies the basis in which *the vector field is provided*. Defaults to ``'unit'``. This will change
-            the equation by a scaling factor (the Lame coefficient).
-
-            .. hint::
-
-                In most cases, we express vector fields in the ``"unit"`` basis, that way the vectors don't
-                implicitly scale at different points in space (as they would if covariant or contravariant); however,
-                there may be some instances in which this kwarg must be set.
-
-        **kwargs
-            Additional arguments to be passed to ``partial_derivative``, such as ``edge_order``.
-
-        Returns
-        -------
-        NDArray
-            The computed divergence term along the specified axis, with shape ``(...,)``.
-
-        Notes
-        -----
-        In many cases, the Lame Coefficients may not depend on the axis specified and therefore, the
-        equation simplifies somewhat. To handle this, the :py:attr:`CoordinateSystem.lame_dependence_matrix` is used
-        to determine what lame coefficients actually matter for the computation and only those are used.
-
-        Additionally, this method is left public to ensure that users who might need to utilize a specific symmetry,
-        which knocks out specific terms in the sum are able to do so efficiently.
-
-        See Also
-        --------
-        divergence
-        """
-        _vf = vector_field[:, axis]
-
-        if basis == 'unit':
-            _vf /= self.lame_coefficients[axis](coordinates)
-        if basis == 'covariant':
-            _vf /= self.lame_coefficients[axis](coordinates) ** 2
-        elif basis == 'contravariant':
-            pass
-        else:
-            raise ValueError(f"Unsupported basis '{basis}'. Expected 'unit' or 'contravariant'.")
-
-        # Determine the Lame coefficient dependence for this axis. If a Lame coefficient doesn't depend
-        # on a particular axis, then it pulls out of the derivative and cancels out of the Jacobian.
-        dependent_axes = np.arange(self.NDIM)[~self.lame_invariance_matrix[axis, :]]
-
-        # Compute the dependent part of the jacobian. This is the terms in the Jacobian that don't cancel
-        # out.
-        if len(dependent_axes):
-            dependent_jacobian = np.prod(self.compute_lame_coefficients(coordinates, active_axes=dependent_axes),
-                                         axis=0)
-        else:
-            # If we have no dependent axes, then this becomes trivial.
-            dependent_jacobian = np.ones((coordinates.shape[0],))
-
-        # Compute the relevant derivative term. This is partial J*F, where J is the dependent part
-        # of the Jacobian. If the Jacobian is empty, then we just take the derivative of F.
-        derivative_term = partial_derivative(coordinates, dependent_jacobian * _vf, axis, **kwargs)
-
-        return derivative_term / dependent_jacobian
-
-    def compute_function_divergence_term(self,
-                                         coordinates: NDArray,
-                                         vector_function: Callable[[NDArray], NDArray],
-                                         axis: int,
-                                         *,
-                                         basis='unit',
-                                         epsilon: float = 1e-5) -> NDArray:
-        r"""
-        Compute a single term of the divergence for an analytical vector function along a specified axis.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinate points with shape ``(..., NDIM)``, where ``...`` is the number of points.
-        vector_function : Callable[[NDArray], NDArray]
-            Analytical vector function to compute the divergence term for.
-        axis : int
-            The index of the axis along which the divergence term is computed.
-        basis : {'unit', 'covariant', 'contravariant'}, optional
-            Specifies the basis in which the vector function is provided. Defaults to 'unit'.
-        epsilon : float, optional
-            Step size for finite differences, used in numerical differentiation.
-
-        Returns
-        -------
-        NDArray
-            The computed divergence term along the specified axis, with shape ``(...,)``.
-
-        Notes
-        -----
-        This function composes the vector function with the Lame coefficients before differentiating,
-        enabling efficient computation of divergence terms with basis-specific scaling.
-        """
-        # Define the basis-corrected function
-        lame_coeff = self.lame_coefficients[axis]
-        if basis == 'unit':
-            corrected_function = lambda coords: vector_function(coords)[:, axis] / lame_coeff(coords)
-        elif basis == 'covariant':
-            corrected_function = lambda coords: vector_function(coords)[:, axis] / (lame_coeff(coords) ** 2)
-        elif basis == 'contravariant':
-            corrected_function = lambda coords: vector_function(coords)[:, axis]
-        else:
-            raise ValueError(f"Unsupported basis '{basis}'. Expected 'unit', 'covariant', or 'contravariant'.")
-
-        dependent_axes = np.arange(self.NDIM)[~self.lame_invariance_matrix[axis, :]]
-
-        if len(dependent_axes):
-            jacobian_component = lambda coords: np.prod(
-                self.compute_lame_coefficients(coords, active_axes=dependent_axes), axis=0)
-            composite_function = lambda coords: jacobian_component(coords) * corrected_function(coords)
-        else:
-            composite_function = corrected_function
-
-        derivative_term = function_partial_derivative(composite_function, coordinates, axis, method='central', h=epsilon)
-
-        if len(dependent_axes):
-            # noinspection PyUnboundLocalVariable
-            return derivative_term / jacobian_component(coordinates)
-        else:
-            return derivative_term
-
-    def divergence(
-            self,
-            coordinates: NDArray,
-            vector_field: NDArray,
-            /,
-            basis: str = 'unit',
-            active_axes: Optional[List[int]] = None,
-            **kwargs
-    ) -> NDArray:
-        r"""
-        Compute the divergence of a vector field in this coordinate system.
-
-        The divergence of a vector field :math:`\mathbf{F}` in a coordinate system with
-        Lame coefficients is given by:
-
-        .. math::
-
-            \nabla \cdot \mathbf{F} = \sum_i \frac{1}{J} \partial_i \left(\frac{J}{h_i} \hat{F}_i \right),
-
-        where :math:`J` is the Jacobian and :math:`h_i` are the Lame coefficients corresponding
-        to each coordinate direction. This method computes the divergence by summing the
-        contribution from each axis, and allows basis adjustment to ensure accurate representation.
-
-        Parameters
-        ----------
-        coordinates : NDArray
-            Array of coordinate points with shape ``(..., NDIM)``, where ``...`` is the grid of points
-            and ``NDIM`` is the number of dimensions.
-        vector_field : NDArray
-            Array of vector field components along each axis at each point, with shape ``(..., NDIM)``.
-        basis : {'unit', 'covariant', 'contravariant'}, optional
-            Specifies the basis in which *the vector field is provided*. Defaults to ``'unit'``:
-            - ``'unit'``: Scales the vector field to avoid implicit scaling due to space curvature.
-            - ``'covariant'``: Scales by :math:`h_i^2` for each component.
-            - ``'contravariant'``: No scaling, assumes direct contravariant basis.
-        active_axes : Optional[List[int]], optional
-            List of axis indices to include in the divergence calculation. By default, all axes are included.
-
-        Returns
-        -------
-        NDArray
-            The divergence of the vector field at each coordinate point, with shape ``(N,)``.
-
-        Notes
-        -----
-
-        The calculation utilizes the **Lame dependence matrix** to minimize computational load
-        by identifying which Lame coefficients depend on the differentiation axis. Only necessary
-        terms are computed to optimize performance.
-
-        This method sums contributions from each axis, using ``compute_divergence_term`` to compute
-        the divergence term for each specified axis.
-
-        See Also
-        --------
-        compute_divergence_term : Computes the individual divergence term for a single axis.
-        """
-        # Validate inputs to ensure coordinates and vector field have compatible shapes
-        if coordinates.shape != vector_field.shape:
             raise ValueError(
-                f"Coordinates and vector_field have mismatched shapes: {coordinates.shape}, {vector_field.shape}")
+                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable.")
 
-        # Default to all axes if active_axes is not specified
-        if active_axes is None:
-            active_axes = np.arange(self.NDIM)
+        # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
+        # need to be computed and we need to enforce further restrictions on the grid shape.
+        if derivatives is not None:
+            if field_type == 'function':
+                # validate that the derivatives are provided correctly and that we have as many as
+                # necessary.
+                if not isinstance(derivatives, (list, tuple)):
+                    raise ValueError(f"Field was specified as a function, but derivatives were provided with type {type(derivatives)}.\n"
+                                     "We always expect a list of derivative functions when `field` is a function.")
 
-        # Initialize an array for the divergence result
-        divergence_result = np.zeros(coordinates.shape[0])
+                if len(derivatives) != len(axes):
+                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(derivatives)} derivatives, which doesn't match.")
 
-        # Sum the divergence terms for each axis
-        for axis in active_axes:
-            divergence_result += self.compute_divergence_term(
-                coordinates,
-                vector_field,
-                axis,
-                basis=basis,
-                **kwargs
-            )
+                # Coerce the coordinates and then evaluate them.
+                # The derivatives should now have shape (...,len(axes))
+                d_coords = np.moveaxis(coordinates,-1,0)
+                derivatives = np.stack([d(*d_coords) for d in derivatives], axis=-1)
 
-        return divergence_result
+            # validate
+            if derivatives.shape != (*coordinates.shape[:-1], len(axes)):
+                raise ValueError(f"Derivatives were found to have shape {derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                                 f" Please ensure that you have provided the `derivatives` argument correctly. Consult the documentation for detailed information.")
 
-    def laplacian(
-            self,
-            coordinates: NDArray,
-            scalar_field: NDArray,
-            /,
-            active_axes: Optional[List[int]] = None,
-            **kwargs
-    ) -> NDArray:
+        else:
+            # The derivatives are not provided to us; they need to be computed which will require additional enforced
+            # structure on the grid.
+            if field_type == 'function':
+                derivatives = function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+            else:
+                # validate the grid shape.
+                if coordinates.ndim != self.NDIM + 1:
+                    raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
+                derivatives = partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
+
+        # Compute divergence using the product rule and _get_D_term
+        divergence_terms = []
+        lame = self.eval_lame(coordinates, axes)
+        _scale = dict(unit=-1, contravariant=-2, covariant=0)[basis]
+        for i, axis in enumerate(axes):
+            # Retrieve or compute the D_term
+            D_values = self.D_term(coordinates, axis, basis=basis)
+            # Compute the divergence term for this axis
+            divergence_term = (D_values * field[..., i]) + (lame[...,i]**_scale)*derivatives[...,i]
+            divergence_terms.append(divergence_term)
+
+        # Sum the divergence terms to get the total divergence
+        divergence = np.sum(divergence_terms,axis=0)
+
+        return divergence
+
+    def compute_laplacian(self,
+                          field: Union[np.ndarray, Callable],
+                          coordinates: np.ndarray,
+                          /,
+                          axes: Union['AxisAlias', List['AxisAlias']] = None,
+                          *,
+                          basis: str = 'unit',
+                          first_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+                          second_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+                          **kwargs) -> np.ndarray:
         r"""
-        Compute the Laplacian of a scalar field in this coordinate system.
-
-        The Laplacian :math:`\nabla^2 \phi` of a scalar field :math:`\phi` in an orthogonal
-        coordinate system with Lame coefficients :math:`h_i` is given by the divergence of the
-        gradient:
-
-        .. math::
-
-            \nabla^2 \phi = \sum_i \frac{1}{J} \partial_i \left( \frac{J}{h_i^2} \frac{\partial \phi}{\partial q^i} \right),
-
-        where :math:`J` is the Jacobian of the transformation. This method computes the Laplacian
-        by first calculating the gradient in the specified basis, then applying the divergence to
-        this gradient.
+        Compute the Laplacian of a scalar field.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinate points with shape ``(..., NDIM)``, where ``...`` is the grid of points
-            and ``NDIM`` is the number of dimensions.
-        scalar_field : NDArray
-            Array of scalar field values at each coordinate point, with shape ``(...,)``.
-        active_axes : Optional[List[int]], optional
-            List of axis indices to include in the Laplacian calculation. By default, all axes are included.
-        kwargs :
-            Additional kwargs to pass to :py:meth:`CoordinateSystem.gradient` and to :py:meth:`CoordinateSystem.divergence`.
+        field : Union[np.ndarray, Callable]
+            The scalar field to take the gradient of:
+            - A numpy array for numerical input. This must be a ``(...,)`` array matching the shape of the
+              ``coordinates`` argument (up to the final dimension).
+            - A callable function returning a numpy array for functional input. This should have signature
+              ``f(x_0,...,x_1)`` and return an array of the same shape as each of the input coordinates.
+
+            .. warning::
+
+                If derivatives are **not** provided explicitly, then fields passed as ``np.ndarray`` must have a more
+                stringent grid shape of ``(N_1,N_2,...,N_DIM_FREE,)`` in order to compute the necessary derivatives.
+
+        coordinates : np.ndarray
+            Array of coordinates with shape ``(..., NDIM)``, where ``NDIM`` is the number of **free** dimensions. If numerical
+            derivatives are necessary, then ``(..., NDIM)`` must be a grid with more stringent shape ``(N_1,...,N_NDIM,N_DIM)``,
+            where ``N_i`` may be any number of grid points.
+
+            .. note::
+
+                The free dimensions are those which are free **after** the operation, not before it. Thus,
+                if a gradient computation breaks symmetry, the coordinates must include the now-free coordinates.
+                
+        axes : Union['AxisAlias', List['AxisAlias']], optional
+            The axes along which the Laplacian is computed.
+        basis : {'unit', 'covariant', 'contravariant'}, optional
+            The basis in which to compute the Laplacian. Default is 'unit'.
+        first_derivatives : List[Optional[Union[np.ndarray, Callable]]], optional
+            Known 1-st derivatives along specific axes to be used instead of numerical differentiation. If the ``field``
+            is specified as a ``callable``, then ``derivatives`` should be a ``list[Callable]`` providing each of the
+            derivatives to be computed (length of ``axes``). If the field is an array, ``derivatives`` should be an array
+            matching the shape of the ``coordinates`` up to the final axis and then having ``len(axes)`` elements in the final
+            index.
+        second_derivatives : List[Optional[Union[np.ndarray, Callable]]], optional
+            Precomputed second derivatives along the specified axes. The structure is similar to
+            `first_derivatives`.
+        **kwargs
+            Additional keyword arguments for numerical differentiation.
 
         Returns
         -------
-        NDArray
-            The Laplacian of the scalar field at each coordinate point, with shape ``(...,)``.
+        np.ndarray
+            The computed Laplacian of the field, with shape ``(...)``.
 
         Notes
         -----
+        The Laplacian of a scalar field :math:`f` in orthogonal coordinates is given by:
 
-        **Efficiency and Dependence Matrix**
+        .. math::
 
-        This method leverages the Lame dependence matrix for efficient computation by excluding
-        unnecessary terms, which further optimizes performance, especially for high-dimensional
-        systems.
+            \nabla^2 f = \frac{1}{\lambda_k^2} \partial_k^2 f + \frac{1}{J} \partial_k \left( \frac{J}{\lambda_k^2} \right) \partial_k f.
 
-        See Also
-        --------
-        divergence : Computes the divergence, used here on the gradient of the scalar field.
-        gradient : Computes the gradient of the scalar field prior to divergence.
+        This method accounts for contributions from both the second derivative and the first derivative
+        scaled by the geometry-dependent :math:`L_k` term. The computation is performed in the specified
+        basis, which determines the scaling of the derivative terms.
         """
-        # Default to all axes if active_axes is not specified
-        if active_axes is None:
-            active_axes = np.arange(self.NDIM)
+        # VALIDATE inputs.
+        # Coordinates are coerced to CoordinateArray, which ensures a shape at least of (...,NDIM).
+        # This does not enforce a grid shape -- must be done when derivatives are assessed.
+        coordinates = CoordinateArray(coordinates, self.NDIM)
+        # Construct the axes and their indices. Fill in if values are not provided.
+        if axes is None:
+            axes = self.AXES[:]
+        if not isinstance(axes, (list, tuple)):
+            axes = [axes]
+        axes = [self.ensure_axis_string(axis) for axis in axes]
+        axes_indices = [self.ensure_axis_numeric(axis) for axis in axes]
 
-        # Compute the gradient in the unit basis, since divergence requires it in this form
-        gradient_values = self.gradient(coordinates, scalar_field, basis='contravariant', active_axes=active_axes,
-                                        **kwargs)
+        # The field type is determined based on type and then (if numpy array), we coerce the field further to
+        # match the shape of the coordinates.
+        if isinstance(field, np.ndarray):
+            field_type = 'array'
 
-        # Compute the divergence of the gradient to obtain the Laplacian
-        laplacian_values = self.divergence(coordinates, gradient_values, basis='contravariant', active_axes=active_axes,
-                                           **kwargs)
+            # checking that the field has the correct shape. This will ensure that
+            # (..., NDIM) matches the shape of the coordinates.
+            try:
+                field = field.reshape((*coordinates.shape[:-1],len(axes)))
+            except Exception as e:
+                raise ValueError(
+                    f"Field (shape={field.shape}) does not match the shape of coordinates (shape={coordinates.shape}).\n"
+                    f"The field should have had shape ({coordinates.shape[:-1]},{len(axes)}).\n"
+                    f"ERROR={e}")
 
-        return laplacian_values
+        elif callable(field):
+            field_type = 'function'
+        else:
+            raise ValueError(
+                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable.")
 
-    def function_divergence(self,
-                            coordinates: NDArray,
-                            vector_function: Callable[[NDArray], NDArray],
-                            *,
-                            basis: str = 'unit',
-                            active_axes: Optional[List[int]] = None,
-                            epsilon: float = 1e-5) -> NDArray:
+        # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
+        # need to be computed and we need to enforce further restrictions on the grid shape.
+        if first_derivatives is not None:
+            if field_type == 'function':
+                # validate that the first_derivatives are provided correctly and that we have as many as
+                # necessary.
+                if not isinstance(first_derivatives, (list, tuple)):
+                    raise ValueError(f"Field was specified as a function, but first_derivatives were provided with type {type(first_derivatives)}.\n"
+                                     "We always expect a list of derivative functions when `field` is a function.")
+
+                if len(first_derivatives) != len(axes):
+                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(first_derivatives)} first_derivatives, which doesn't match.")
+
+                # Coerce the coordinates and then evaluate them.
+                # The first_derivatives should now have shape (...,len(axes))
+                d_coords = np.moveaxis(coordinates,-1,0)
+                first_derivatives = np.stack([d(*d_coords) for d in first_derivatives], axis=-1)
+
+            # validate
+            if first_derivatives.shape != (*coordinates.shape[:-1], len(axes)):
+                raise ValueError(f"Derivatives were found to have shape {first_derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                                 f" Please ensure that you have provided the `first_derivatives` argument correctly. Consult the documentation for detailed information.")
+
+        else:
+            # The first_derivatives are not provided to us; they need to be computed which will require additional enforced
+            # structure on the grid.
+            if field_type == 'function':
+                first_derivatives = function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+            else:
+                # validate the grid shape.
+                if coordinates.ndim != self.NDIM + 1:
+                    raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
+                first_derivatives = partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
+
+        # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
+        # need to be computed and we need to enforce further restrictions on the grid shape.
+        if second_derivatives is not None:
+            if field_type == 'function':
+                # validate that the second_derivatives are provided correctly and that we have as many as
+                # necessary.
+                if not isinstance(second_derivatives, (list, tuple)):
+                    raise ValueError(f"Field was specified as a function, but second_derivatives were provided with type {type(second_derivatives)}.\n"
+                                     "We always expect a list of derivative functions when `field` is a function.")
+
+                if len(second_derivatives) != len(axes):
+                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(second_derivatives)} second_derivatives, which doesn't match.")
+
+                # Coerce the coordinates and then evaluate them.
+                # The second_derivatives should now have shape (...,len(axes))
+                d_coords = np.moveaxis(coordinates,-1,0)
+                second_derivatives = np.stack([d(*d_coords) for d in second_derivatives], axis=-1)
+
+            # validate
+            if second_derivatives.shape != (*coordinates.shape[:-1], len(axes)):
+                raise ValueError(f"Derivatives were found to have shape {second_derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                                 f" Please ensure that you have provided the `second_derivatives` argument correctly. Consult the documentation for detailed information.")
+
+        else:
+            # The second_derivatives are not provided to us; they need to be computed which will require additional enforced
+            # structure on the grid.
+            # validate the grid shape.
+            if coordinates.ndim != self.NDIM + 1:
+                raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
+            second_derivatives = np.stack([
+                partial_derivative(coordinates, first_derivatives[...,axi], axes=[axi], **kwargs) for axi in range(len(axes_indices))],axis=-1)
+
+        # Compute Laplacian terms
+        laplacian_terms = []
+        lame = self.eval_lame(coordinates, axes)
+        for i, axis in enumerate(axes):
+            # Compute L term and Lame coefficient
+            L_term = self.L_term(coordinates, axis)
+
+            # Combine second derivative and first derivative contributions
+            laplacian_term = (1 / lame[...,i] ** 2) * second_derivatives[...,i] + (L_term * first_derivatives[...,i])
+            laplacian_terms.append(laplacian_term)
+
+        # Sum the Laplacian terms to get the total Laplacian
+        laplacian = np.sum(laplacian_terms, axis=0)
+
+        return laplacian
+
+    def analytical_gradient(self, expression: sp.Basic) -> Dict[str, sp.Basic]:
         """
-        Compute the divergence of a vector function in this coordinate system.
+        Compute the gradient of a scalar expression in the coordinate system.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinate points with shape ``(..., NDIM)``.
-        vector_function : Callable[[NDArray], NDArray]
-            Function representing the vector field, returning an array of components at each point.
-        basis : {'unit', 'covariant', 'contravariant'}, optional
-            Specifies the basis in which the vector function is provided. Defaults to 'unit'.
-        active_axes : Optional[List[int]], optional
-            List of axis indices to include in the divergence calculation. By default, all axes are included.
-        epsilon : float, optional
-            Step size for finite differences, used in numerical differentiation.
+        expression : sp.Basic
+            A symbolic expression representing the scalar field.
 
         Returns
         -------
-        NDArray
-            The divergence of the vector field at each coordinate point, with shape ``(N,)``.
+        Dict[str, sp.Basic]
+            A dictionary mapping each axis to its gradient component.
         """
-        # Default to all axes if active_axes is not specified
-        if active_axes is None:
-            active_axes = np.arange(self.NDIM)
+        gradient = {}
+        for axis in self.AXES:
+            lame_coeff = self.get_lame_symbolic(axis)
+            gradient[axis] = sp.simplify(sp.diff(expression, self.SYMBAXES[self.AXES.index(axis)]) / lame_coeff)
+        return gradient
 
-        # Initialize an array for the divergence result
-        divergence_result = np.zeros(coordinates.shape[0])
-
-        # Sum the divergence terms for each axis
-        for axis in active_axes:
-            divergence_result += self.compute_function_divergence_term(
-                coordinates,
-                vector_function,
-                axis,
-                basis=basis,
-                epsilon=epsilon
-            )
-
-        return divergence_result
-
-    def function_laplacian(self,
-                                   coordinates: NDArray,
-                                   scalar_function: Callable[[NDArray], NDArray],
-                                   *,
-                                   active_axes: Optional[List[int]] = None,
-                                   epsilon: float = 1e-5) -> NDArray:
+    def analytical_divergence(self, vector_field: Dict[str, sp.Basic]) -> sp.Basic:
         """
-        Compute the Laplacian of a scalar function in this coordinate system.
+        Compute the divergence of a vector field in the coordinate system.
 
         Parameters
         ----------
-        coordinates : NDArray
-            Array of coordinate points with shape ``(..., NDIM)``.
-        scalar_function : Callable[[NDArray], NDArray]
-            Function representing the scalar field, returning values at each point.
-        active_axes : Optional[List[int]], optional
-            List of axis indices to include in the Laplacian calculation. By default, all axes are included.
-        epsilon : float, optional
-            Step size for finite differences, used in numerical differentiation.
+        vector_field : Dict[str, sp.Basic]
+            A dictionary mapping each axis to a symbolic expression representing the vector field component.
 
         Returns
         -------
-        NDArray
-            The Laplacian of the scalar field at each coordinate point, with shape ``(...,)``.
+        sp.Basic
+            A symbolic expression for the divergence of the vector field.
         """
-        # Default to all axes if active_axes is not specified
-        if active_axes is None:
-            active_axes = np.arange(self.NDIM)
+        divergence = 0
+        jacobian = self.get_derived_attribute_symbolic('jacobian')
+        for axis in self.AXES:
+            lame_coeff = self.get_lame_symbolic(axis)
+            term = sp.diff(jacobian * vector_field[axis] / lame_coeff, self.SYMBAXES[self.AXES.index(axis)])
+            divergence += term / jacobian
+        return sp.simplify(divergence)
 
-        # Define a gradient function to calculate the divergence of this gradient
-        gradient_function = lambda coords: np.stack([
-            self.compute_function_gradient_term(
-                coords,
-                scalar_function,
-                axis,
-                basis='contravariant',
-                epsilon=epsilon
-            ) for axis in active_axes
-        ], axis=-1)
+    def analytical_laplacian(self, expression: sp.Basic) -> sp.Basic:
+        """
+        Compute the Laplacian of a scalar expression in the coordinate system.
 
-        # Compute the divergence of the gradient to obtain the Laplacian
-        laplacian_values = self.function_divergence(
-            coordinates,
-            gradient_function,
-            basis='contravariant',
-            active_axes=active_axes,
-            epsilon=epsilon
-        )
+        Parameters
+        ----------
+        expression : sp.Basic
+            A symbolic expression representing the scalar field.
 
-        return laplacian_values
+        Returns
+        -------
+        sp.Basic
+            A symbolic expression for the Laplacian of the scalar field.
+        """
+        laplacian = 0
+        jacobian = self.get_derived_attribute_symbolic('jacobian')
+        for axis in self.AXES:
+            # Compute first set of values
+            lame_coeff = self.get_lame_symbolic(axis)
+            first_deriv = sp.diff(expression, self.SYMBAXES[self.AXES.index(axis)])
+            # Compute the second set of values
+            _exp = (jacobian/lame_coeff**2)*first_deriv
+            second_deriv = sp.diff(_exp, self.SYMBAXES[self.AXES.index(axis)])
+
+            laplacian += (1/jacobian)*second_deriv
+
+        return sp.simplify(laplacian)
+
+    # @@ LAME FUNCTION MANAGEMENT @@ #
+    # This is where the developer should implement the relevant Lame coefficient functions and
+    # the various utilities for fetching those functions are placed.
+    def get_lame_symbolic(self, axis: 'AxisAlias') -> sp.Basic:
+        return self._lame_inst_symbols[self.ensure_axis_string(axis)]
+
+    def get_lame_function(self, axis: 'AxisAlias') -> Callable:
+        return self._lame_functions[self.ensure_axis_numeric(axis)]
+
+    def eval_lame(self, coordinates, axes: Optional[List['AxisAlias'] | 'AxisAlias'] = None) -> np.ndarray:
+        # COERCE coordinates
+        coordinates = CoordinateArray(coordinates, self.NDIM)
+        c_shape = coordinates.shape
+        coordinates = np.moveaxis(coordinates, -1, 0)
+
+        # VALIDATE axes
+        if axes is None:
+            axes = self.AXES
+        if any(ax not in self.AXES for ax in axes):
+            raise ValueError("Axes not in AXES list")
+
+        output_array = np.zeros((*c_shape[:-1], len(axes)))
+
+        for axi, ax in enumerate(axes):
+            output_array[..., axi] = self.get_lame_function(ax)(*coordinates)
+
+        return output_array
+
+    def scale_by_lame(self, coordinates, field, axes=None, order=1):
+        """
+        Scale a scalar or vector field by the Lame coefficients of the coordinate system.
+
+        Parameters
+        ----------
+        coordinates : np.ndarray
+            Array of coordinates with shape (..., NDIM).
+        field : np.ndarray
+            The field to scale. Can be:
+            - A scalar field with shape (...), matching the spatial grid of `coordinates`.
+            - A vector field with shape (..., N), where `N` corresponds to the number of axes.
+        axes : List[str] or None, optional
+            The axes along which the field components are defined. If not provided, it is deduced
+            from the last dimension of `field`.
+        order : int, optional
+            The order of scaling by Lame coefficients. Default is 1.
+
+        Returns
+        -------
+        np.ndarray
+            The scaled field with the same shape as the input `field`.
+
+        Raises
+        ------
+        ValueError
+            If the field dimensions do not match the coordinate or axis specifications.
+        """
+        # Coerce coordinates to the correct format
+        coordinates = CoordinateArray(coordinates, self.NDIM)
+
+        # Extract the grid shape from coordinates
+        grid_shape = coordinates.shape[:-1]
+
+        # Determine if the field is scalar or vector and adjust its shape
+        _is_scalar = False
+        if field.shape == grid_shape:  # Scalar field
+            _is_scalar = True
+            field = field[..., np.newaxis]  # Add a dummy axis for uniform processing
+
+        # Validate axes and match with field components
+        if axes is None:
+            axes = self.AXES[:field.shape[-1]]  # Deduce axes from the field's last dimension
+        if len(axes) != field.shape[-1]:
+            raise ValueError("`axes` must have the same length as the field's last dimension.")
+
+        # Evaluate Lame coefficients for the specified axes
+        lame_coefficients = self.eval_lame(coordinates, axes=axes)
+
+        # Scale the field by the Lame coefficients raised to the specified order
+        scaled_field = field * (lame_coefficients ** order)
+
+        # If the input field was scalar, return a scalar result
+        if _is_scalar:
+            return scaled_field.squeeze(axis=-1)
+
+        return scaled_field
+
 
     # @@ COORDINATE CONVERSION @@ #
     # These are handlers for converting between coordinate systems.
-    def to_cartesian(self, coordinates) -> NDArray:
+    # The _convert_native_to_cartesian and _convert_cartesian_to_native methods
+    # should be implemented uniquely for each subclass and the rest is performed automatically.
+    def to_cartesian(self, coordinates) -> np.ndarray:
         """
         Convert native coordinates of this coordinate system to Cartesian coordinates.
 
@@ -1387,13 +1255,13 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         Parameters
         ----------
-        coordinates : NDArray
+        coordinates : np.ndarray
             Array of native coordinates in this coordinate system, with shape ``(..., NDIM)``, where ``...`` is
             the grid of points and ``NDIM`` is the number of dimensions.
 
         Returns
         -------
-        NDArray
+        np.ndarray
             Array of Cartesian coordinates with shape ``(...,NDIM)``.
 
         Raises
@@ -1411,12 +1279,16 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         --------
         from_cartesian : Converts Cartesian coordinates to this native coordinate system.
         """
+        # COERCE the coordinates
+        coordinates = CoordinateArray(coordinates)
+
+        # PERFORM the conversion
         try:
             return self._convert_native_to_cartesian(coordinates)
         except Exception as e:
             raise ConversionError(f"Failed to convert from {self.__class__.__name__} to cartesian: {e}")
 
-    def from_cartesian(self, coordinates) -> NDArray:
+    def from_cartesian(self, coordinates) -> np.ndarray:
         """
         Convert Cartesian coordinates to the native coordinates of this coordinate system.
 
@@ -1426,13 +1298,13 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         Parameters
         ----------
-        coordinates : NDArray
+        coordinates : np.ndarray
             Array of Cartesian coordinates with shape ``(..., NDIM)``, where ``...`` may be any grid structure and
             ``NDIM`` is the number of dimensions.
 
         Returns
         -------
-        NDArray
+        np.ndarray
             Array of coordinates in this coordinate system with shape ``(..., NDIM)``, where ``NDIM``
             is the number of dimensions of this coordinate system.
 
@@ -1451,12 +1323,16 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         --------
         to_cartesian : Converts native coordinates in this system to Cartesian coordinates.
         """
+        # COERCE the coordinates
+        coordinates = CoordinateArray(coordinates)
+
+        # PERFORM the conversion
         try:
             return self._convert_cartesian_to_native(coordinates)
         except Exception as e:
             raise ConversionError(f"Failed to convert from cartesian to  {self.__class__.__name__}: {e}")
 
-    def convert_to(self, target_coord_system: 'CoordinateSystem', *args: Any) -> NDArray:
+    def convert_to(self, target_coord_system: 'CoordinateSystem', *args: Any) -> np.ndarray:
         """
         Convert coordinates from this system to another specified coordinate system.
 
@@ -1474,7 +1350,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         Returns
         -------
-        NDArray
+        np.ndarray
             Array of coordinates in the target coordinate system's format.
 
         Notes
@@ -1497,56 +1373,34 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return converter(*args)
 
     @abstractmethod
-    def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
+    def _convert_native_to_cartesian(self, coordinates: np.ndarray) -> np.ndarray:
         pass
 
     @abstractmethod
-    def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
+    def _convert_cartesian_to_native(self, coordinates: np.ndarray) -> np.ndarray:
         pass
 
-    # @@ UTILITIES @@ #
-    def index_reorder_axes(self, axes: List[str]) -> NDArray[np.int_]:
-        """
-        Compute the index array to reorder a list of axes to match the expected order of the coordinate system.
+    # @@ UTILITY FUNCTIONS @@ #
+    # These are basic helper functions to be used in various other methods.
+    def ensure_axis_numeric(self, axis: 'AxisAlias') -> int:
+        if isinstance(axis, str):
+            return self.AXES.index(axis)
+        else:
+            return axis
 
-        Parameters
-        ----------
-        axes : List[str]
-            A subset of axes to reorder. Each axis must be a valid axis in the coordinate system.
+    def ensure_axis_string(self, axis: 'AxisAlias') -> str:
+        if isinstance(axis, int):
+            return self.AXES[axis]
+        else:
+            return axis
 
-        Returns
-        -------
-        NDArray[np.int_]
-            An array of indices such that `axes[index_array]` will reorder `axes` to match the order in `self.AXES`.
-
-        Raises
-        ------
-        ValueError
-            If any axis in `axes` is not valid for this coordinate system.
-
-        Notes
-        -----
-        This method ensures that the axes are reordered according to the order defined in the `AXES` attribute
-        of the coordinate system. Only the provided axes are considered, and their relative order is determined
-        by their order in `self.AXES`.
-
-        Examples
-        --------
-        >>> from pisces.geometry.coordinate_systems import CartesianCoordinateSystem
-        >>> cs = CartesianCoordinateSystem()
-        >>> cs.index_reorder_axes(['y', 'x'])
-        array([1, 0])
-        """
-        # Validate input axes
-        invalid_axes = [ax for ax in axes if ax not in self.AXES]
-        if invalid_axes:
-            raise ValueError(f"Invalid axes {invalid_axes}. Allowed axes: {self.AXES}.")
-
-        # Determine the indices for reordering
-        ordered_indices = np.array([self.AXES.index(ax) for ax in axes], dtype=int)
-        return ordered_indices
+    def ensure_axis_order(self, axes):
+        axes = [self.ensure_axis_string(ax) for ax in axes]
+        return [ax for ax in self.AXES if ax in axes]
 
     # @@ IO OPERATIONS @@ #
+    # These provide method for reading and writing coordinate systems to disk. They
+    # generally do not need to be overwritten in custom implementations.
     def to_file(self, file_obj, fmt: str = 'json'):
         """
         Save the coordinate system configuration to a file or group.
@@ -1605,8 +1459,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         import json
         data = {
             'class_name': self.__class__.__name__,
-            'args': self._args,
-            'kwargs': self._kwargs
+            'parameters': self.parameters,
         }
         json.dump(data, file_obj)
 
@@ -1629,7 +1482,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         data = json.load(file_obj)
 
         _cls = find_in_subclasses(CoordinateSystem, data['class_name'])
-        return _cls(*data['args'], **data['kwargs'])
+        return _cls(**data['kwargs'])
 
     def _to_yaml(self, file_obj):
         """
@@ -1643,8 +1496,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         import yaml
         data = {
             'class_name': self.__class__.__name__,
-            'args': self._args,
-            'kwargs': self._kwargs
+            'parameters': self.parameters,
         }
         yaml.dump(data, file_obj)
 
@@ -1667,7 +1519,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         data = yaml.safe_load(file_obj)
 
         _cls = find_in_subclasses(CoordinateSystem, data['class_name'])
-        return _cls(*data['args'], **data['kwargs'])
+        return _cls(**data['kwargs'])
 
     def _to_hdf5(self, group_obj):
         """
@@ -1680,10 +1532,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         import json
         group_obj.attrs['class_name'] = self.__class__.__name__
-        group_obj.attrs['args'] = json.dumps(self._args)  # convert args to JSON-compatible format
 
         # Save each kwarg individually as an attribute
-        for key, value in self._kwargs.items():
+        for key, value in self.parameters.items():
             if isinstance(value, (int, float, str)):
                 group_obj.attrs[key] = value
             else:
@@ -1707,13 +1558,12 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         import json
         data = {
             'class_name': group_obj.attrs['class_name'],
-            'args': json.loads(group_obj.attrs['args'])  # deserialize args from JSON-compatible format
         }
 
         # Load kwargs, deserializing complex data as needed
         kwargs = {}
         for key, value in group_obj.attrs.items():
-            if key not in ('class_name', 'args'):
+            if key != 'class_name':
                 try:
                     kwargs[key] = json.loads(value)  # try to parse complex JSON data
                 except (TypeError, json.JSONDecodeError):
@@ -1722,7 +1572,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         data['kwargs'] = kwargs
 
         _cls = find_in_subclasses(CoordinateSystem, data['class_name'])
-        return _cls(*data['args'], **data['kwargs'])
+        return _cls(**data['kwargs'])
 
     def __hash__(self):
         """
@@ -1738,93 +1588,42 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         return hash((
             self.__class__.__name__,
-            tuple(self._args),
-            tuple(sorted(self._kwargs.items()))
+            tuple(sorted(self.parameters.items()))
         ))
 
 class RadialCoordinateSystem(CoordinateSystem, ABC):
     """
-    Special case of :py:class:`CoordinateSystem` for coordinate systems
-    which possess a radial coordinate of some sort.
+    Base class for radially defined coordinate systems.
+
+    A coordinate system is **Radial** if its first axis has level surfaces which form shells around
+    the origin. In this case, several additional operations are made considerably simpler.
     """
+    # @@ CLASS ATTRIBUTES @@ #
+    # DEVELOPERS: these should be set in any subclass of CoordinateSystem. The axes
+    #  should follow standard convention and the parameters and axes will become the
+    #  symbolic attributes of the class.
     NDIM: int = 3
-    AXES: list[str] = ['r', 'theta', 'phi']
+    AXES: list[str] = ['x','y','z']
+    PARAMETERS: Dict[str, Any] = {}
+
+    # @@ DYNAMICALLY GENERATED ATTRIBUTES @@ #
+    # These attributes are generated dynamically in the metaclass
+    # and then populated based on other class methods.
+    #
+    # DEVELOPERS: If changes are made to the metaclass, new variables could be added here
+    #  to ensure that IntelliJ understands what's going on.
+    SYMBAXES: List[sp.Symbol] = None
+    SYMBPARAMS: Dict[str, sp.Symbol] = None
+    _lame_symbolic: Dict[str, sp.Basic] = None
 
     @abstractmethod
-    def shell_volume(self,radii: NDArray[np.floating]) -> NDArray[np.floating]:
-        r"""
-        Calculate the volume of thin shells at specified radii in the coordinate system.
-
-        More precisely, for a given radius :math:`r`, the volume of a thin shell of constant :math:`r` and width
-        :math:`dr` is
-
-        .. math::
-
-            dV_{\rm shell} = V_{\rm shell}(r) dr,
-
-        where :math:`V_{\rm shell}` is the ``shell_volume`` function.
-
-        Parameters
-        ----------
-        radii : NDArray
-            An array of radii at which to compute the shell volumes. Each radius represents
-            the distance from the origin in the given coordinate system.
-
-        Returns
-        -------
-        NDArray
-            An array of volumes corresponding to the given radii. The output is in the same shape
-            as the input radii array.
-
-        Notes
-        -----
-
-        **Mathematical Definition**:
-
-        Formally, the 'physical' volume of a particular coordinate region :math:`R \subset \mathbb{R}^N` is
-
-        .. math::
-
-            V = \int_R J(x_1,\cdots,x_N) dx_1 \cdots dx_N,
-
-        where :math:`J` is the Jacobian (:py:meth:`CoordinateSystem.jacobian`):
-
-        .. math::
-
-            J(x_1,\cdots,X_N) = \prod_{i=1}^N \lambda_{x_i}(x_1,\cdots,X_N)
-
-        and :math:`\lambda` are the Lame coefficients.
-
-        In a radial coordinate system, a shell is a surface of constant :math:`r`, so the volume of a shell of infinitesmal width
-        is
-
-        .. math::
-
-            V_{\rm shell} = \int_{r=r_0} dS J({\bf x}) = dr \int_0^{2\pi} d\phi \int_0^{\pi} d\theta J(r,\phi,\theta).
-
-        Now, in cases of complex :math:`J`, this is as far as one can get; however, in most cases relevant to Pisces,
-
-        .. math::
-
-            J(r,\phi,\theta) = K(r)\Omega(\phi,\theta)
-
-        and we find
-
-        .. math::
-
-            V_{\rm shell} = K(r) dr \int_0^{2\pi} d\phi \int_0^\pi d\theta \Omega(\phi,\theta).
-
-        This is the value computed by this method when implemented.
-        """
+    def integrate_in_shells(self,
+                            field: Union[np.ndarray,Callable],
+                            radii: np.ndarray):
         pass
 
-    def integrate_in_shells(self, radii: NDArray[np.floating], function: Callable) -> NDArray[np.floating]:
-        # CONSTRUCT the integrand
-        func = lambda _r: function(_r) * self.shell_volume(_r)
-
-        # PERFORM the integration
-        result = np.zeros_like(radii)
-        for i, r in enumerate(radii):
-            result[i] = quad(func, 0, r)[0]
-
-        return result
+    @abstractmethod
+    def integrate_to_infinity(self,
+                              field: Union[np.ndarray,Callable],
+                              radii: np.ndarray):
+        pass

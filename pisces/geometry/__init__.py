@@ -22,8 +22,7 @@ from pisces.geometry.coordinate_systems import (
     CartesianCoordinateSystem2D,
     PseudoSphericalCoordinateSystem
 )
-from pisces.geometry.symmetry import Symmetry
-from pisces.geometry.handlers import GeometryHandler
+from pisces.geometry.handler import GeometryHandler
 
 __all__ = [
     'CoordinateSystem',
@@ -31,6 +30,5 @@ __all__ = [
     'CartesianCoordinateSystem',
     'CylindricalCoordinateSystem',
     'PolarCoordinateSystem',
-    'Symmetry',
     'GeometryHandler',
 ]

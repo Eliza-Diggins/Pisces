@@ -1,0 +1,37 @@
+#======================================================================================================================#
+#                                     Pisces Galaxy Clusters Configuration File                                        #
+#                                     +---------------------------------------+                                        #
+#                                                                                                                      #
+#   This file contains settings specific to galaxy cluster models.                                                     #
+#                                                                                                                      #
+#======================================================================================================================#
+fields:
+  # -- Contains the list of recognized fields and the details of each of those fields -- #
+  stellar_density:
+    units: 'Msun/kpc**3'
+    mass_field: 'stellar_mass'
+  gas_density:
+    units: 'Msun/kpc**3'
+    mass_field: 'gas_mass'
+  total_density:
+    units: 'Msun/kpc**3'
+    mass_field: 'total_mass'
+  dark_matter_density:
+    units: 'Msun/kpc**3'
+    mass_field: 'dark_matter_mass'
+  stellar_mass:
+    units: 'Msun'
+  gas_mass:
+    units: 'Msun'
+  total_mass:
+    units: 'Msun'
+  dark_matter_mass:
+    units: 'Msun'
+  pressure:
+    units: 'atm'
+  gravitational_field:
+    units: 'm/s**2'
+  gravitational_potential:
+    units: 'm**2/s**2'
+  temperature:
+    units: 'keV'

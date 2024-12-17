@@ -1,0 +1,3 @@
+"""
+Model of galaxy clusters.
+"""
