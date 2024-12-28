@@ -575,7 +575,24 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
             if dynamic_loading and not was_loaded:
                 self.unload_element(key)
 
+    def get(self, key: IndexType, default: ItemType=None):
+        """
+        Return the value for ``key`` if ``key`` is in the dictionary, else ``default``.
 
+        Parameters
+        ----------
+        key: IndexType
+        default: ItemType
+
+        Returns
+        -------
+        ItemType
+            The element in the HDF5 structure or ``default``.
+        """
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
 
 

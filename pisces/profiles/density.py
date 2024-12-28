@@ -17,7 +17,7 @@ class RadialDensityProfile(RadialProfile,ABC):
     # @@ CLASS ATTRIBUTES @@ #
     AXES =  ['r']
     PARAMETERS = None
-    UNITS: str = "Msun/kpc"
+    UNITS: str = "Msun/kpc**3"
 
     def get_ellipsoid_psi(self,r_min: float,r_max: float, n_points: int, scale: str = 'log'):
         r"""

@@ -22,7 +22,7 @@ logging:
     stream: stderr   # Can be STDERR or STDOUT.
   devlog:
     # The developer log. This will increase the ammount of technical detail printed to stdout.
-    enabled: false
+    enabled: true
     format: '%(name)-3s : [%(levelname)-9s] %(asctime)s %(message)s' # Logger's string format for output
     level: DEBUG    # Only logging passed to this level or higher are displayed.
     stream: stderr   # Can be STDERR or STDOUT.

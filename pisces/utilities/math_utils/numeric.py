@@ -1,6 +1,9 @@
+"""
+Core numerical functions commonly used in Pisces.
+"""
 import numpy as np
 from typing import List, Any, Union, Callable, Literal, TYPE_CHECKING, Optional
-from scipy.integrate import quad
+from scipy.integrate import quad, quad_vec
 from numpy.typing import NDArray
 if TYPE_CHECKING:
     from pisces.geometry.base import CoordinateSystem
@@ -81,31 +84,31 @@ def partial_derivative(coordinates: np.ndarray,
 
         1. single scalar to specify a sample distance for all dimensions.
         2. N scalars to specify a constant sample distance for each dimension.
-           i.e. `dx`, `dy`, `dz`, ...
+           i.e. ``dx``, ``dy``, ``dz``, ...
         3. N arrays to specify the coordinates of the values along each
            dimension of F. The length of the array must match the size of
            the corresponding dimension
         4. Any combination of N scalars/arrays with the meaning of 2. and 3.
 
-        If `axis` is given, the number of varargs must equal the number of axes.
+        If ``axis`` is given, the number of varargs must equal the number of axes.
         Default: 1.
     axes : list of int or int, optional
         The axis or list of axes along which to compute the derivative. If None, derivatives
         will be computed along all axes.
     __validate__ : bool, optional
-        Whether to validate `coordinates` and `field` shapes for consistency.
-    **kwargs : Additional arguments passed to `np.gradient`.
+        Whether to validate ``coordinates`` and ``field`` shapes for consistency.
+    **kwargs : Additional arguments passed to ``np.gradient``.
 
     Returns
     -------
     np.ndarray
-        Array of the computed partial derivative(s) of `field`. Will have shape ``(*grid_shape, axes)`` with each
+        Array of the computed partial derivative(s) of ``field``. Will have shape ``(*grid_shape, axes)`` with each
         element of the final axis representing a partial derivative along a different axis.
 
     Raises
     ------
     ValueError
-        If `coordinates` shape is incompatible with the required grid format or if validation
+        If ``coordinates`` shape is incompatible with the required grid format or if validation
         fails.
     """
     # Validation
@@ -227,7 +230,7 @@ def integrate(
         minima: bool = False
 ) -> NDArray[np.floating]:
     r"""
-    Perform definite integration of a function from each value in `x` to `x_0`.
+    Perform definite integration of a function from each value in ``x`` to ``x_0``.
 
     Parameters
     ----------
@@ -236,20 +239,23 @@ def integrate(
     x : NDArray[np.floating]
         Array of points defining the lower bounds of the integration.
     x_0 : Optional[float], default=None
-        The upper bound of the integration. If None, the maximum value of `x` is used.
+        The upper bound of the integration. If None, the maximum value of ``x`` is used.
     minima : bool, default=False
         If True, the returned values are negated.
 
     Returns
     -------
     NDArray[np.floating]
-        Array of integrated values corresponding to the input `x`.
+        Array of integrated values corresponding to the input ``x``.
 
     Notes
     -----
     This function computes the integral:
-    .. math:: I(x) = \int_{x}^{x_0} f(x') dx'
-    If `minima` is True, the result is negated.
+
+    .. math::
+        I(x) = \int_{x}^{x_0} f(x') dx'
+
+    If ``minima`` is True, the result is negated.
 
     Examples
     --------
@@ -266,12 +272,57 @@ def integrate(
     return -result if minima else result
 
 # noinspection PyTypeChecker
+def integrate_vectorized(
+        function: Callable[[float], float],
+        x: NDArray[np.floating],
+        x_0: Optional[float] = None,
+        minima: bool = False
+) -> NDArray[np.floating]:
+    r"""
+    Perform vectorized definite integration of a function from each value in ``x`` to ``x_0``.
+
+    Parameters
+    ----------
+    function : Callable[[float], float]
+        The scalar function to integrate.
+    x : NDArray[np.floating]
+        Array of points defining the lower bounds of the integration.
+    x_0 : Optional[float], default=None
+        The upper bound of the integration. If None, the maximum value of ``x`` is used.
+    minima : bool, default=False
+        If True, the returned values are negated.
+
+    Returns
+    -------
+    NDArray[np.floating]
+        Array of integrated values corresponding to the input ``x``.
+
+    Notes
+    -----
+    This function computes the integral:
+
+    .. math::
+        I(x) = \int_{x}^{x_0} f(x') dx'
+
+    If ``minima`` is True, the result is negated.
+    """
+    # determine the output shape and make the result array.
+    output_shape = np.array(function(x[0])).shape
+    result = np.zeros((len(x), *output_shape))
+    x_0 = x_0 if x_0 is not None else np.amax(x)
+
+    for i, _x in enumerate(x):
+        result[i,...] = quad_vec(function, _x, x_0)[0]
+
+    return -result if minima else result
+
+# noinspection PyTypeChecker
 def integrate_from_zero(
         function: Callable[[float], float],
         x: NDArray[np.floating]
 ) -> NDArray[np.floating]:
     r"""
-    Compute definite integration of a function from zero to each value in the input array `x`.
+    Compute definite integration of a function from zero to each value in the input array ``x``.
 
     Parameters
     ----------
@@ -283,7 +334,7 @@ def integrate_from_zero(
     Returns
     -------
     NDArray[np.floating]
-        An array of integrated values corresponding to each upper bound in the input `x`.
+        An array of integrated values corresponding to each upper bound in the input ``x``.
 
     Notes
     -----
@@ -291,14 +342,14 @@ def integrate_from_zero(
 
     .. math:: I(x) = \int_{0}^{x} f(x') dx'
 
-    where the integral is evaluated for each value in the input array `x`.
+    where the integral is evaluated for each value in the input array ``x``.
 
-    The function uses the `scipy.integrate.quad` method for numerical integration, which provides high accuracy
+    The function uses the ``scipy.integrate.quad`` method for numerical integration, which provides high accuracy
     for smooth functions over the specified range.
 
     Examples
     --------
-    Integrating the quadratic function \( f(x) = x^2 \):
+    Integrating the quadratic function :math:`f(x) = x^2`:
 
     >>> import numpy as np
     >>> from scipy.integrate import quad
@@ -322,7 +373,7 @@ def integrate_toinf(
         x: NDArray[np.floating]
 ) -> NDArray[np.floating]:
     r"""
-    Perform definite integration of a function from each value in `x` to infinity.
+    Perform definite integration of a function from each value in ``x`` to infinity.
 
     Parameters
     ----------
@@ -334,12 +385,14 @@ def integrate_toinf(
     Returns
     -------
     NDArray[np.floating]
-        Array of integrated values corresponding to the input `x`.
+        Array of integrated values corresponding to the input ``x``.
 
     Notes
     -----
     This function computes the integral:
-    .. math:: I(x) = \int_{x}^{\infty} f(x') dx'
+
+    .. math::
+        I(x) = \int_{x}^{\infty} f(x') dx'
 
     Examples
     --------

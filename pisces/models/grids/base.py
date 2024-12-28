@@ -713,7 +713,7 @@ class ModelGridManager:
         Parameters
         ----------
         profile : Profile
-            The profile used to compute the field values. Must have an `.axes` attribute.
+            The profile used to compute the field values. Must have an `.AXES` attribute.
         field_name : str
             The name of the field to be added.
         chunking : bool, optional
@@ -733,9 +733,9 @@ class ModelGridManager:
             If the profile's axes are incompatible with the grid's coordinate system.
         """
         # Validate that the profile's axes align with the grid's coordinate system
-        if not all(ax in self.coordinate_system.AXES for ax in profile.axes):
+        if not all(ax in self.coordinate_system.AXES for ax in profile.AXES):
             raise ValueError(
-                f"Profile axes {profile.axes} are incompatible with the grid's coordinate system axes: {self.coordinate_system.AXES}."
+                f"Profile axes {profile.AXES} are incompatible with the grid's coordinate system axes: {self.coordinate_system.AXES}."
             )
 
         # Determine field units
@@ -755,7 +755,7 @@ class ModelGridManager:
         self.add_field_from_function(
             lambda *coords: profile(*coords) * conv_factor,
             field_name,
-            axes=profile.axes,
+            axes=profile.AXES,
             chunking=chunking,
             units=units,
             dtype=dtype,

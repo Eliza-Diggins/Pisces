@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING, Callable, Union, List, Optional
 import h5py
 import numpy as np
 from unyt import Unit
-
-from pisces.profiles.registries import _DEFAULT_PROFILE_REGISTRY
+from pisces.utilities.general import find_in_subclasses
 
 if TYPE_CHECKING:
     pass
@@ -84,23 +83,10 @@ class ProfileMeta(ABCMeta):
 
         # Handle registration for concrete subclasses
         if not is_abstract:
-            mcs._register_class(cls, clsdict)
             mcs._generate_symbolics(cls)
             mcs._register_class_expressions(cls, clsdict)
 
         return cls
-
-    @staticmethod
-    def _register_class(cls: Type['Profile'], clsdict: Dict[str, Any]):
-        """Register the class if `_REGISTER` is enabled."""
-        _registration_flag = clsdict.get('_REGISTER', False)
-        _registry = clsdict.get('_DEFAULT_REGISTRY', _DEFAULT_PROFILE_REGISTRY)
-
-        if _registration_flag and _registry:
-            try:
-                _registry.register(cls)
-            except Exception as e:
-                raise ValueError(f"Failed to register class '{cls.__name__}' due to: {e}")
 
     @staticmethod
     def _generate_symbolics(cls: Type['Profile']):
@@ -250,8 +236,6 @@ class Profile(ABC,metaclass=ProfileMeta):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _REGISTER = True
-    _DEFAULT_REGISTRY = _DEFAULT_PROFILE_REGISTRY
     _IS_ABC = True
     _EXPR_DICT = {}
 
@@ -476,14 +460,11 @@ class Profile(ABC,metaclass=ProfileMeta):
 
         # Load class name and ensure compatibility
         class_name = group.attrs.get("class_name", None)
-        if class_name != cls.__name__:
-            raise ValueError(
-                f"Mismatch in class name. Expected '{cls.__name__}', found '{class_name}' in group '{group_name}'."
-            )
+        _subcls = find_in_subclasses(cls,class_name)
 
         # Load parameters and validate
         parameters = {key: group.attrs[key] for key in group.attrs if key not in ["class_name", "axes", "units"]}
-        return cls(units=group.attrs["units"], **parameters)
+        return _subcls(units=group.attrs["units"], **parameters)
 
     @property
     def symbolic_expression(self) -> sp.Basic:

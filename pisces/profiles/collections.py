@@ -83,7 +83,7 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
             profile_params = ", ".join(
                 f"{k}={np.format_float_scientific(v,precision=3)}" for k, v in profile.parameters.items() if not k.startswith("_")
             )
-            profile_info.append([name, profile_type, profile_params or "N/A", str(profile.axes), str(profile.units)])
+            profile_info.append([name, profile_type, profile_params or "N/A", str(profile.AXES), str(profile.units)])
 
         # Handle output with or without tabulate
         if not _use_tabulate:

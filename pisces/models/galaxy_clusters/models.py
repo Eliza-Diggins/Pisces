@@ -5,8 +5,10 @@ import numpy as np
 import unyt
 from numpy.typing import ArrayLike
 from scipy.integrate import quad
+from scipy.integrate import quad_vec
 from scipy.interpolate import InterpolatedUnivariateSpline
-
+from scipy.interpolate import make_interp_spline
+from pisces.utilities.array_utils import make_grid_fields_broadcastable
 from pisces.geometry import CoordinateSystem
 from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
 from pisces.io import HDF5_File_Handle
@@ -14,8 +16,9 @@ from pisces.models.base import Model
 from pisces.models.galaxy_clusters.grids import ClusterGridManager
 from pisces.models.galaxy_clusters.utils import gcluster_params
 from pisces.models.solver import solver_checker, solver_process
-from utilities.math_utils.numeric import integrate
+from pisces.utilities.math_utils.numeric import integrate_vectorized
 from pisces.utilities.physics import m_p, mu, G
+from utilities.math_utils.numeric import integrate
 
 if TYPE_CHECKING:
     from pisces.profiles.base import Profile
@@ -1032,6 +1035,7 @@ class ClusterModel(Model):
 
     @solver_process('spherical_dens_temp', step=1, args=['pressure'], kwargs=dict(create_field=True))
     @solver_process('homoeoidal_dens_temp', step=1, args=['pressure'], kwargs=dict(create_field=True))
+    @solver_process('homoeoidal_dens_tden', step=5, args=['temperature'], kwargs=dict(create_field=True))
     def solve_eos(self, field_name: str, create_field: bool = False):
         """
         Solve for a thermodynamic field using the equation of state.
@@ -1058,19 +1062,32 @@ class ClusterModel(Model):
         pressure = self.FIELDS.get('pressure', None)
         density = self.FIELDS.get('gas_density', None)
         temperature = self.FIELDS.get('temperature', None)
-
         scale_factor = m_p * mu  # Universal scale factor
 
         # Compute the desired field
         if field_name == 'temperature':
-            field = (pressure[...] * scale_factor) / density[...]
+            axes = [ax for ax in self.coordinate_system.AXES if ax in set().union(pressure._axes,density._axes)]
+            pressure, density = make_grid_fields_broadcastable([pressure[...],density[...]],
+                                                               [pressure._axes,density._axes],
+                                                               self.coordinate_system)
+            field = (pressure * scale_factor) / density
         elif field_name == 'pressure':
-            field = (temperature[...] * density[...]) / scale_factor
+            axes = [ax for ax in self.coordinate_system.AXES if ax in set().union(temperature._axes,density._axes)]
+            temperature, density = make_grid_fields_broadcastable([temperature[...],density[...]],
+                                                               [temperature._axes,density._axes],
+                                                               self.coordinate_system)
+            field = (temperature * density) / scale_factor
         elif field_name == 'gas_density':
+            axes = [ax for ax in self.coordinate_system.AXES if ax in set().union(pressure._axes,temperature._axes)]
+            pressure, temperature = make_grid_fields_broadcastable([pressure[...],temperature[...]],
+                                                               [pressure._axes,temperature._axes],
+                                                               self.coordinate_system)
             field = (pressure[...] * scale_factor) / temperature[...]
+        else:
+            raise ValueError(f"Invalid field name '{field_name}' provided.")
 
         # Set units and create the field if required
-        field = self._assign_units_and_add_field(field_name, field, create_field)
+        field = self._assign_units_and_add_field(field_name, field, create_field, axes)
         return field
 
     @solver_process('homoeoidal_dens_temp', step=3)
@@ -1196,6 +1213,63 @@ class ClusterModel(Model):
         total_mass = (-radius ** 2 * gravitational_field) / G
         self._assign_units_and_add_field('total_mass', total_mass, create_field=True, axes=['r'])
 
+    @solver_process('homoeoidal_dens_tden',step=3)
+    def solve_poisson_problem_homoeoidal(self):
+        # Pull out the coordinates and the density profile from the Model instance.
+        coordinates = self.grid_manager.get_coordinates()
+        density_profile = self.profiles['total_density']
+        _dunits,_lunits = unyt.Unit(density_profile.units),unyt.Unit(self.grid_manager.length_unit)
+
+        # Compute the gravitational potential. This passes down to the poisson solver at the
+        # lower level of the coordinate system object.
+        # TODO: this should be unifiable using symmetry; however, the Handler object cannot tell
+        # that it's a radial handler. This needs to be managed...
+        gravitational_potential = self.coordinate_system.solve_radial_poisson_problem(
+            density_profile,
+            coordinates,
+        )
+        gravitational_potential = G*unyt.unyt_array(gravitational_potential[...,0], _dunits*_lunits**2) # cut of phi dependence.
+
+        # Assign the data to a the gravitational potential field and proceed.
+        self._assign_units_and_add_field('gravitational_potential', gravitational_potential, True, ['r','theta'])
+
+    @solver_process('homoeoidal_dens_tden',step=4)
+    def solve_hse_asymmetric(self):
+        # Pull the coordinates and the units necessary. Because we are integrating radially, only
+        # the radii matter, not the angular coordinates.
+        radius = self._get_radial_coordinates()
+        gas_density_profile = self.profiles['gas_density']
+        gravitational_potential = self.FIELDS['gravitational_potential'][...]
+
+        # Build the splines that are necessary for our integration scheme.
+        # - gas_density_spline: rho -- we only need this for the derivative.
+        # - middle_integrand_spline: d(rho)/dr * phi
+        gas_density_spline = InterpolatedUnivariateSpline(radius.d, gas_density_profile(radius.d))
+
+        # construct the middle_integrand_spline
+        deriv_gas_dens = gas_density_spline(radius.d,1)[...,np.newaxis] #-> reshaped to ensure broadcastability
+        middle_integrand_spline = make_interp_spline(radius.d, deriv_gas_dens*gravitational_potential.d)
+
+        # Compute the integrals for the pressure.
+        # 1. -rho(r)*phi(r)
+        # 2. - int_r^r_max d(rho)/dr * phi(r) dr
+        # 3. - int_r_max^inf d(rho)/dr * phi(r) dr.
+        extended_potential = lambda _r: gravitational_potential[-1,:].d * (_r/radius.d[-1])**(-1)
+        middle_integrand = lambda _r: middle_integrand_spline(_r)
+        outer_integrand = lambda _r: gas_density_spline(_r,1)*extended_potential(_r)
+
+        # compute the relevant integrals
+        inner_integral = gas_density_spline(radius.d)[...,np.newaxis] * gravitational_potential.d
+        middle_integral = integrate_vectorized(middle_integrand, radius.d, x_0=radius.d[-1])
+        outer_integral = quad_vec(outer_integrand, radius.d[-1], np.inf)[0]
+
+        # Set the pressure and coerce the units
+        pressure = -inner_integral - middle_integral # TODO: the boundary needs to be dealt with.
+        base_units = self.FIELDS['gravitational_potential'].units*self.FIELDS['gas_density'].units
+        pressure = unyt.unyt_array(pressure,base_units)
+
+        # Pass to the unit setter and field adder.
+        self._assign_units_and_add_field('pressure', pressure, True, ['r','theta'])
 
 
 if __name__ == '__main__':
@@ -1211,6 +1285,10 @@ if __name__ == '__main__':
 
     cs_ho = OblateHomoeoidalCoordinateSystem(ecc=0.9)
 
-    model_hom = ClusterModel.from_dens_and_tden('test_hom.hdf5', 1e-1, 1e4, d, td,coordinate_system=cs_ho,n_theta=100,overwrite=True)
+    model_hom = ClusterModel.from_dens_and_tden('test_hom.hdf5', 1e-1, 1e4, d, td,coordinate_system=cs_ho,n_theta=50,overwrite=True)
     #model = ClusterModel.from_dens_and_temp('test.hdf5', 1e-1, 1e4, d, t, coordinate_system=cs, overwrite=True)
+    import matplotlib.pyplot as plt
+    r = model_hom._get_radial_coordinates().d
+    plt.semilogx(r,model_hom.FIELDS['temperature'][:,:])
+    plt.show()
 

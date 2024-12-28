@@ -1,3 +1,10 @@
+"""
+Utilities for symbolic mathematical manipulations.
+
+This module relies on the `Sympy Package <https://sympy.org>`_ to perform various mathematical operations. The ``sympy``
+module provides important backends for both the differential geometry of the :py:mod:`~pisces.geometry` module and the
+:py:mod:`~pisces.profiles` module.
+"""
 import sympy as sp
 
 def get_powerlaw_limit(expression, variable, limit: str = 'outer'):

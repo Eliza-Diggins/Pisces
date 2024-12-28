@@ -18,10 +18,6 @@ Notes
 - All computations assume natural (Planck) units for consistency.
 - Users must ensure that density profiles are smooth and continuous for accurate results.
 
-See Also
---------
-`scipy.integrate.quad`: Underlying numerical integration library used.
-`scipy.interpolate.InterpolatedUnivariateSpline`: Spline interpolation utility for density profiles.
 """
 from typing import Callable, Union, Tuple, TYPE_CHECKING
 
@@ -130,8 +126,8 @@ def solve_poisson_spherical(
         powerlaw_index: int = None,
         *,
         boundary_mode: str = 'asymptotic') -> np.ndarray:
-    """
-    Solve Poisson's equation for a spherical coordinate system with a given density profile.
+    r"""
+    Solve Poisson's equation for a spherically symmetric distribution of mass specified by :math:`\rho(r)`.
 
     This function computes the gravitational potential :math:`\Phi(r)` for a radial density profile
     :math:`\rho(r)` in spherical coordinates by solving Poisson's equation:
@@ -141,17 +137,20 @@ def solve_poisson_spherical(
 
     Parameters
     ----------
-    density_profile : Union[np.ndarray, Callable]
+    density_profile : np.ndarray or Callable
         The density profile of the system. Can be provided as:
+
         - A callable function that takes a single argument (radius) and returns the density.
         - A numerical array of density values corresponding to the radii specified in ``coordinates``.
     coordinates : np.ndarray
         Array of radii (in ascending order) where the potential is computed.
     boundary_mode : str, optional
         Method for handling the outer boundary condition. Options are:
+
         - ``'integrate'``: Numerically integrates the density profile to infinity.
         - ``'asymptotic'``: Approximates the boundary contribution using an asymptotic power-law behavior.
           Default is ``'asymptotic'``.
+
     powerlaw_index : int, optional
         Power-law index for the asymptotic density behavior. Required when ``boundary_mode`` is ``'asymptotic'``.
         Default is ``None``, which will raise an error if it is needed and not specified.
@@ -168,23 +167,46 @@ def solve_poisson_spherical(
 
     Notes
     -----
-    - The potential is computed as:
+    The potential is computed as :footcite:p:`BovyGalaxyBook` :
 
-      .. math::
-          \Phi(r) = -4 \pi \left[\frac{1}{r} \int_0^r r'^2 \rho(r') \, dr' + \int_r^\infty r' \rho(r') \, dr' \right].
+    .. math::
+        \Phi(r) = -4 \pi \left[\frac{1}{r} \int_0^r r'^2 \rho(r') \, dr' + \int_r^\infty r' \rho(r') \, dr' \right].
 
-      - The first term accounts for the mass enclosed within radius :math:`r`.
-      - The second term accounts for the contribution from mass at larger radii.
-    - If ``density_profile`` is provided as an array, it will be interpolated as a spline.
-    - When ``boundary_mode`` is ``'asymptotic'``, the density profile is assumed to follow a power-law decay
-      beyond the largest radius in ``coordinates``.
+    - The first term accounts for the mass enclosed within radius :math:`r`.
+    - The second term accounts for the contribution from mass at larger radii.
+
+    The importance of the ``boundary_mode`` argument is the nature of the second term. If :math:`\rho(r)` is known over all
+    :math:`\mathbb{R}`, then quadrature can be used to evaluate the second term all the way out to :math:`\infty`. If :math:`\rho(r)` is not
+    known all the way out (as is the case for splines), then attempting to use standard quadrature will lead to massive inaccuracies. To counteract this,
+    the second term is broken up into two terms:
+
+    .. math::
+
+        \int_r^{r_0} r' \rho(r')\, dr' + \int_{r_0}^{\infty} r' \tilde{\rho}(r')\, dr',
+
+    where :math:`\tilde{\rho}` is an **adapted density**. In this case, we let
+
+    .. math::
+
+        \tilde{\rho}(r) = \rho(r_0)\left(\frac{r}{r_0}\right)^\gamma,
+
+    where :math:`\gamma` is the ``powerlaw_index`` parameter. If :math:`\gamma < -2`, then
+
+    .. math::
+
+        \int_{r_0}^{\infty} r' \tilde{\rho}(r') \, dr' = \frac{\rho(r_0)}{r_0^\gamma}\int_{r_0}^{\infty} r'^{\gamma + 1} \, dr' = - \frac{\rho(r_0)r_0^2}{\gamma + 2}.
+
+    This approach then allows for the user to specify density profiles which are not complete on the entire domain but to
+    still get accurate results.
+
+    .. rubric:: References
+
+    .. footbibliography::
 
     See Also
     --------
-    _compute_spherical_poisson_boundary_integrated
-        Computes the outer boundary contribution using numerical integration.
-    _compute_spherical_poisson_boundary_asymptotic
-        Computes the outer boundary contribution using a power-law approximation.
+    solve_poisson_ellipsoidal
+        Solve the poisson problem for ellipsoidal density distributions.
 
     """
     # Ensure density_profile is callable, using interpolation if necessary
@@ -421,28 +443,87 @@ def compute_ellipsoidal_psi(density_profile: Callable,
                             num_points: int = 1000,
                             method: str = 'spline',
                             **kwargs) -> Tuple[np.ndarray, np.ndarray, float]:
-    """
-    Unified function to compute the ellipsoidal :math:`\\psi(r)` for a density profile.
+    r"""
+    Compute the ellipsoidal :math:`\psi(r)` function using a spline interpolation scheme.
+
+    This function takes a function :math:`\rho(r)` representing the dynamical density at effective radius :math:`r` and
+    returns
+
+    .. math::
+
+        \psi(r) = 2\int_0^r \; d\xi\; \xi \rho(\xi),
+
+    at each :math:`r` specified over a particular domain. :py:func:`compute_ellipsoidal_psi` is intended to be a general purpose
+    solver for this purpose and can manage cases when ``density_profile`` is fully supported on :math:`\mathbb{R}` and also
+    in cases where it is not.
+
+    The :math:`\psi(r)` function is utilized in quadrature solutions of the `Poisson equation <https://en.wikipedia.org/wiki/Poisson%27s_equation>`_
+    in cases of ellipsoidal symmetry.
 
     Parameters
     ----------
     density_profile : Callable
-        The density profile function :math:`\\rho(r)`, which must be callable.
+        The density profile function :math:`\rho(r)`, which must be callable.
+
+        This should either be a spline approximation of the density profile, or a callable completely characterizing
+        the density profile.
+
+        .. note::
+
+            If you only have a spline for ``density_profile``, then its behavior above and below the domain boundaries
+            is not well constrained. In such a case, ``r_min``, ``r_max``, and ``method`` should be specified correctly
+            to ensure that a reasonable boundary approximation is used.
+
     r_min : float
-        The minimum radius for the integration.
+        The minimum radius for the integration. This should be sufficiently close to zero that :math:`\rho(r)` can be
+        linearly estimated between zero and ``r_min``.
+
+        .. warning::
+
+            ``r_min`` must be greater than 0.
+
     r_max : float
-        The maximum radius for the integration.
+        The maximum radius for the integration. In general, this should simply be the largest effective radius for
+        which the :math:`\psi(r)` function is necessary.
     num_points : int
-        Number of points for the integration grid.
+        Number of points for the integration grid. The output abscissa will be ``num_points + 1`` in size to include
+        ``0``.
     method: str
-        The method for computing the ellipsoidal :math:`\\psi(r)`. If ``spline``, then various approximations are used
-        to ensure tractability. If ``integrate``, then the exact integration technique is used.
-    **kwargs : dict
-        Additional arguments for controlling the behavior, such as ``scale``.
+        The method for computing the ellipsoidal :math:`\psi(r)`.
+
+        - ``"spline"``: Assumes that ``density_profile`` was provided as a spline and an asymptotic approximation is
+          used for the extrapolation to :math:`\infty`.
+        - ``"function"``: Assumes that the ``density_profile`` was provided as a function that it's asymptotic behavior
+          is completely characterized. In this case, the boundary limit is determined by quadrature to :math:`\infty`.
+
+        If possible, ``"function"`` is the more accurate option; however, if the ``density_profile`` is not fully
+        supported to :math:`\infty`, then ``"function"`` will yield massively erroneous results for the boundary.
+
+    **kwargs
+        Additional arguments passed to sub-function solvers.
+
+        - If ``method = 'spline'``, then
+
+          - ``scale``: may be either ``"log"`` or ``"linear"``, determines the spacing between points in the
+            interpolation abscissa.
+          - ``n``: the power-law index at large radii estimating :math:`\rho(r)`. This is used to obtain the
+            boundary value.
+
+        - If ``method = 'function'``, then
+
+          - ``scale``: may be either ``"log"`` or ``"linear"``, determines the spacing between points in the
+            interpolation abscissa.
+
+
     Returns
     -------
-    Tuple[np.ndarray, np.ndarray, float]
-        The radii, the computed :math:`\\psi(r)` values, and the asymptotic limit :math:`\\psi(\\infty)`.
+    np.ndarray
+        The abscissa of the computed :math:`\psi(r)` values. This includes :math:`0`, but not :math:`\infty`. This
+        array will be of shape ``(num_points + 1, )``.
+    np.ndarray
+        The computed values of :math:`\psi(r)` over the domain. This array will be of shape ``(num_points + 1, )``.
+    float
+        The asymptotically computed limit :math:`\lim_{r\to \infty} \psi(r)`.
 
     Raises
     ------
@@ -451,7 +532,7 @@ def compute_ellipsoidal_psi(density_profile: Callable,
 
     Notes
     -----
-    This function combines spline and function-based methods to compute :math:`\\psi(r)` depending on the domain
+    This function combines spline and function-based methods to compute :math:`\psi(r)` depending on the domain
     and characteristics of the density profile.
     """
     if method == 'spline':
@@ -488,14 +569,17 @@ def solve_poisson_ellipsoidal(
 
     Parameters
     ----------
-    density_profile : Union[Callable, np.ndarray]
-        The density profile function :math:`\rho(r)`. Can be:
+    density_profile : Callable or np.ndarray
+        The density profile function :math:`\rho(r)`.
+        Can be:
+
         - A callable function defining the density.
         - A numerical array corresponding to density values at specified radii. If provided, it will
           be interpolated to create a callable function.
+
     coordinates : np.ndarray
         Array of ellipsoidal coordinates where the potential is computed. Must follow the format
-        :math:`(..., NDIM)`, where :math:`NDIM` is the number of dimensions.
+        ``(..., NDIM)``, where ``NDIM`` is the number of dimensions.
     coordinate_system : PseudoSphericalCoordinateSystem
         The coordinate system defining the ellipsoidal geometry, including scale parameters.
     num_points : int, optional
@@ -505,6 +589,15 @@ def solve_poisson_ellipsoidal(
     psi : Callable, optional
         Precomputed :math:`\psi(r)` function for the density profile. If provided, this will be
         used directly. If ``None``, it will be computed from the density profile.
+
+        .. note::
+
+            :math:`\psi(r)` is defined as
+
+            .. math::
+
+                \psi(r) = 2\int_0^r \; \xi \rho(\xi) \; d\xi.
+
     powerlaw_index : int, optional
         Power-law index for the asymptotic density behavior. Required when ``density_profile`` is
         an array and ``psi`` is not provided.
@@ -523,21 +616,27 @@ def solve_poisson_ellipsoidal(
 
     Notes
     -----
-    The potential is computed as:
+    The potential is computed as :footcite:p:`BovyGalaxyBook`:
 
     .. math::
         \Phi(\mathbf{x}) = -\pi \frac{1}{(\prod_i \eta_i)^2} \int_0^\infty
-        \frac{\psi(\infty) - \\psi(\xi(\tau))}{\sqrt{\prod_i (\tau + \eta_i^{-2})}} \, d\tau,
+        \frac{\psi(\infty) - \psi(\xi(\tau))}{\sqrt{\prod_i (\tau + \eta_i^{-2})}} \, d\tau,
 
     where:
+
     - :math:`\psi(r)` is computed based on the density profile.
     - :math:`\xi(\tau)` is the effective radius for a given integration parameter :math:`\tau`.
 
     For more detail on the relevant theory, see :ref:`poisson_equation`.
 
+    .. rubric:: References
+
+    .. footbibliography::
+
     See Also
     --------
     solve_poisson_spherical
+
 
     """
     # Manipulate the coordinates to ensure they need our formatting constraints and expectations.
@@ -579,12 +678,14 @@ def solve_poisson_ellipsoidal(
             _psi_method = 'spline'
             radii = _build_ellipsoidal_psi_abscissa(r_min, r_max, num_points, scale)
             density_profile = InterpolatedUnivariateSpline(radii, density_profile)
+            _kwgs = dict(scale=scale, n=powerlaw_index)
         else:
             _psi_method = 'function'
+            _kwgs = dict(scale=scale)
 
         # Compute the psi function abscissa and interpolation values.
         radii, psi_values, psi_inf = compute_ellipsoidal_psi(
-            density_profile, r_min, r_max, num_points=num_points, method=_psi_method
+            density_profile, r_min, r_max, num_points=num_points, method=_psi_method, **_kwgs
         )
 
         # Create the necessary spline

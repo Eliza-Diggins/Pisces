@@ -4,7 +4,7 @@ various contexts.
 from typing import Callable
 
 def build_asymptotic_extension(function: Callable, r0: float, n: float) -> Callable:
-    """
+    r"""
     Create an asymptotic extension of a given function.
 
     This utility generates a callable function that extends the behavior of the input `function`
@@ -35,7 +35,7 @@ def build_asymptotic_extension(function: Callable, r0: float, n: float) -> Calla
     -----
     - This utility is useful for extending density profiles, potential functions, or other radial functions
       when their asymptotic behavior can be approximated by a power law.
-    - The input `function` is evaluated once at :math:`r_0` to determine the boundary value.
+    - The input ``function`` is evaluated once at :math:`r_0` to determine the boundary value.
     """
     # Evaluate the function at the boundary radius r0
     _boundary_value = function(r0)
