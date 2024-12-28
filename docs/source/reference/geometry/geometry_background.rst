@@ -1,14 +1,10 @@
 .. _geometry_theory:
 
-Geometry Theory Overview
-========================
+Coordinate Systems Theory
+-------------------------
 
-On this page, you can find a review of the theory underlying Pisces' geometry system.
-
-Coordinate Systems
-------------------
-
-All of the coordinate systems in Pisces are *orthogonal coordinate systems*. An orthogonal coordinate system in Pisces is
+All of the coordinate systems in Pisces are *orthogonal coordinate systems* and are managed under the
+:py:class:`~pisces.geometry.base.CoordinateSystem` class. An orthogonal coordinate system in Pisces is
 a mathematical structure that maps points from a :math:`d`-dimensional Euclidean space, :math:`\mathbb{R}^d`, into another
 Euclidean space (effectively, :math:`\mathbb{R}^d` again) by establishing a system of coordinates that are orthogonal at
 every point. This structure facilitates various vector calculus operations (e.g., dot product, cross product, gradient,
@@ -239,4 +235,3 @@ set of each Lame coefficient :math:`h_i`, and let the coordinate system be :math
 In summary, the symmetry properties of an operation depend on both the symmetry of the field and the symmetry of the Lame
 coefficients. Understanding how these factors interact is essential for ensuring that specific symmetries are maintained
 through various operations in Pisces.
-

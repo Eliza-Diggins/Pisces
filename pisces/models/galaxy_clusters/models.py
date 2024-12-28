@@ -14,7 +14,7 @@ from pisces.models.base import Model
 from pisces.models.galaxy_clusters.grids import ClusterGridManager
 from pisces.models.galaxy_clusters.utils import gcluster_params
 from pisces.models.solver import solver_checker, solver_process
-from pisces.utilities.math import integrate
+from utilities.math_utils.numeric import integrate
 from pisces.utilities.physics import m_p, mu, G
 
 if TYPE_CHECKING:
@@ -707,6 +707,8 @@ class ClusterModel(Model):
                     step=6,args=[['gas_density','stellar_density']],kwargs=dict(create_fields=True))
     @solver_process('spherical_dens_temp',
                     step=6,args=[['gas_density','stellar_density','dark_matter_density']],kwargs=dict(create_fields=True))
+    @solver_process('homoeoidal_dens_tden',step=2,
+                    args=[['gas_density','stellar_density','dark_matter_density','total_density']],kwargs=dict(create_fields=True))
     def integrate_radial_density_field(self, density_field_names: List[str], create_fields: bool = False):
         """
         Integrate radial density profiles to compute corresponding mass profiles.
@@ -873,6 +875,7 @@ class ClusterModel(Model):
     @solver_process('homoeoidal_dens_temp', step=7, args=['dark_matter_mass'], kwargs=dict(create_field=True, field_type='mass'))
     @solver_process('spherical_dens_temp', step=5, args=['dark_matter_density'], kwargs=dict(create_field=True))
     @solver_process('homoeoidal_dens_temp', step=5, args=['dark_matter_density'], kwargs=dict(create_field=True))
+    @solver_process('homoeoidal_dens_tden',step=1,args=['dark_matter_density'], kwargs=dict(create_field=True))
     def compute_missing_mass_field(self, target_field: str, create_field: bool = False, field_type: str = 'density'):
         """
         Compute a missing field (mass or density) by summing existing components
@@ -1194,6 +1197,7 @@ class ClusterModel(Model):
         self._assign_units_and_add_field('total_mass', total_mass, create_field=True, axes=['r'])
 
 
+
 if __name__ == '__main__':
     from pisces.profiles import NFWDensityProfile, IsothermalTemperatureProfile
     from pisces.geometry import SphericalCoordinateSystem, OblateHomoeoidalCoordinateSystem
@@ -1207,8 +1211,6 @@ if __name__ == '__main__':
 
     cs_ho = OblateHomoeoidalCoordinateSystem(ecc=0.9)
 
-    model_hom = ClusterModel.from_dens_and_temp('test_hom.hdf5', 1e-1, 1e4, d, t,coordinate_system=cs_ho,n_theta=100,overwrite=True)
+    model_hom = ClusterModel.from_dens_and_tden('test_hom.hdf5', 1e-1, 1e4, d, td,coordinate_system=cs_ho,n_theta=100,overwrite=True)
     #model = ClusterModel.from_dens_and_temp('test.hdf5', 1e-1, 1e4, d, t, coordinate_system=cs, overwrite=True)
 
-    model_hom.pipeline_summary('spherical_dens_temp')
-    model_hom.pipeline_summary('homoeoidal_dens_temp')

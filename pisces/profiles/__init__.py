@@ -32,3 +32,4 @@ from .temperature import (RadialTemperatureProfile,
                                          BetaModelTemperatureProfile,
                                          AM06TemperatureProfile)
 from .base import Profile
+from .utils import compute_ellipsoid_psi

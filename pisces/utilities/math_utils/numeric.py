@@ -265,6 +265,56 @@ def integrate(
 
     return -result if minima else result
 
+# noinspection PyTypeChecker
+def integrate_from_zero(
+        function: Callable[[float], float],
+        x: NDArray[np.floating]
+) -> NDArray[np.floating]:
+    r"""
+    Compute definite integration of a function from zero to each value in the input array `x`.
+
+    Parameters
+    ----------
+    function : Callable[[float], float]
+        The scalar function to integrate. It should take a single float as input and return a float.
+    x : NDArray[np.floating]
+        Array of points defining the upper bounds of the integration. Must be a 1D array of floating-point values.
+
+    Returns
+    -------
+    NDArray[np.floating]
+        An array of integrated values corresponding to each upper bound in the input `x`.
+
+    Notes
+    -----
+    This function computes the integral:
+
+    .. math:: I(x) = \int_{0}^{x} f(x') dx'
+
+    where the integral is evaluated for each value in the input array `x`.
+
+    The function uses the `scipy.integrate.quad` method for numerical integration, which provides high accuracy
+    for smooth functions over the specified range.
+
+    Examples
+    --------
+    Integrating the quadratic function \( f(x) = x^2 \):
+
+    >>> import numpy as np
+    >>> from scipy.integrate import quad
+    >>> function = lambda x: x**2
+    >>> x = np.linspace(0, 10, 5)
+    >>> integrate_from_zero(function, x)
+    array([  0.        ,   6.25      ,  50.        , 168.75      , 333.33333333])
+    """
+    result = np.zeros_like(x)
+
+    for i, _x in enumerate(x):
+        result[i] = quad(function, 0, _x)[0]
+
+    return result
+
+
 
 # noinspection PyTypeChecker
 def integrate_toinf(
@@ -304,9 +354,3 @@ def integrate_toinf(
 
     return result
 
-if __name__ == '__main__':
-    import numpy as np
-    x = np.linspace(-np.pi,np.pi/1000)
-    y = np.sin
-    dy = function_partial_derivative(y, x,0)
-    print(dy)

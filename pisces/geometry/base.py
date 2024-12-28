@@ -157,7 +157,7 @@ from pisces.geometry.exceptions import ConversionError
 from pisces.geometry.utils import CoordinateConverter
 from pisces.utilities.array_utils import CoordinateArray
 from pisces.utilities.general import find_in_subclasses
-from pisces.utilities.math import partial_derivative, function_partial_derivative
+from utilities.math_utils.numeric import partial_derivative, function_partial_derivative
 from pisces.utilities.logging import mylog
 
 if TYPE_CHECKING:

@@ -147,15 +147,22 @@ See Also
 `Orthogonal coordinates <https://en.wikipedia.org/wiki/Orthogonal_coordinates>`_
 
 """
-from pisces.geometry.base import CoordinateSystem, RadialCoordinateSystem
+
+from typing import Callable, Union, TYPE_CHECKING
+
+import numpy as np
+import sympy as sp
 from numpy.typing import NDArray
 from scipy.integrate import quad, dblquad
 from scipy.interpolate import InterpolatedUnivariateSpline
-import numpy as np
-import sympy as sp
-from typing import Callable, Union
+
+from pisces.geometry.base import CoordinateSystem, RadialCoordinateSystem
 from pisces.utilities.logging import mylog
-from pisces.utilities.math import integrate
+from utilities.math_utils.numeric import integrate
+
+if TYPE_CHECKING:
+    pass
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CartesianCoordinateSystem(CoordinateSystem):
@@ -254,6 +261,7 @@ class CartesianCoordinateSystem(CoordinateSystem):
     def lame_2(x, y, z):
         return 1
 
+
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CartesianCoordinateSystem1D(CoordinateSystem):
     r"""
@@ -291,6 +299,7 @@ class CartesianCoordinateSystem1D(CoordinateSystem):
 
     def lame_0(x):
         return 1
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CartesianCoordinateSystem2D(CoordinateSystem):
@@ -353,7 +362,7 @@ class CartesianCoordinateSystem2D(CoordinateSystem):
         >>> plt.show()
     """
     NDIM = 2
-    AXES = ['x','y']
+    AXES = ['x', 'y']
     PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
@@ -362,11 +371,12 @@ class CartesianCoordinateSystem2D(CoordinateSystem):
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         return coordinates  # Already Cartesian
 
-    def lame_0(x,y):
+    def lame_0(x, y):
         return 1
 
-    def lame_1(x,y):
+    def lame_1(x, y):
         return 1
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class SphericalCoordinateSystem(RadialCoordinateSystem):
@@ -461,11 +471,10 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        r = np.sqrt(x**2 + y**2 + z**2)
+        r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
         theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return np.stack((r, theta, phi), axis=-1)
-
 
     def lame_0(r, theta, phi):
         return 1
@@ -474,10 +483,10 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
         return r
 
     def lame_2(r, theta, phi):
-        return r*sp.sin(theta)
+        return r * sp.sin(theta)
 
     def integrate_in_shells(self,
-                            field: Union[np.ndarray,Callable],
+                            field: Union[np.ndarray, Callable],
                             radii: np.ndarray):
         r"""
 
@@ -523,15 +532,173 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
         """
         # Construct the integrand and the spline
         if callable(field):
-            f = lambda r: field(r)*r**2
+            f = lambda r: field(r) * r ** 2
         else:
-            f = InterpolatedUnivariateSpline(radii,field*radii**2)
-        return 4*np.pi*integrate(f,radii,radii[0],minima=True)
+            f = InterpolatedUnivariateSpline(radii, field * radii ** 2)
+        return 4 * np.pi * integrate(f, radii, radii[0], minima=True)
 
     def integrate_to_infinity(self,
-                              field: Union[np.ndarray,Callable],
+                              field: Union[np.ndarray, Callable],
                               radii: np.ndarray):
         pass
+
+    def solve_radial_poisson_problem(self,
+                                     density_profile: Union[np.ndarray, Callable],
+                                     radii: NDArray,
+                                     boundary_mode: str = 'integrate',
+                                     powerlaw_index: int = None):
+        r"""
+        Solve Poisson's equation (in Planck units) for spherical coordinates, given a density profile.
+
+        This method computes the gravitational potential :math:`\Phi(r)` for a given density profile
+        :math:`\rho(r)` in spherical coordinates by solving Poisson's equation:
+
+        .. math::
+            \nabla^2 \Phi = 4 \pi \rho(r).
+
+        The solution is returned in Planck units, and therefore has natural units of :math:`[M]/[L]`.
+        The density profile should be supplied in units of :math:`[M]/[L]^3` and the radii in
+        units of :math:`[L]`. This ensures compatibility with the computational framework.
+
+        Parameters
+        ----------
+        density_profile : Union[Callable, np.ndarray]
+            The density profile of the system, which can either be:
+
+            - A callable function that takes a single argument (``radius``) and returns the density.
+            - A numerical array of density values corresponding to the ``radii``.
+
+        radii : np.ndarray
+            Array of radii at which the potential is computed. Must be in ascending order.
+        boundary_mode : str, optional
+            Method for handling the outer boundary. Available options are:
+
+            - ``'integrate'``: The boundary is treated by numerical integration to infinity. This is a viable option
+              when the full functional form of ``density_profile`` is provided. If ``density_profile`` is a spline or
+              some other interpolation product, then ``'integrate'`` will lead to inaccurate boundary behavior.
+
+            - ``'asymptotic'``: An asymptotic approximation is used beyond the provided radii. Formally, we assume that
+              beyond ``radii[-1]``, the density profile goes as :math:`\rho(r)\sim r^l,\; (l < -2)`. In this case,
+
+              .. math::
+
+                  \rho(r) = \rho(r_0) \left(\frac{r}{r_0}\right)^l,
+
+              and
+
+              .. math::
+
+                  \int_{r^0}^{\infty} r \rho(r) \; dr = \frac{\rho(r_0)}{r_0^l} \int_{r^0}^{\infty} r^{l+1}\; dr = - \frac{\rho(r_0)r_0^2}{l+2}.
+
+            Default is `'integrate'`.
+        powerlaw_index : int, optional
+            Specifies the asymptotic power-law behavior of the density profile at large radii.
+            Required only if ``boundary_mode`` is ``'asymptotic'``. This must be a value smaller than :math:`-2`.
+
+        Returns
+        -------
+        potential : np.ndarray
+            Array of computed gravitational potential values at each radius in `radii`, in
+            units of mass/length.
+
+        Notes
+        -----
+        - The computed gravitational potential accounts for contributions from mass enclosed
+          at smaller radii (inner integral) and contributions from outer shells (outer integral).
+        - When using ``'asymptotic'`` for the ``boundary_mode``, the provided ``boundary_behavior``
+          must accurately describe the power-law decline of the density profile at large radii.
+          Incorrect values may lead to unphysical results.
+        - The density profile :math:`\rho(r)` must be smooth and continuous for accurate results.
+
+        Theory
+        ------
+        This implementation is based on the solution to Poisson's equation for spherical systems:
+
+        .. math::
+            \Phi(r) = -4 \pi G \left[
+                \frac{1}{r} \int_0^r r'^2 \rho(r') dr' +
+                \int_r^\infty r' \rho(r') dr'
+            \right].
+
+        - The first term accounts for the mass enclosed within radius :math:`r`.
+        - The second term represents the contribution from mass at larger radii.
+        - For more details, refer to the section on Poisson's equation in the theory documentation:
+          :ref:`poisson_equation`.
+
+        Examples
+        --------
+        Compute the potential for a density profile with exponential decay:
+
+        See Also
+        --------
+        - :py:func:`integrate_from_zero`: Computes definite integrals from 0 to a specified upper bound.
+        - :py:func:`cumulative_trapezoid`: Implements trapezoidal rule for cumulative integration.
+        - :ref:`poisson_equation`: Detailed derivations and examples of Poisson's equation solutions.
+
+        Warnings
+        --------
+        - Numerical instabilities may occur if the density profile is poorly sampled or discontinuous.
+        - Ensure the density profile units are consistent with the Planck units used in the calculations.
+
+        Examples
+        --------
+        As an example of this method, let's compute the potential of the Hernquist density profile:
+
+        .. math::
+
+            \rho(r) = \frac{\rho_0}{\xi(1+\xi)^3},
+
+        where :math:`\xi = r/r_s`.
+
+        This has a known solution:
+
+        .. math::
+
+            \Phi(r) = -2\pi\frac{G\rho_0 r_s^3}{r+r_s}.
+
+        In this case, we'll use 1 for :math:`\rho_0` and :math:`r_s`, so
+
+        .. math::
+
+            \rho(r) = \frac{1}{r(1+r)^3},\implies \Phi(r) = -2\pi \frac{1}{1+r}.
+
+        .. plot::
+            :include-source:
+
+            >>> from pisces.profiles.density import HernquistDensityProfile
+            >>> import numpy as np
+            >>> dp = HernquistDensityProfile(rho_0=1,r_s=1)
+            >>> r = np.geomspace(1e-1,1e3,10000)
+            >>> known_potential = -2*np.pi/(1+r)
+
+            Let's now initialize the geometry and compute the solution.
+
+            >>> from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
+            >>> cs = SphericalCoordinateSystem()
+            >>> computed_potential = cs.solve_radial_poisson_problem(dp, r)
+
+            We can now make a plot:
+
+            >>> import matplotlib.pyplot as plt
+            >>> fig,axes = plt.subplots(nrows=2,ncols=1,sharex=True,gridspec_kw=dict(hspace=0,height_ratios=[1,0.25]))
+            >>> _ = axes[0].loglog(r,-known_potential,label='True')
+            >>> _ = axes[0].loglog(r,-computed_potential, label='Computed')
+            >>> _ = axes[1].loglog(r, np.abs((known_potential-computed_potential)/known_potential))
+            >>> _ = axes[0].set_ylabel(r"Potential $\left(-\Phi(r)\right)$")
+            >>> _ = axes[1].set_ylabel(r"Rel. Err.")
+            >>> _ = axes[1].set_xlabel(r"Radius")
+            >>> _ = axes[0].legend()
+            >>> plt.show()
+
+        """
+        from pisces.utilities.math_utils.poisson import solve_poisson_spherical
+        return solve_poisson_spherical(
+            density_profile,
+            radii,
+            powerlaw_index=powerlaw_index,
+            boundary_mode=boundary_mode,
+        )
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class PolarCoordinateSystem(CoordinateSystem):
@@ -618,15 +785,16 @@ class PolarCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y = coordinates[..., 0], coordinates[..., 1]
-        r = np.sqrt(x**2 + y**2)
+        r = np.sqrt(x ** 2 + y ** 2)
         theta = np.arctan2(y, x)
         return np.stack((r, theta), axis=-1)
 
-    def lame_0(r,theta):
+    def lame_0(r, theta):
         return 1
 
-    def lame_1(r,theta):
+    def lame_1(r, theta):
         return r
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class CylindricalCoordinateSystem(CoordinateSystem):
@@ -720,20 +888,19 @@ class CylindricalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        rho = np.sqrt(x**2 + y**2)
+        rho = np.sqrt(x ** 2 + y ** 2)
         phi = np.arctan2(y, x)
         return np.stack((rho, phi, z), axis=-1)
 
-
-    def lame_0(rho,phi,z):
+    def lame_0(rho, phi, z):
         return 1
 
-
-    def lame_1(rho,phi,z):
+    def lame_1(rho, phi, z):
         return rho
 
-    def lame_2(rho,phi,z):
+    def lame_2(rho, phi, z):
         return 1
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
@@ -886,18 +1053,18 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
     the scaling factors :math:`\eta_x`, :math:`\eta_y`, and :math:`\eta_z`.
     """
     NDIM = 3
-    AXES = ['r','theta','phi']
-    PARAMETERS = {'scale_x':1, 'scale_y':1, 'scale_z':1}
+    AXES = ['r', 'theta', 'phi']
+    PARAMETERS = {'scale_x': 1, 'scale_y': 1, 'scale_z': 1}
     _SKIP_LAMBDIFICATION = ['jacobian']
 
-    def __init__(self, scale_x: float = 1,scale_y: float = 1,scale_z: float = 1):
+    def __init__(self, scale_x: float = 1, scale_y: float = 1, scale_z: float = 1):
         # BASIC SETUP
         self.scale_x = scale_x
         self.scale_y = scale_y
         self.scale_z = scale_z
         self.scales = np.array([scale_x, scale_y, scale_z])
 
-        super().__init__(scale_x=scale_x,scale_y=scale_y,scale_z=scale_z)
+        super().__init__(scale_x=scale_x, scale_y=scale_y, scale_z=scale_z)
 
         # COMPUTING special attributes
         # For these coordinate systems, we need the flux factor and the shell factor,
@@ -910,28 +1077,30 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
         func = self.get_derived_attribute_function('r_shell_element')
         integrand = lambda theta, phi: func(1, theta, phi)
 
-        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0*x, lambda x: 0*x + 2*np.pi)[0]
+        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0 * x, lambda x: 0 * x + 2 * np.pi)[0]
 
     def _compute_flux_coefficient(self):
         func = self.get_derived_attribute_function('r_surface_element')
         integrand = lambda theta, phi: func(1, theta, phi)
 
-        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0*x, lambda x: 0*x + 2*np.pi)[0]
+        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0 * x, lambda x: 0 * x + 2 * np.pi)[0]
 
     def _derive_symbolic_attributes(self):
         # PERFORM the standard ones.
         super()._derive_symbolic_attributes()
-        self._symbolic_attributes['omega'] = sp.simplify(self._omega(*self.SYMBAXES,**self.SYMBPARAMS).subs(self.parameters))
+        self._symbolic_attributes['omega'] = sp.simplify(
+            self._omega(*self.SYMBAXES, **self.SYMBPARAMS).subs(self.parameters))
         mylog.debug(f"\t [COMPLETE] Derived  omega...")
 
         # COMPUTING the r surface element.
-        r_surf_element_symbol = (self.get_lame_symbolic('theta')*self.get_lame_symbolic('phi'))/(self.get_lame_symbolic('r')*self.SYMBAXES[0]**2)
+        r_surf_element_symbol = (self.get_lame_symbolic('theta') * self.get_lame_symbolic('phi')) / (
+                    self.get_lame_symbolic('r') * self.SYMBAXES[0] ** 2)
         r_surf_element_symbol = sp.simplify(r_surf_element_symbol.subs(self.parameters))
         self._symbolic_attributes['r_surface_element'] = sp.simplify(r_surf_element_symbol)
         mylog.debug(f"\t [COMPLETE] Derived  r_surface_element...")
 
         # COMPUTING the shell element.
-        shell_element = (self.get_derived_attribute_symbolic('jacobian')/self.SYMBAXES[0]**2)
+        shell_element = (self.get_derived_attribute_symbolic('jacobian') / self.SYMBAXES[0] ** 2)
         shell_element = sp.simplify(shell_element.subs(self.parameters))
         self._symbolic_attributes['r_shell_element'] = sp.simplify(shell_element)
         mylog.debug(f"\t [COMPLETE] Derived  r_shell_element...")
@@ -939,15 +1108,15 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
     @staticmethod
     def _omega(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         return sp.sqrt(
-            (scale_x*sp.sin(theta)*sp.cos(phi))**2 +
-            (scale_y*sp.sin(theta)*sp.sin(phi))**2 +
-            (scale_z*sp.cos(theta))**2
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
+            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
+            (scale_z * sp.cos(theta)) ** 2
         )
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         # PULL the coordinates out of the coordinate arrays.
-        omega = self._eval_der_attr_func('omega',coordinates)
-        r,theta, phi = coordinates[...,0], coordinates[..., 1], coordinates[..., 2]
+        omega = self._eval_der_attr_func('omega', coordinates)
+        r, theta, phi = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
         st, ct, cp, sp = np.sin(theta), np.cos(theta), np.cos(phi), np.sin(phi)
 
         # COMPUTE inversion
@@ -958,28 +1127,28 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        xi = np.sqrt((self.scale_x*x)**2 + (self.scale_y*y)**2 + (self.scale_z*z)**2)
-        r = np.sqrt(x**2+y**2+z**2)
+        xi = np.sqrt((self.scale_x * x) ** 2 + (self.scale_y * y) ** 2 + (self.scale_z * z) ** 2)
+        r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
         theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return np.stack((xi, theta, phi), axis=-1)
 
     def lame_0(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         _o = sp.sqrt(
-            (scale_x*sp.sin(theta)*sp.cos(phi))**2 +
-            (scale_y*sp.sin(theta)*sp.sin(phi))**2 +
-            (scale_z*sp.cos(theta))**2
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
+            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
+            (scale_z * sp.cos(theta)) ** 2
         )
-        return 1/_o
+        return 1 / _o
 
     def lame_1(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         _o = sp.sqrt(
-            (scale_x*sp.sin(theta)*sp.cos(phi))**2 +
-            (scale_y*sp.sin(theta)*sp.sin(phi))**2 +
-            (scale_z*sp.cos(theta))**2
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
+            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
+            (scale_z * sp.cos(theta)) ** 2
         )
 
-        return r*sp.sqrt((sp.diff(1/_o,theta)**2 + (1/_o)**2))
+        return r * sp.sqrt((sp.diff(1 / _o, theta) ** 2 + (1 / _o) ** 2))
 
     def lame_2(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         _o = sp.sqrt(
@@ -990,24 +1159,227 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
 
         return r * sp.sqrt((sp.diff(1 / _o, phi) ** 2 + (sp.sin(theta) / _o) ** 2))
 
-    def jacobian(self,coordinates: NDArray) -> NDArray:
-        return np.prod(self.eval_lame(coordinates),axis=-1)
+    def jacobian(self, coordinates: NDArray) -> NDArray:
+        return np.prod(self.eval_lame(coordinates), axis=-1)
 
     def integrate_in_shells(self,
-                            field: Union[np.ndarray,Callable],
+                            field: Union[np.ndarray, Callable],
                             radii: np.ndarray):
         # Interpolate the integrand
         if callable(field):
-            f = lambda r: field(r)*r**2
+            f = lambda r: field(r) * r ** 2
         else:
-            f = InterpolatedUnivariateSpline(radii,field*radii**2)
+            f = InterpolatedUnivariateSpline(radii, field * radii ** 2)
 
-        return self.shell_parameter*integrate(f,radii,x_0=radii[0],minima=True)
+        return self.shell_parameter * integrate(f, radii, x_0=radii[0], minima=True)
 
     def integrate_to_infinity(self,
-                              field: Union[np.ndarray,Callable],
+                              field: Union[np.ndarray, Callable],
                               radii: np.ndarray):
         pass
+
+    def solve_radial_poisson_problem(self,
+                                     density_profile: Union[Callable, np.ndarray],
+                                     coordinates: np.ndarray,
+                                     /,
+                                     *,
+                                     num_points: int = 1000,
+                                     scale: str = 'log',
+                                     psi: Callable = None,
+                                     powerlaw_index: int = None,
+                                     ) -> np.ndarray:
+        r"""
+        Solve Poisson's equation for ellipsoidal coordinates, given a density profile.
+
+        This method computes the gravitational potential :math:`\Phi(\mathbf{x})` (in Planck units) for a given density profile
+        :math:`\rho(r)` in ellipsoidal coordinates by solving Poisson's equation:
+
+        .. math::
+            \nabla^2 \Phi = 4 \pi \rho(r).
+
+        In ellipsoidal coordinates, the effective radius :math:`m` is defined as:
+
+        .. math::
+            m^2 = \sum_i \eta_i^2 x_i^2,
+
+        where :math:`\eta_i` are the scale parameters of the ellipsoidal coordinate system. This method generalizes
+        the spherical case to account for anisotropic mass distributions by incorporating the geometry of the
+        ellipsoidal system.
+
+        The solution is returned in Planck units, with natural units of :math:`[M]/[L]`. The density profile should
+        be supplied in units of :math:`[M]/[L]^3` and the coordinates in units of :math:`[L]`. This ensures
+        compatibility with the computational framework.
+
+        Parameters
+        ----------
+        density_profile : Union[Callable, np.ndarray]
+            The density profile of the system, which can either be:
+
+            - A callable function that takes a single argument (``radius``) and returns the density.
+            - A numerical array of density values corresponding to the ``coordinates``.
+
+        coordinates : np.ndarray
+            Array of ellipsoidal coordinates where the potential is computed. Must follow the format
+            ``(..., NDIM)``, where ``NDIM`` is the number of dimensions.
+
+        num_points : int, optional
+            Number of points for integration grids. Default is `1000`.
+
+        scale : str, optional
+            Scaling method for grid construction. Can be `'log'` or `'linear'`. Default is `'log'`.
+
+        psi : Callable, optional
+            Precomputed :math:`\psi(r)` function for the density profile. If provided, this will be
+            used directly. If `None`, it will be computed from the density profile.
+
+        powerlaw_index : int, optional
+            Power-law index for the asymptotic density behavior. Required when `density_profile` is
+            an array and `psi` is not provided.
+
+        Returns
+        -------
+        potential : np.ndarray
+            Array of computed gravitational potential values at each coordinate, in units of mass/length.
+
+        Raises
+        ------
+        ValueError
+            If the input density profile is not callable and `powerlaw_index` is not specified.
+        ValueError
+            If the coordinate system's scale parameters cannot be extracted.
+
+        Notes
+        -----
+        The potential is computed as:
+
+        .. math::
+
+            \Phi(\mathbf{x}) = -\pi \frac{1}{(\prod_i \eta_i)^2} \int_0^\infty
+            \frac{\psi(\infty) - \psi(\xi(\tau))}{\sqrt{\prod_i (\tau + \eta_i^{-2})}} \, d\tau,
+
+        where:
+
+        - :math:`\psi(r)` is computed based on the density profile.
+        - :math:`\xi(\tau)` is the effective radius for a given integration parameter :math:`\tau`.
+
+        See :ref:`poisson_equation` for details on the relevant theory.
+
+        Examples
+        --------
+
+        **Comparison to the Spherical Case**
+
+        As a baseline, consider an :py:class:`OblateHomoeoidalCoordinateSystem` with eccentricity :math:`e = 0.0`, which
+        reduces to the spherical case. Using the Hernquist density profile:
+
+        .. math::
+            \rho(r) = \frac{\rho_0}{\xi (1 + \xi)^3},
+
+        where :math:`\xi = r/r_s`, and the corresponding potential:
+
+        .. math::
+
+            \Phi(r) = -2\pi\frac{G\rho_0 r_s^3}{r + r_s}.
+
+        We compute and compare the potentials:
+
+        .. plot::
+            :include-source:
+
+            >>> from pisces.profiles.density import HernquistDensityProfile
+            >>> from pisces.geometry.coordinate_systems import OblateHomoeoidalCoordinateSystem
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>>
+            >>> # Hernquist profile with rho_0 = 1, r_s = 1
+            >>> dp = HernquistDensityProfile(rho_0=1, r_s=1)
+            >>> r = np.geomspace(1e-1, 1e3, 1000)
+            >>> known_potential = -2 * np.pi / (1 + r)
+            >>>
+            >>> # Oblate system with e = 0 (spherical)
+            >>> cs= OblateHomoeoidalCoordinateSystem(ecc=0.0)
+            >>>
+            >>> # The coordinates need to be constructed as (..., 3) with all the
+            >>> # required coordinates. For this example, we have only 1 phi and 1 theta
+            >>> # in the coordinates.
+            >>> coords = np.moveaxis(np.meshgrid(r,[0],[0],indexing='ij'),0,-1)
+            >>> computed_potential = cs.solve_radial_poisson_problem(
+            ...     dp, coords)
+            >>>
+            >>> # Plot comparison
+            >>> _ = plt.loglog(r, -known_potential, label="True Spherical Potential",color='k',ls='-')
+            >>> _ = plt.loglog(r, -computed_potential[:,0,0], label="Computed (e=0)",color='red',ls='--')
+            >>> _ = plt.xlabel("Radius (r)")
+            >>> _ = plt.ylabel(r"Potential, $-\Phi(r)$")
+            >>> _ = plt.legend()
+            >>> plt.show()
+
+        **Effect of Ellipticity**
+
+        We can now look at what happens when we have various degrees of eccentricity in the coordinate system. In this
+        case, we'll look at :math:`\Phi(r, \theta = 0)` in coordinate systems with differing eccentricities. Note that
+        the choice of :math:`\theta` plays a considerable role, :math:`\theta` maximizes the difference from spherical, while
+        :math:`\theta = \pi/2` minimizes it.
+
+        .. plot::
+            :include-source:
+
+            >>> from pisces.profiles.density import HernquistDensityProfile
+            >>> from pisces.geometry.coordinate_systems import OblateHomoeoidalCoordinateSystem
+            >>> import numpy as np
+            >>> import matplotlib.pyplot as plt
+            >>> from matplotlib.colors import Normalize
+            >>>
+            >>> # Hernquist profile with rho_0 = 1, r_s = 1
+            >>> dp = HernquistDensityProfile(rho_0=1, r_s=1)
+            >>> r = np.geomspace(1e-1, 1e3, 1000)
+            >>> known_potential = -2 * np.pi / (1 + r)
+            >>>
+            >>> # Setup the figure
+            >>> fig, axes = plt.subplots(nrows=2, sharex=True, figsize=(6,10))
+            >>> _ = axes[0].loglog(r, -known_potential, label="True Spherical Potential",color='k',ls='-')
+            >>> _ = axes[1].semilogx(r, -known_potential/np.abs(known_potential[0]), color='k',ls='-')
+            >>> _ = axes[1].set_xlabel("Radius (r)")
+            >>> _ = axes[0].set_ylabel(r"Potential $-\Phi(r)$")
+            >>> _ = axes[1].set_ylabel(r"Potential, $-\Phi(r)/\Phi(0)$")
+            >>>
+            >>> # Cycle through various eccentricities and plot each one.
+            >>> eccentricities = [0.0,0.1,0.2,0.5,0.7,0.9,0.99]
+            >>> coords = np.moveaxis(np.meshgrid(r,[0],[0],indexing='ij'),0,-1)
+            >>> for ecc in eccentricities:
+            ...     cs= OblateHomoeoidalCoordinateSystem(ecc=ecc)
+            ...
+            ...     # The coordinates need to be constructed as (..., 3) with all the
+            ...     # required coordinates. For this example, we have only 1 phi and 1 theta
+            ...     # in the coordinates.
+            ...     computed_potential = cs.solve_radial_poisson_problem(
+            ...         dp, coords)
+            ...
+            ...     # Plot comparison
+            ...     _ = axes[1].semilogx(r, -computed_potential[:,0,0]/(np.abs(computed_potential[0,0,0])),color=plt.cm.cool(ecc),ls='--')
+            ...     _ = axes[0].loglog(r, -computed_potential[:,0,0],color=plt.cm.cool(ecc),ls='--')
+            >>> _ = axes[0].legend()
+            >>> plt.colorbar(plt.cm.ScalarMappable(Normalize(vmin=0,vmax=1),
+            ...     cmap=plt.cm.cool),ax=axes, orientation='horizontal',fraction=0.07, label=r'Eccentricity, $e$')
+            >>> plt.show()
+
+
+
+        See Also
+        --------
+        - :py:func:`compute_ellipsoidal_psi` : Computes the :math:`\psi(r)` function for ellipsoidal potentials.
+        - :py:func:`solve_poisson_spherical` : Computes the potential for spherical coordinates.
+    """
+        from pisces.utilities.math_utils.poisson import solve_poisson_ellipsoidal
+        return solve_poisson_ellipsoidal(
+            density_profile,
+            coordinates,
+            self,
+            num_points=num_points,
+            scale = scale,
+            psi=psi,
+            powerlaw_index=powerlaw_index
+        )
 
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding,PyMethodOverriding
@@ -1202,14 +1574,14 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['r', 'theta','phi']
+    AXES = ['r', 'theta', 'phi']
     PARAMETERS = {'ecc': 0.0}
 
     def __init__(self, ecc: float = 0.0):
         self.ecc = ecc
         self.scale_x = self.scale_y = np.sqrt(1 - ecc ** 2)
         self.scale_z = 1
-        super(PseudoSphericalCoordinateSystem,self).__init__(ecc=self.ecc)
+        super(PseudoSphericalCoordinateSystem, self).__init__(ecc=self.ecc)
 
         # COMPUTING special attributes
         # For these coordinate systems, we need the flux factor and the shell factor,
@@ -1220,9 +1592,9 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     def _compute_shell_coefficient(self):
         func = self.get_derived_attribute_function('r_shell_element')
-        integrand = lambda theta: func(1,theta,0)
+        integrand = lambda theta: func(1, theta, 0)
 
-        return 2*np.pi*quad(integrand, 0,np.pi)[0]
+        return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
     def _compute_flux_coefficient(self):
         func = self.get_derived_attribute_function('r_surface_element')
@@ -1231,17 +1603,17 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
         return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
     @staticmethod
-    def _omega(r,theta,phi,ecc=0.0):
+    def _omega(r, theta, phi, ecc=0.0):
         return sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
 
     def lame_0(r, theta, phi, ecc=0.0):
         _o = sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
-        return 1/_o
+        return 1 / _o
 
     def lame_1(r, theta, phi, ecc=0.0):
         _o = sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
 
-        return r*sp.sqrt((sp.diff(1/_o,theta)**2 + (1/_o)**2))
+        return r * sp.sqrt((sp.diff(1 / _o, theta) ** 2 + (1 / _o) ** 2))
 
     def lame_2(r, theta, phi, ecc=0.0):
         _o = sp.sqrt(1 - (ecc * sp.sin(theta)) ** 2)
@@ -1253,6 +1625,7 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     def __repr__(self):
         return self.__str__()
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
@@ -1430,14 +1803,14 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['r', 'theta','phi']
+    AXES = ['r', 'theta', 'phi']
     PARAMETERS = {'ecc': 0.0}
 
     def __init__(self, ecc: float = 0.0):
         self.ecc = ecc
         self.scale_x = self.scale_y = 1
         self.scale_z = np.sqrt(1 - ecc ** 2)
-        super(PseudoSphericalCoordinateSystem,self).__init__(ecc=self.ecc)
+        super(PseudoSphericalCoordinateSystem, self).__init__(ecc=self.ecc)
 
         # COMPUTING special attributes
         # For these coordinate systems, we need the flux factor and the shell factor,
@@ -1463,17 +1836,17 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
         return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
     @staticmethod
-    def _omega(r,theta,phi,ecc=0.0):
+    def _omega(r, theta, phi, ecc=0.0):
         return sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
 
     def lame_0(r, theta, phi, ecc=0.0):
         _o = sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
-        return 1/_o
+        return 1 / _o
 
     def lame_1(r, theta, phi, ecc=0.0):
         _o = sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
 
-        return r*sp.sqrt((sp.diff(1/_o,theta)**2 + (1/_o)**2))
+        return r * sp.sqrt((sp.diff(1 / _o, theta) ** 2 + (1 / _o) ** 2))
 
     def lame_2(r, theta, phi, ecc=0.0):
         _o = sp.sqrt(1 - (ecc * sp.cos(theta)) ** 2)
@@ -1485,6 +1858,7 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     def __repr__(self):
         return self.__str__()
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class OblateSpheroidalCoordinateSystem(CoordinateSystem):
@@ -1595,21 +1969,22 @@ class OblateSpheroidalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        rho = np.sqrt(x**2 + y**2)
-        d1_2,d2_2 = (rho+self.a)**2 + z**2, (rho-self.a)**2 + z**2
-        mu = np.arccosh((np.sqrt(d1_2)+np.sqrt(d2_2)) / (2 * self.a))
-        nu = np.arccos((np.sqrt(d1_2)-np.sqrt(d2_2)) / (2 * self.a))
+        rho = np.sqrt(x ** 2 + y ** 2)
+        d1_2, d2_2 = (rho + self.a) ** 2 + z ** 2, (rho - self.a) ** 2 + z ** 2
+        mu = np.arccosh((np.sqrt(d1_2) + np.sqrt(d2_2)) / (2 * self.a))
+        nu = np.arccos((np.sqrt(d1_2) - np.sqrt(d2_2)) / (2 * self.a))
         phi = np.arctan2(y, x)
         return np.stack((mu, nu, phi), axis=-1)
 
-    def lame_0(mu,nu,phi,a=1.0):
+    def lame_0(mu, nu, phi, a=1.0):
         return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    def lame_1(mu,nu,phi,a=1.0):
+    def lame_1(mu, nu, phi, a=1.0):
         return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    def lame_2(mu,nu,phi,a=1.0):
+    def lame_2(mu, nu, phi, a=1.0):
         return a * sp.cosh(mu) * sp.cos(nu)
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker,PyMethodOverriding
 class ProlateSpheroidalCoordinateSystem(CoordinateSystem):
@@ -1718,23 +2093,18 @@ class ProlateSpheroidalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        rho = np.sqrt(x**2 + y**2)
-        d1_2,d2_2 = (rho)**2 + (z+self.a)**2, (rho)**2 + (z-self.a)**2
-        mu = np.arccosh((np.sqrt(d1_2)+np.sqrt(d2_2)) / (2 * self.a))
-        nu = np.arccos((np.sqrt(d1_2)-np.sqrt(d2_2)) / (2 * self.a))
+        rho = np.sqrt(x ** 2 + y ** 2)
+        d1_2, d2_2 = (rho) ** 2 + (z + self.a) ** 2, (rho) ** 2 + (z - self.a) ** 2
+        mu = np.arccosh((np.sqrt(d1_2) + np.sqrt(d2_2)) / (2 * self.a))
+        nu = np.arccos((np.sqrt(d1_2) - np.sqrt(d2_2)) / (2 * self.a))
         phi = np.arctan2(y, x)
         return np.stack((mu, nu, phi), axis=-1)
 
-    def lame_0(mu,nu,phi,a=1.0):
+    def lame_0(mu, nu, phi, a=1.0):
         return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    def lame_1(mu,nu,phi,a=1.0):
+    def lame_1(mu, nu, phi, a=1.0):
         return a * sp.sqrt(sp.sinh(mu) ** 2 + sp.sin(nu) ** 2)
 
-    def lame_2(mu,nu,phi,a=1.0):
+    def lame_2(mu, nu, phi, a=1.0):
         return a * sp.sinh(mu) * sp.sin(nu)
-
-if __name__ == '__main__':
-    q = OblateHomoeoidalCoordinateSystem(ecc=0.0)
-    print(q.get_derived_attribute_symbolic('r_shell_element'))
-    print(q.flux_parameter/(4*np.pi))

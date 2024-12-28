@@ -14,15 +14,17 @@ Physical Models
 These guides give an overview of the physics that goes into particular models.
 
 .. toctree::
+    :titlesonly:
 
     ./models/galaxy_clusters
 
 Mathematics
 +++++++++++
 
-These guides give an overview of the mathematical details that are relevant for this software.
+These documents give an overview of the mathematical details that are relevant for this software.
 
 .. toctree::
     :titlesonly:
 
-    ./geometry_theory
+    ./geometry/geometry_overview
+    ./geometry/poisson_equation
