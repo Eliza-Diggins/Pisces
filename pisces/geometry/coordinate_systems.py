@@ -1,151 +1,12 @@
 r"""
 Coordinate Systems for Pisces
-=============================
 
 This module contains the coordinate systems for the Pisces library. This includes various spheroidal
 coordinate systems, cartesian coordinate systems, cylindrical coordinate systems, and others. For each of
 these coordinate systems, structures have been generated to allow for differential operations and the tracking
 of symmetries through those operations.
 
-Mathematical Background
-=======================
-
-An orthogonal coordinate system is defined by a set of coordinate surfaces that intersect
-at right angles. Each coordinate axis has an associated Lame coefficient, :math:`h_i`, which
-scales differential elements along that axis. Orthogonal systems are useful in physics and
-engineering because they allow the calculation of differential operators (e.g., gradient,
-divergence, and Laplacian) based on Lame coefficients, simplifying the complexity of vector
-calculus in curved spaces.
-
-A more complete overview of the relevant theory may also be found here :ref:`geometry_theory`.
-
-Basis Vectors
--------------
-
-Orthogonal coordinate systems feature a set of **basis vectors** for each point in space, which
-are tangent to the curves obtained by varying a single coordinate while holding others constant.
-Unlike in Cartesian coordinates where basis vectors are constant, these basis vectors vary across
-points in general orthogonal coordinates but remain mutually orthogonal.
-
-- **Covariant Basis** : The covariant basis vectors :math:`\mathbf{e}_i` align with the coordinate
-  curves and are derived as:
-
-  .. math::
-
-     \mathbf{e}_i = \frac{\partial \mathbf{r}}{\partial q^i}
-
-  where :math:`\mathbf{r}` is the position vector and :math:`q^i` represents the coordinates.
-  These vectors are not typically unit vectors and can vary in length.
-
-- **Unit Basis** : By dividing the covariant basis by their **scale factors**, the normalized
-  basis vectors :math:`\hat{\mathbf{e}}_i` are obtained:
-
-  .. math::
-
-     \hat{\mathbf{e}}_i = \frac{\mathbf{e}_i}{h_i}
-
-  .. note::
-
-      These **scale factors** are also referred to as **Lame Coefficients**. That is the term used
-      in Pisces. They are a critical component of all of the vector calculus computations that occur in
-      a given geometry.
-
-- **Contravariant Basis**: The contravariant basis vectors, denoted :math:`\mathbf{e}^i`, are reciprocal
-  to the covariant basis and provide a means to express vectors in a dual basis. In orthogonal systems, they are
-  simply related by reciprocal lengths to the covariant vectors:
-
-  .. math::
-
-     \mathbf{e}^i = \frac{\hat{\mathbf{e}}_i}{h_i} = \frac{\mathbf{e}_i}{h_i^2}
-
-  These satisfy the orthogonality condition:
-
-  .. math::
-
-     \mathbf{e}_i \cdot \mathbf{e}^j = \delta_i^j
-
-  where :math:`\delta_i^j` is the Kronecker delta.
-
-  .. hint::
-
-      For those with a mathematical background, the contravariant basis forms the **dual basis** to the
-      covariant basis at a given point. Thus, in some respects, these vectors actually live in entirely different
-      spaces; however, this detail is of minimal importance in this context.
-
-Differential Operators
-----------------------
-
-Let :math:`\phi` be a scalar field in a space equipped with a particular coordinate system. Evidently, the differential
-change in :math:`\phi` is
-
-.. math::
-
-    d\phi = \partial_i \phi dq^i
-
-The gradient is, by definition, an operator such that :math:`d\phi = \nabla \phi \cdot d{\rm r}`. Clearly,
-
-.. math::
-
-    d{\bf r} = \partial_i {\bf r} dq^i = {\bf e}_i dq^i,
-
-so
-
-.. math::
-
-    \nabla_k \phi \cdot d{\rm r} = \nabla_{kj} {\bf e}_j dq^j = \partial_k \phi dq^k.
-
-Thus,
-
-.. math::
-
-    \nabla_{kj} \phi = \partial_k \phi e^k \implies \nabla \phi \cdot d{\rm r} = \partial_k \phi dq^k e^k \cdot e_k = \partial_k \phi dq^k.
-
-As such, the general form of the gradient for a scalar field is
-
-.. math::
-
-   \nabla \phi = \sum_{i} \frac{\hat{\mathbf{e}}_i}{h_i} \frac{\partial \phi}{\partial q^i}
-
-More in-depth analysis is needed to understand the divergence, curl, and Laplacian; however, the results take the following form:
-
-- **Divergence of a vector field** : For a vector field :math:`\mathbf{F} = \sum_{i} F_i \hat{\mathbf{e}}_i`,
-  the divergence is computed as:
-
-  .. math::
-
-     \nabla \cdot \mathbf{F} = \frac{1}{\prod_k h_k} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{\prod_k h_k}{h_i}\mathbf{F}_i \right)
-
-- **Laplacian of a scalar field** : For a scalar field :math:`\phi`, the Laplacian is given by:
-
-  .. math::
-
-     \nabla^2 \phi = \frac{1}{\prod_k h_k} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{\frac{1}{\prod_k h_k}}{h_i^2} \frac{\partial \phi}{\partial q^i} \right)
-
-The notation may be made simpler by introducing the **Jacobian** determinant:
-
-.. math::
-
-    J = \prod_i h_i.
-
-In this case, we then find
-
-- **Divergence of a vector field** : For a vector field :math:`\mathbf{F} = \sum_{i} F_i \hat{\mathbf{e}}_i`,
-  the divergence is computed as:
-
-  .. math::
-
-     \nabla \cdot \mathbf{F} = \frac{1}{J} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{J}{h_i}\mathbf{F}_i \right)
-
-- **Laplacian of a scalar field** : For a scalar field :math:`\phi`, the Laplacian is given by:
-
-  .. math::
-
-     \nabla^2 \phi = \frac{1}{J} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{J}{h_i^2} \frac{\partial \phi}{\partial q^i} \right)
-
-See Also
---------
-`Orthogonal coordinates <https://en.wikipedia.org/wiki/Orthogonal_coordinates>`_
-
+For users unfamiliar with this module, we suggest reading both :ref:`geometry_overview` and :ref:`geometry_theory`.
 """
 
 from typing import Callable, Union, TYPE_CHECKING
@@ -158,7 +19,7 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 
 from pisces.geometry.base import CoordinateSystem, RadialCoordinateSystem
 from pisces.utilities.logging import mylog
-from utilities.math_utils.numeric import integrate
+from pisces.utilities.math_utils.numeric import integrate
 
 if TYPE_CHECKING:
     pass
@@ -536,11 +397,6 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
         else:
             f = InterpolatedUnivariateSpline(radii, field * radii ** 2)
         return 4 * np.pi * integrate(f, radii, radii[0], minima=True)
-
-    def integrate_to_infinity(self,
-                              field: Union[np.ndarray, Callable],
-                              radii: np.ndarray):
-        pass
 
     def solve_radial_poisson_problem(self,
                                      density_profile: Union[np.ndarray, Callable],
@@ -1173,11 +1029,6 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
 
         return self.shell_parameter * integrate(f, radii, x_0=radii[0], minima=True)
 
-    def integrate_to_infinity(self,
-                              field: Union[np.ndarray, Callable],
-                              radii: np.ndarray):
-        pass
-
     def solve_radial_poisson_problem(self,
                                      density_profile: Union[Callable, np.ndarray],
                                      coordinates: np.ndarray,
@@ -1362,8 +1213,6 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
             >>> plt.colorbar(plt.cm.ScalarMappable(Normalize(vmin=0,vmax=1),
             ...     cmap=plt.cm.cool),ax=axes, orientation='horizontal',fraction=0.07, label=r'Eccentricity, $e$')
             >>> plt.show()
-
-
 
         See Also
         --------

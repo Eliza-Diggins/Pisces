@@ -1,5 +1,5 @@
-from pisces import utilities
-from pisces import profiles
+"""
+Templates and components for astrophysical modeling in Pisces.
 
-from pisces import io
-from pisces import models
+
+"""

@@ -1,14 +1,18 @@
 """
 Density profiles for astrophysical modeling.
+
+All of the profiles in this module represent the density of a particular species of matter
+as a function of spatial position.
 """
 from abc import ABC
-from typing import List, Tuple, Dict, Any
-import sympy as sp
+from typing import List, Dict, Any
+
 import numpy as np
-from pisces.profiles.base import RadialProfile
+import sympy as sp
 
+from pisces.profiles.base import RadialProfile, class_expression
 
-class RadialDensityProfile(RadialProfile,ABC):
+class RadialDensityProfile(RadialProfile, ABC):
     r"""
     Base class for radial density profiles with fixed axes, units, and parameters.
     """
@@ -16,175 +20,45 @@ class RadialDensityProfile(RadialProfile,ABC):
 
     # @@ CLASS ATTRIBUTES @@ #
     AXES =  ['r']
-    PARAMETERS = None
-    UNITS: str = "Msun/kpc**3"
+    DEFAULT_PARAMETERS = None
+    DEFAULT_UNITS: str = "Msun/kpc**3"
 
-    def get_ellipsoid_psi(self,r_min: float,r_max: float, n_points: int, scale: str = 'log'):
+    @class_expression('ellipsoidal_psi',on_demand=True)
+    @staticmethod
+    def _ellipsoid_psi(axes,params,expression):
+        # Determines the moment of the profile with respect to radius.
+        # This is ON_DEMAND, so we only grab this when it's requested.
+        integral_symbol = sp.Symbol('xi')
+        integrand = expression.subs(axes[0],integral_symbol) * integral_symbol
+        return sp.simplify(2*sp.integrate(integrand,(integral_symbol,0,axes[0])))
+
+    def has_elementary_ellipsoidal_psi(self):
         r"""
-        Compute the density moment function for use in computing the ellipsoidal potential.
+        Check whether this profile has an analytical form for :math:`\psi(r)`.
 
-        For ellipsoidally distributed systems, the gravitational potential relies on the function
+        The :math:`\psi(r)` function appears in solutions of the Poisson equation for
+        elliptically symmetric systems:
 
         .. math::
 
-            \psi(r) = \int_0^r \; d\xi \; \xi \rho(\xi)
-
-        in quadrature. This method provides the values of this function over a range of :math:`r` values, including
-        at :math:`r=0`, and :math:`r=\infty`.
-
-        .. note::
-
-            It is not necessarily the case that all density profiles have a well defined :math:`\psi` function. For those
-            which do not, an error is raised in this method.
-
-        Parameters
-        ----------
-        r_min : float
-            The minimum radius for the radial range of the computation. Must be greater than zero.
-
-            .. note::
-
-                The returned abscissa values will be a length ``n_points+1`` array, with the first element corresponding
-                to :math:`\Psi(0)`.
-
-        r_max : float
-            The maximum radius for the radial range of the computation.
-        n_points : int
-            The number of points to use in the radial grid for interpolation.
-        scale : str, optional
-            The scale of the radial grid. Options are:
-            - ``'log'``: Geometric spacing for radii.
-            - ``'linear'``: Linear spacing for radii.
-            Default is ``'log'``.
+            \psi(r) = 2 \int_0^r \, d\xi \xi \rho(\xi).
 
         Returns
         -------
-        radii : numpy.ndarray
-            The radial grid including zero, with size ``n_points + 1``.
-        psi_integral : numpy.ndarray
-            The values of the :math:`\psi(r)` function over the range specified by ``radii``. This includes the zero point
-            value.
-        psi_inf : float
-            The asymptotic value of the potential as :math:`r \\to \\infty`. This is generally necessary independently
-            in the computation.
-
-        Raises
-        ------
-        ValueError
-            If:
-
-            - The behavior of :math:`r^2 \rho(r)` as :math:`r \to 0` does not converge.
-            - ``r_min`` is negative.
-            - An unknown value is provided for ``scale``.
+        bool
+            ``True`` if this profile has an analytical form. ``False`` if non-elementary expressions are required.
 
         Notes
         -----
-
-        **Convergence Check:**
-
-        The method first validates that the integral of :math:`r^2 \rho(r)` converges as
-        :math:`r \to 0`. If it diverges, the ellipsoidal potential function is undefined
-        because the value at :math:`r = 0` cannot be established.
-
-        The zero-point value is set to zero under the assumption that the integral
-        from :math:`0` to :math:`r_{min}` converges to zero.
-
-        **Integration Details:**
-
-        The method constructs the radial grid using either linear or logarithmic spacing
-        (based on the ``scale`` parameter) and numerically integrates the density profile
-        from :math:`0` to :math:`r`. The quadrature is extended to infinity to determine the
-        asymptotic potential value.
-
-        Examples
-        --------
-        The NFW profile follows the form
-
-        .. math::
-
-            \rho(r) = \frac{\rho_0}{\left(\frac{r}{r_s}\right)\left(1+\frac{r}{r_s}\right)^2},
-
-        Which has an analytic form for :math:`\psi(r)`:
-
-        .. math::
-
-            \psi(r) = \frac{\rho_0 r_s r}{r_s + r}.
-
-        Let's test this prediction against our numerical solution:
-
-        .. plot::
-
-            >>> from pisces.profiles.density import NFWDensityProfile
-            >>> import matplotlib.pyplot as plt
-            >>> profile = NFWDensityProfile(rho_0=1.0, r_s=1.0)
-            >>> r_min, r_max, n_points = 1e-2, 1000, 1000
-            >>> radii, psi_integral, psi_inf = profile.get_ellipsoid_psi(r_min, r_max, n_points, scale='log')
-
-            >>> fig, axes = plt.subplots(nrows=2, sharex=True, gridspec_kw=dict(height_ratios=[4,1],hspace=0))
-            >>> theory = radii/(1+radii)
-            >>> _ = axes[0].plot(radii, psi_integral,color='black', label=r'$\psi(r)$ - Computed')
-            >>> _ = axes[0].plot(radii, theory,color='cyan',ls='--', label=r'$\psi(r)$ - Theory')
-            >>> _ = axes[0].axhline(psi_inf, color='red', linestyle='--', label=r'$\lim_{r\to \infty} \psi(r)$')
-            >>> _ = axes[0].axhline(psi_integral[0], color='red', linestyle=':', label=r'$\lim_{r \to 0} \psi(r)$')
-            >>> _ = axes[0].set_xscale('log')
-            >>> _ = axes[0].set_ylabel(r'$\psi(r)$')
-            >>> _ = axes[1].set_xlabel('Radius (r)')
-            >>> _ = axes[1].plot(radii[1:], np.abs((psi_integral-theory)/theory)[1:], color='black', label=r'Error')
-            >>> _ = axes[1].set_xscale('log')
-            >>> _ = axes[1].set_yscale('log')
-            >>> _ = plt.legend()
-            >>> plt.show()
-
+        :py:meth:`RadialDensityProfile.has_elementary_ellipsoidal_psi` utilizes the class-level expression ``'ellipsoidal_psi'``
+        generated by the ``._ellipsoid_psi`` method.
         """
-        # Validate that the integral actually converges for this system.
-        # This requires us checking the boundary behavior as r -> 0 and ensuring that it goes faster
-        # than r**-2. If it does not, we cannot establish the psi(0) value which will lead to issues
-        # in the quadrature.
-        from pisces.utilities.math_utils.numeric import integrate_from_zero
-        from scipy.integrate import quad
-        rad_symbol = self.SYMBAXES[0]
-        limit = float(sp.limit(self.symbolic_expression*(rad_symbol**2),rad_symbol, 0, "-"))
-
-        if np.isinf(limit) or np.isnan(limit):
-            raise ValueError(f"The behavior of r^2 * rho(r) as r -> 0 does not converge: {limit}.\n"
-                             f"The ellipsoidal psi function therefore has no value at zero and is not valid "
-                             f"for use in this context.")
-
-        # If the limit exists, it must be zero (int_0^0 f(x) dx = 0), so we can immediately set the
-        # zero point value.
-        zero_point_value = 0
-
-        # Construct the abscissa and prepare for the interpolation step of this scheme. We interpolate
-        # including zero (using the zero_point_value).
-        if r_min < 0:
-            raise ValueError("The minimum radius may not be negative.")
-
-        # Construct the abscissa.
-        if scale == 'log':
-            radii = np.geomspace(r_min,r_max,n_points)
-        elif scale == 'linear':
-            radii = np.linspace(r_min,r_max,n_points)
-        else:
-            raise ValueError(f"Unknown scale '{scale}'")
-
-        # Perform the baseline integration over the standard (non-limit including) abscissa.
-        integrand = lambda _xi: _xi*self(_xi)
-        psi_integral = integrate_from_zero(integrand, radii)
-
-        # add the zero-point to the abcissa and to the value set.
-        psi_integral = np.concatenate([np.array([zero_point_value]), psi_integral])
-        radii = np.concatenate([np.array([0]),radii])
-
-        # Determine the limit at infinity. This can be achieved by integrating in quadrature
-        # because our density profile is fully characterized over the entire real line.
-        psi_inf = psi_integral[-1]+ quad(integrand, float(radii[-1]), np.inf)[0]
-
-        return radii, psi_integral, psi_inf
-
+        ell_psi_expr = self.get_expression('ellipsoidal_psi',search_class=True)
+        return not ell_psi_expr.has(sp.Integral)
 
 class NFWDensityProfile(RadialDensityProfile):
     r"""
-    Navarro-Frenk-White (NFW) Density Profile.
+    Navarro-Frenk-White :footcite:p:`NFWProfile` (NFW) Density Profile.
 
     This profile is commonly used in astrophysics to describe the dark matter halo density
     in a spherical, isotropic system. It is derived from simulations of structure formation.
@@ -197,10 +71,45 @@ class NFWDensityProfile(RadialDensityProfile):
     - :math:`\rho_0` is the central density.
     - :math:`r_s` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`NFWDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`NFWDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``spherical_mass``
+             - :math:`M(r) = 4\pi\,\rho_0\,r_s^3\,\bigl[\ln(1 + \tfrac{r}{r_s}) \;-\; \tfrac{r}{r + r_s}\bigr]`
+             - None
+           * - ``spherical_potential``
+             - :math:`\Phi(r) = -\,\frac{4\pi\,\rho_0\,r_s^3}{r}\,\ln\!\Bigl(1 + \tfrac{r}{r_s}\Bigr)`
+             - None
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) \;=\; 2\int_{0}^{r}\! \xi\,\rho(\xi)\,d\xi`
+             - Inherited from base. Set to `on_demand=True`
 
     References
     ----------
-    .. [NaFrWh96] Navarro, Frenk, and White, 1996.
+    .. footbibliography::
 
     Example
     -------
@@ -235,7 +144,7 @@ class NFWDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_s": 1.0,
     }
@@ -244,9 +153,29 @@ class NFWDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, r_s=1.0):
         return rho_0 / (r / r_s * (1 + r / r_s) ** 2)
 
+    @class_expression(name='spherical_potential', on_demand=False)
+    @staticmethod
+    def _spherical_potential(axes, parameters, _):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,rho_0 = parameters['r_s'], parameters['rho_0']
+
+        # Produce the potential
+        return -(4*sp.pi*rho_0*r_s**3)*sp.log(1+ (r/r_s))/r
+
+    @class_expression(name='spherical_mass', on_demand=False)
+    @staticmethod
+    def _spherical_mass(axes,parameters,_):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,rho_0 = parameters['r_s'], parameters['rho_0']
+
+        # Produce the mass
+        return (4*sp.pi*rho_0*r_s**3)*(sp.log(1+ (r/r_s)) - (r/(r_s+r)))
+
 class HernquistDensityProfile(RadialDensityProfile):
     r"""
-    Hernquist Density Profile.
+    Hernquist Density Profile :footcite:p:`HernquistProfile`.
 
     This profile is often used to model the density distribution of elliptical galaxies and bulges.
 
@@ -258,9 +187,48 @@ class HernquistDensityProfile(RadialDensityProfile):
     - :math:`\rho_0` is the central density.
     - :math:`r_s` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Hernquist Profile Parameters
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`HernquistDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``spherical_mass``
+             - :math:`M(r) = 2\pi\,\rho_0\,r_s^3 \,\bigl(\tfrac{r}{r_s + r}\bigr)^{2}`
+             - None
+           * - ``spherical_potential``
+             - :math:`\Phi(r) = -\,\frac{2\pi\,\rho_0\,r_s^3}{r + r_s}`
+             - None
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Her90] Hernquist, L. 1990.
+    .. footbibliography::
 
     Example
     -------
@@ -294,7 +262,7 @@ class HernquistDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_s": 1.0,
     }
@@ -303,9 +271,29 @@ class HernquistDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, r_s=1.0):
         return rho_0 / ((r / r_s) * (1 + r / r_s) ** 3)
 
+    @class_expression(name='spherical_potential', on_demand=False)
+    @staticmethod
+    def _spherical_potential(axes, parameters, _):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,rho_0 = parameters['r_s'], parameters['rho_0']
+
+        # Produce the potential
+        return -(2*sp.pi*rho_0*r_s**3)/(r+r_s)
+
+    @class_expression(name='spherical_mass', on_demand=False)
+    @staticmethod
+    def _spherical_mass(axes,parameters,_):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,rho_0 = parameters['r_s'], parameters['rho_0']
+
+        # Produce the mass
+        return (2*sp.pi*rho_0*r_s**3) * (r/(r_s+r))**2
+
 class EinastoDensityProfile(RadialDensityProfile):
     r"""
-    Einasto Density Profile.
+    Einasto Density Profile :footcite:p:`EinastoProfile`.
 
     This profile provides a flexible model for dark matter halos with a gradual density decline.
 
@@ -318,9 +306,44 @@ class EinastoDensityProfile(RadialDensityProfile):
     - :math:`r_s` is the scale radius.
     - :math:`\alpha` is a shape parameter that controls the profile steepness.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`EinastoDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+           * - ``alpha``
+             - :math:`\alpha`
+             - Shape parameter controlling profile steepness
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`EinastoDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+    
     References
     ----------
-    .. [Ein65] Einasto, J., 1965.
+    .. footbibliography::
 
     Example
     -------
@@ -354,7 +377,7 @@ class EinastoDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_s": 1.0,
         "alpha": 0.18,
@@ -366,21 +389,54 @@ class EinastoDensityProfile(RadialDensityProfile):
 
 class SingularIsothermalDensityProfile(RadialDensityProfile):
     r"""
-    Singular Isothermal Sphere (SIS) Density Profile.
+    Singular Isothermal Sphere (SIS) Density Profile :footcite:p:`BinneyTremaine`.
 
     The SIS profile is a simple model commonly used to describe the density distribution
     of dark matter in galaxies and galaxy clusters under the assumption of an isothermal system.
 
     .. math::
-        \rho(r) = \frac{\\rho_0}{r^2}
+        \rho(r) = \frac{\rho_0}{r^2}
 
     where:
 
     - :math:`\rho_0` is the central density.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`SingularIsothermalDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`SingularIsothermalDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``spherical_mass``
+             - :math:`M(r) = 4\pi\,\rho_0\,r`
+             - Diverges as :math:`r\to\infty`.
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [BinTr87] Binney, J. & Tremaine, S., 1987.
+    .. footbibliography::
 
     Example
     -------
@@ -414,7 +470,7 @@ class SingularIsothermalDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
     }
 
@@ -422,24 +478,67 @@ class SingularIsothermalDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0):
         return rho_0 / r**2
 
+    @class_expression(name='spherical_mass', on_demand=False)
+    @staticmethod
+    def _spherical_mass(axes,parameters,_):
+        # Grab the symbols out.
+        r = axes[0]
+        rho_0 = parameters['rho_0']
+
+        # Produce the mass
+        return 4*sp.pi*rho_0*r
+
 class CoredIsothermalDensityProfile(RadialDensityProfile):
     r"""
-    Cored Isothermal Sphere Density Profile.
+    Cored Isothermal Sphere Density Profile :footcite:p:`BinneyTremaine`.
 
     This profile modifies the Singular Isothermal Sphere (SIS) by introducing a core radius
     to account for the central flattening of the density distribution.
 
     .. math::
-        \rho(r) = \frac{\\rho_0}{1 + \left(\frac{r}{r_c}\right)^2}
+        \rho(r) = \frac{\rho_0}{1 + \left(\frac{r}{r_c}\right)^2}
 
     where:
 
     - :math:`\rho_0` is the central density.
     - :math:`r_c` is the core radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Cored Isothermal Profile Parameters
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_c``
+             - :math:`r_c`
+             - Core radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`CoredIsothermalDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Bur95] Burkert, A., 1995.
+    .. footbibliography::
 
     Example
     -------
@@ -473,7 +572,7 @@ class CoredIsothermalDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_c": 1.0,
     }
@@ -484,7 +583,7 @@ class CoredIsothermalDensityProfile(RadialDensityProfile):
 
 class PlummerDensityProfile(RadialDensityProfile):
     r"""
-    Plummer Density Profile.
+    Plummer Density Profile :footcite:p:`PlummerProfile`.
 
     The Plummer profile is commonly used to model the density distribution of star clusters
     or spherical galaxies. It features a central core and a steep falloff at larger radii.
@@ -497,9 +596,51 @@ class PlummerDensityProfile(RadialDensityProfile):
     - :math:`M` is the total mass.
     - :math:`r_s` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`PlummerDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``M``
+             - :math:`M`
+             - Total mass
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`PlummerDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``spherical_mass``
+             - :math:`M(r) = M\,\bigl(\tfrac{r}{\sqrt{r^2 + r_s^2}}\bigr)^{3}`
+             - None
+           * - ``spherical_potential``
+             - :math:`\Phi(r) = -\,\frac{M}{\sqrt{r^2 + r_s^2}}`
+             - Multiplicative constants (e.g. `G`) can be included externally
+           * - ``surface_density``
+             - :math:`\Sigma(R) = \frac{M\,r_s^2}{\pi\,\bigl(r_s^2 + R^2\bigr)^{2}}`
+             - On-demand expression for projected (2D) density
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Plu11] Plummer, H. C., 1911.
+    .. footbibliography::
 
     Example
     -------
@@ -526,18 +667,45 @@ class PlummerDensityProfile(RadialDensityProfile):
     """
     AXES = ['r']
     
-    PARAMETERS = {
+    DEFAULT_PARAMETERS = {
         "M": 1.0,
         "r_s": 1.0,
-    }
+}
 
     @staticmethod
     def _function(r, M=1.0, r_s=1.0):
         return (3 * M) / (4 * sp.pi * r_s**3) * (1 + (r / r_s) ** 2) ** (-5 / 2)
 
+    @class_expression(name='spherical_potential', on_demand=False)
+    @staticmethod
+    def _spherical_potential(axes, parameters, _):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,M = parameters['r_s'], parameters['M']
+
+        # Produce the potential
+        return -M/sp.sqrt(r**2 + r_s**2)
+
+    @class_expression(name='spherical_mass', on_demand=False)
+    @staticmethod
+    def _spherical_mass(axes,parameters,_):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,M = parameters['r_s'], parameters['M']
+
+        # Produce the mass
+        return M*(r/sp.sqrt(r**2+r_s**2))**3
+
+    @class_expression(name='surface_density', on_demand=True)
+    @staticmethod
+    def _surface_density(axes, parameters, _):
+        r = axes[0]
+        r_s,M = parameters['r_s'], parameters['M']
+        return (M*r_s**2)/(sp.pi*(r_s**2+r**2)**2)
+
 class DehnenDensityProfile(RadialDensityProfile):
     r"""
-    Dehnen Density Profile.
+    Dehnen Density Profile :footcite:p:`DehnenProfile`.
 
     This profile is widely used in modeling galactic bulges and elliptical galaxies.
     It generalizes other profiles like Hernquist and Jaffe with an adjustable inner slope.
@@ -552,9 +720,48 @@ class DehnenDensityProfile(RadialDensityProfile):
     - :math:`r_s` is the scale radius.
     - :math:`\gamma` controls the inner density slope.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`DehnenDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``M``
+             - :math:`M`
+             - Total mass
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+           * - ``gamma``
+             - :math:`\gamma`
+             - Controls the inner density slope
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`DehnenDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``spherical_mass``
+             - :math:`M(r) = M\,\Bigl(\frac{r}{r + r_s}\Bigr)^{3 - \gamma}`
+             - Contains Hernquist (gamma=1) and Jaffe (gamma=2) as special cases
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Deh93] Dehnen, W., 1993.
+    .. footbibliography::
 
     Example
     -------
@@ -588,7 +795,7 @@ class DehnenDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "M": 1.0,
         "r_s": 1.0,
         "gamma": 1.0,
@@ -603,23 +810,69 @@ class DehnenDensityProfile(RadialDensityProfile):
             * (1 + r / r_s) ** (gamma - 4)
         )
 
+    @class_expression(name='spherical_mass', on_demand=False)
+    @staticmethod
+    def _spherical_mass(axes,parameters,_):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,M, gamma = parameters['r_s'], parameters['M'], parameters['gamma']
+
+        # Produce the mass
+        return M*(r/(r+r_s))**(3-gamma)
+
 class JaffeDensityProfile(RadialDensityProfile):
     r"""
-    Jaffe Density Profile.
+    Jaffe Density Profile :footcite:p:`JaffeProfile`.
 
     This profile is commonly used to describe the density distribution of elliptical galaxies.
 
     .. math::
-        \rho(r) = \frac{\\rho_0}{\frac{r}{r_s} \left(1 + \frac{r}{r_s}\right)^2}
+        \rho(r) = \frac{\rho_0}{\frac{r}{r_s} \left(1 + \frac{r}{r_s}\right)^2}
 
     where:
 
     - :math:`\rho_0` is the central density.
     - :math:`r_s` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`JaffeDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`JaffeDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``spherical_mass``
+             - :math:`M(r) = 4\pi\,\rho_0\,r_s^3\,\Bigl[\ln(r + r_s) + \ln(r_s) \;-\; 1 \;+\; \frac{r_s}{r + r_s}\Bigr]`
+             - (As coded; can simplify further)
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Jaf83] Jaffe, W., 1983.
+    .. footbibliography::
 
     Example
     -------
@@ -653,7 +906,7 @@ class JaffeDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_s": 1.0,
     }
@@ -662,27 +915,72 @@ class JaffeDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, r_s=1.0):
         return rho_0 / ((r / r_s) * (1 + r / r_s) ** 2)
 
+    @class_expression(name='spherical_mass', on_demand=False)
+    @staticmethod
+    def _spherical_mass(axes,parameters,_):
+        # Grab the symbols out.
+        r = axes[0]
+        r_s,rho_0 = parameters['r_s'], parameters['rho_0']
+
+        # Produce the mass
+        return (4*sp.pi*r_s**3 * rho_0)*((r_s/(r+r_s)) + sp.log(r_s+r) - 1 + sp.log(r_s))
 
 class KingDensityProfile(RadialDensityProfile):
     r"""
-    King Density Profile.
+    King Density Profile :footcite:p:`KingProfile`.
 
     This profile describes the density distribution in globular clusters and galaxy clusters,
     accounting for truncation at larger radii.
 
     .. math::
-        \rho(r) = \\rho_0 \\left[\left(1 + \left(\frac{r}{r_c}\right)^2\\right)^{-3/2}
-        - \left(1 + \left(\frac{r_t}{r_c}\right)^2\\right)^{-3/2}\\right]
+        \rho(r) = \rho_0 \left[\left(1 + \left(\frac{r}{r_c}\right)^2\right)^{-3/2}
+        - \left(1 + \left(\frac{r_t}{r_c}\right)^2\right)^{-3/2}\right]
 
     where:
 
-    - :math:`\\rho_0` is the central density.
+    - :math:`\rho_0` is the central density.
     - :math:`r_c` is the core radius.
     - :math:`r_t` is the truncation radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`KingDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_c``
+             - :math:`r_c`
+             - Core radius
+           * - ``r_t``
+             - :math:`r_t`
+             - Truncation radius
+
+    
+    
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`KingDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Kin66] King, I. R., 1966.
+    .. footbibliography::
 
     Example
     -------
@@ -716,7 +1014,7 @@ class KingDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_c": 1.0,
         "r_t": 1.0,
@@ -726,25 +1024,56 @@ class KingDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, r_c=1.0, r_t=1.0):
         return rho_0 * ((1 + (r / r_c) ** 2) ** (-3 / 2) - (1 + (r_t / r_c) ** 2) ** (-3 / 2))
 
-
 class BurkertDensityProfile(RadialDensityProfile):
     r"""
-    Burkert Density Profile.
+    Burkert Density Profile :footcite:p:`BurkertProfile`.
 
     This profile describes dark matter halos with a flat density core, often used to
     fit rotation curves of dwarf galaxies.
 
     .. math::
-        \rho(r) = \frac{\\rho_0}{\left(1 + \frac{r}{r_s}\right) \left(1 + \left(\frac{r}{r_s}\right)^2\right)}
+        \rho(r) = \frac{\rho_0}{\left(1 + \frac{r}{r_s}\right) \left(1 + \left(\frac{r}{r_s}\right)^2\right)}
 
     where:
 
-    - :math:`\\rho_0` is the central density.
+    - :math:`\rho_0` is the central density.
     - :math:`r_s` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`BurkertDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`BurkertDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+    
     References
     ----------
-    .. [Bur95] Burkert, A., 1995.
+    .. footbibliography::
 
     Example
     -------
@@ -778,7 +1107,7 @@ class BurkertDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_s": 1.0,
     }
@@ -787,24 +1116,56 @@ class BurkertDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, r_s=1.0):
         return rho_0 / ((1 + r / r_s) * (1 + (r / r_s) ** 2))
 
-
 class MooreDensityProfile(RadialDensityProfile):
     r"""
-    Moore Density Profile.
+    Moore Density Profile :footcite:p:`MooreProfile`.
 
     This profile describes the density of dark matter halos with a steeper central slope compared to NFW.
 
     .. math::
-        \rho(r) = \frac{\\rho_0}{\left(\frac{r}{r_s}\\right)^{3/2} \left(1 + \frac{r}{r_s}\\right)^{3/2}}
+        \rho(r) = \frac{\rho_0}{\left(\frac{r}{r_s}\right)^{3/2} \left(1 + \frac{r}{r_s}\right)^{3/2}}
 
     where:
 
-    - :math:`\\rho_0` is the central density.
+    - :math:`\rho_0` is the central density.
     - :math:`r_s` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`MooreDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`MooreDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Moo98] Moore, B., et al., 1998.
+    .. footbibliography::
 
     Example
     -------
@@ -831,7 +1192,7 @@ class MooreDensityProfile(RadialDensityProfile):
     """
     AXES = ['r']
     
-    PARAMETERS = {
+    DEFAULT_PARAMETERS = {
         "rho_0": 1.0,
         "r_s": 1.0,
     }
@@ -840,25 +1201,57 @@ class MooreDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, r_s=1.0):
         return rho_0 / ((r / r_s) ** (3 / 2) * (1 + r / r_s) ** (3 / 2))
 
-
 class CoredNFWDensityProfile(RadialDensityProfile):
     r"""
-    Cored Navarro-Frenk-White (NFW) Density Profile.
+    Cored Navarro-Frenk-White (NFW) Density Profile :footcite:p:`CNFWProfile`.
 
     This profile modifies the standard NFW profile by introducing a core, leading to
     a shallower density slope near the center.
 
     .. math::
-        \rho(r) = \frac{\\rho_0}{\left(1 + \left(\frac{r}{r_s}\right)^2\right) \left(1 + \frac{r}{r_s}\right)^2}
+        \rho(r) = \frac{\rho_0}{\left(1 + \left(\frac{r}{r_s}\right)^2\right) \left(1 + \frac{r}{r_s}\right)^2}
 
     where:
 
-    - :math:`\\rho_0` is the central density.
+    - :math:`\rho_0` is the central density.
     - :math:`r_s` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Cored NFW Profile Parameters
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`CoredNFWDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Ric05] Ricotti, M., et al., 2005.
+    .. footbibliography::
 
     Example
     -------
@@ -892,7 +1285,7 @@ class CoredNFWDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_s": 1.0,
     }
@@ -901,10 +1294,9 @@ class CoredNFWDensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, r_s=1.0):
         return rho_0 / ((1 + (r / r_s) ** 2) * (1 + r / r_s) ** 2)
 
-
 class VikhlininDensityProfile(RadialDensityProfile):
     r"""
-    Vikhlinin Density Profile.
+    Vikhlinin Density Profile :footcite:p:`VikhlininProfile`.
 
     This profile is used to model the density of galaxy clusters, incorporating
     a truncation at large radii and additional flexibility for inner slopes.
@@ -916,14 +1308,62 @@ class VikhlininDensityProfile(RadialDensityProfile):
 
     where:
 
-    - :math:`\\rho_0` is the central density.
+    - :math:`\rho_0` is the central density.
     - :math:`r_c` is the core radius.
     - :math:`r_s` is the truncation radius.
     - :math:`\alpha, \beta, \gamma, \epsilon` control the slope and truncation behavior.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`VikhlininDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_c``
+             - :math:`r_c`
+             - Core radius
+           * - ``r_s``
+             - :math:`r_s`
+             - Truncation radius
+           * - ``alpha``
+             - :math:`\alpha`
+             - Controls the innermost slope
+           * - ``beta``
+             - :math:`\beta`
+             - Governs the outer slope
+           * - ``epsilon``
+             - :math:`\epsilon`
+             - Steepens the outer decline
+           * - ``gamma``
+             - :math:`\gamma`
+             - Exponent in the truncation factor
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`VikhlininDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Vik06] Vikhlinin, A., et al., 2006.
+    .. footbibliography::
 
     Example
     -------
@@ -957,7 +1397,7 @@ class VikhlininDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_c": 1.0,
         "r_s": 1.0,
@@ -976,10 +1416,9 @@ class VikhlininDensityProfile(RadialDensityProfile):
             * (1 + (r / r_s) ** gamma) ** (-0.5 * epsilon / gamma)
         )
 
-
 class AM06DensityProfile(RadialDensityProfile):
     r"""
-    An & Zhao (2006) Density Profile (AM06).
+    Ascasibar and Markevitch (2006) Density Profile :footcite:p:`AM06Profile`.
 
     This density profile is a generalized model that allows flexibility in fitting
     the density distributions of dark matter halos. It includes additional parameters
@@ -997,13 +1436,58 @@ class AM06DensityProfile(RadialDensityProfile):
     - :math:`\alpha` controls the slope of the transition near the core.
     - :math:`\beta` controls the outer slope.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`AM06DensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``a_c``
+             - :math:`a_c`
+             - Core radius
+           * - ``c``
+             - :math:`c`
+             - Concentration parameter
+           * - ``a``
+             - :math:`a`
+             - Scale radius
+           * - ``alpha``
+             - :math:`\alpha`
+             - Controls slope near the core
+           * - ``beta``
+             - :math:`\beta`
+             - Controls outer slope
+
+    
+    
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`AM06DensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
     Use Case
     --------
     This profile is well-suited for modeling dark matter halos with detailed inner and outer slope behaviors.
 
+    
     References
     ----------
-    .. [An06] An, J., & Zhao, H. S. (2006). Mon. Not. R. Astron. Soc.
+    .. footbibliography::
 
     Example
     -------
@@ -1037,7 +1521,7 @@ class AM06DensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "a": 1.0,
         "a_c": 1.0,
@@ -1050,10 +1534,9 @@ class AM06DensityProfile(RadialDensityProfile):
     def _function(r, rho_0=1.0, a=1.0, a_c=1.0, c=1.0, alpha=1.0, beta=1.0):
         return rho_0 * (1 + r / a_c) * (1 + r / (a_c * c)) ** alpha * (1 + r / a) ** beta
 
-
 class SNFWDensityProfile(RadialDensityProfile):
     r"""
-    Simplified Navarro-Frenk-White (SNFW) Density Profile.
+    Simplified Navarro-Frenk-White (SNFW) Density Profile :footcite:p:`SNFWProfile`.
 
     This profile is a simplified version of the NFW profile, widely used for modeling
     dark matter halos with specific scaling.
@@ -1066,9 +1549,42 @@ class SNFWDensityProfile(RadialDensityProfile):
     - :math:`M` is the total mass.
     - :math:`a` is the scale radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`SNFWDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``M``
+             - :math:`M`
+             - Total mass
+           * - ``a``
+             - :math:`a`
+             - Scale radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`SNFWDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base (no direct mass/potential expression coded here)
+
+
+    
     References
     ----------
-    .. [Zha96] Zhao, H., 1996.
+    .. footbibliography::
 
     Example
     -------
@@ -1102,7 +1618,7 @@ class SNFWDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "M": 1.0,
         "a": 1.0,
     }
@@ -1111,27 +1627,62 @@ class SNFWDensityProfile(RadialDensityProfile):
     def _function(r, M=1.0, a=1.0):
         return 3.0 * M / (16.0 * sp.pi * a**3) / ((r / a) * (1.0 + r / a) ** 2.5)
 
-
 class TNFWDensityProfile(RadialDensityProfile):
     r"""
-    Truncated Navarro-Frenk-White (TNFW) Density Profile.
+    Truncated Navarro-Frenk-White (TNFW) Density Profile :footcite:p:`TNFWProfile`.
 
     This profile is a modification of the NFW profile with an additional truncation
     term to account for finite halo sizes.
 
     .. math::
-        \rho(r) = \frac{\\rho_0}{\frac{r}{r_s} \left(1 + \frac{r}{r_s}\right)^2}
+        \rho(r) = \frac{\rho_0}{\frac{r}{r_s} \left(1 + \frac{r}{r_s}\right)^2}
         \frac{1}{1 + \left(\frac{r}{r_t}\right)^2}
 
     where:
 
-    - :math:`\\rho_0` is the central density.
+    - :math:`\rho_0` is the central density.
     - :math:`r_s` is the scale radius.
     - :math:`r_t` is the truncation radius.
 
+    .. dropdown:: Parameters
+
+        .. list-table:: Parameters for :py:class:`TNFWDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Description**
+           * - ``rho_0``
+             - :math:`\rho_0`
+             - Central density
+           * - ``r_s``
+             - :math:`r_s`
+             - Scale radius
+           * - ``r_t``
+             - :math:`r_t`
+             - Truncation radius
+
+    
+
+    .. dropdown:: Expressions
+
+        .. list-table:: Expressions for :py:class:`TNFWDensityProfile`
+           :widths: 25 25 50
+           :header-rows: 1
+    
+           * - **Name**
+             - **Symbol**
+             - **Notes**
+           * - ``ellipsoidal_psi``
+             - :math:`\psi(r) = 2\int_{0}^{r}\!\xi\,\rho(\xi)\,d\xi`
+             - Inherited from base
+
+
+    
     References
     ----------
-    .. [Hay07] Hayashi, E., et al., 2007.
+    .. footbibliography::
 
     Example
     -------
@@ -1165,7 +1716,7 @@ class TNFWDensityProfile(RadialDensityProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "rho_0": 1.0,
         "r_s": 1.0,
         "r_t": 1.0,
@@ -1174,7 +1725,3 @@ class TNFWDensityProfile(RadialDensityProfile):
     @staticmethod
     def _function(r, rho_0=1.0, r_s=1.0, r_t=1.0):
         return rho_0 / ((r / r_s) * (1 + r / r_s) ** 2) / (1 + (r / r_t) ** 2)
-
-if __name__ == '__main__':
-    q = DehnenDensityProfile()
-    print(q._get_ellipsoid_psi_spline(1e-6,1e6,100,scale='log'))

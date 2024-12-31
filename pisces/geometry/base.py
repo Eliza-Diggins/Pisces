@@ -1,146 +1,12 @@
 r"""
-Coordinate Systems for Pisces
-=============================
+Geometry base classes.
 
 This module contains the coordinate systems for the Pisces library. This includes various spheroidal
 coordinate systems, cartesian coordinate systems, cylindrical coordinate systems, and others. For each of
 these coordinate systems, structures have been generated to allow for differential operations and the tracking
 of symmetries through those operations.
 
-Mathematical Background
-=======================
-
-An orthogonal coordinate system is defined by a set of coordinate surfaces that intersect
-at right angles. Each coordinate axis has an associated Lame coefficient, :math:`h_i`, which
-scales differential elements along that axis. Orthogonal systems are useful in physics and
-engineering because they allow the calculation of differential operators (e.g., gradient,
-divergence, and Laplacian) based on Lame coefficients, simplifying the complexity of vector
-calculus in curved spaces.
-
-A more complete overview of the relevant theory may also be found here :ref:`geometry_theory`.
-
-Basis Vectors
--------------
-
-Orthogonal coordinate systems feature a set of **basis vectors** for each point in space, which
-are tangent to the curves obtained by varying a single coordinate while holding others constant.
-Unlike in Cartesian coordinates where basis vectors are constant, these basis vectors vary across
-points in general orthogonal coordinates but remain mutually orthogonal.
-
-- **Covariant Basis** : The covariant basis vectors :math:`\mathbf{e}_i` align with the coordinate
-  curves and are derived as:
-
-  .. math::
-
-     \mathbf{e}_i = \frac{\partial \mathbf{r}}{\partial q^i}
-
-  where :math:`\mathbf{r}` is the position vector and :math:`q^i` represents the coordinates.
-  These vectors are not typically unit vectors and can vary in length.
-
-- **Unit Basis** : By dividing the covariant basis by their **scale factors**, the normalized
-  basis vectors :math:`\hat{\mathbf{e}}_i` are obtained:
-
-  .. math::
-
-     \hat{\mathbf{e}}_i = \frac{\mathbf{e}_i}{h_i}
-
-  .. note::
-
-      These **scale factors** are also referred to as **Lame Coefficients**. That is the term used
-      in Pisces. They are a critical component of all of the vector calculus computations that occur in
-      a given geometry.
-
-- **Contravariant Basis**: The contravariant basis vectors, denoted :math:`\mathbf{e}^i`, are reciprocal
-  to the covariant basis and provide a means to express vectors in a dual basis. In orthogonal systems, they are
-  simply related by reciprocal lengths to the covariant vectors:
-
-  .. math::
-
-     \mathbf{e}^i = \frac{\hat{\mathbf{e}}_i}{h_i} = \frac{\mathbf{e}_i}{h_i^2}
-
-  These satisfy the orthogonality condition:
-
-  .. math::
-
-     \mathbf{e}_i \cdot \mathbf{e}^j = \delta_i^j
-
-  where :math:`\delta_i^j` is the Kronecker delta.
-
-  .. hint::
-
-      For those with a mathematical background, the contravariant basis forms the **dual basis** to the
-      covariant basis at a given point. Thus, in some respects, these vectors actually live in entirely different
-      spaces; however, this detail is of minimal importance in this context.
-
-Differential Operators
-----------------------
-
-Let :math:`\phi` be a scalar field in a space equipped with a particular coordinate system. Evidently, the differential
-change in :math:`\phi` is
-
-.. math::
-
-    d\phi = \partial_i \phi dq^i
-
-The gradient is, by definition, an operator such that :math:`d\phi = \nabla \phi \cdot d{\rm r}`. Clearly,
-
-.. math::
-
-    d{\bf r} = \partial_i {\bf r} dq^i = {\bf e}_i dq^i,
-
-so
-
-.. math::
-
-    \nabla_k \phi \cdot d{\rm r} = \nabla_{kj} {\bf e}_j dq^j = \partial_k \phi dq^k.
-
-Thus,
-
-.. math::
-
-    \nabla_{kj} \phi = \partial_k \phi e^k \implies \nabla \phi \cdot d{\rm r} = \partial_k \phi dq^k e^k \cdot e_k = \partial_k \phi dq^k.
-
-As such, the general form of the gradient for a scalar field is
-
-.. math::
-
-   \nabla \phi = \sum_{i} \frac{\hat{\mathbf{e}}_i}{h_i} \frac{\partial \phi}{\partial q^i}
-
-More in-depth analysis is needed to understand the divergence, curl, and Laplacian; however, the results take the following form:
-
-- **Divergence of a vector field** : For a vector field :math:`\mathbf{F} = \sum_{i} F_i \hat{\mathbf{e}}_i`,
-  the divergence is computed as:
-
-  .. math::
-
-     \nabla \cdot \mathbf{F} = \frac{1}{\prod_k h_k} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{\prod_k h_k}{h_i}\mathbf{F}_i \right)
-
-- **Laplacian of a scalar field** : For a scalar field :math:`\phi`, the Laplacian is given by:
-
-  .. math::
-
-     \nabla^2 \phi = \frac{1}{\prod_k h_k} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{\frac{1}{\prod_k h_k}}{h_i^2} \frac{\partial \phi}{\partial q^i} \right)
-
-The notation may be made simpler by introducing the **Jacobian** determinant:
-
-.. math::
-
-    J = \prod_i h_i.
-
-In this case, we then find
-
-- **Divergence of a vector field** : For a vector field :math:`\mathbf{F} = \sum_{i} F_i \hat{\mathbf{e}}_i`,
-  the divergence is computed as:
-
-  .. math::
-
-     \nabla \cdot \mathbf{F} = \frac{1}{J} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{J}{h_i}\mathbf{F}_i \right)
-
-- **Laplacian of a scalar field** : For a scalar field :math:`\phi`, the Laplacian is given by:
-
-  .. math::
-
-     \nabla^2 \phi = \frac{1}{J} \sum_{i} \frac{\partial}{\partial q^i} \left( \frac{J}{h_i^2} \frac{\partial \phi}{\partial q^i} \right)
+For users unfamiliar with this module, we suggest reading both :ref:`geometry_overview` and :ref:`geometry_theory`.
 
 See Also
 --------
@@ -157,7 +23,7 @@ from pisces.geometry.exceptions import ConversionError
 from pisces.geometry.utils import CoordinateConverter
 from pisces.utilities.array_utils import CoordinateArray
 from pisces.utilities.general import find_in_subclasses
-from utilities.math_utils.numeric import partial_derivative, function_partial_derivative
+from pisces.utilities.math_utils.numeric import partial_derivative, function_partial_derivative
 from pisces.utilities.logging import mylog
 
 if TYPE_CHECKING:
@@ -166,10 +32,34 @@ if TYPE_CHECKING:
 
 # noinspection PyProtectedMember,PyUnresolvedReferences
 class CoordinateSystemMeta(ABCMeta):
-    # Meta class that composes the sympy components of the coordinate system
-    # class, simplifies, etc. to construct the relevant coordinate system.
+    r"""
+    Metaclass for constructing and validating coordinate system classes.
+
+    This metaclass automates the setup of key symbolic attributes for coordinate systems,
+    such as axes symbols, parameter symbols, and Lame coefficient functions. It simplifies
+    the creation of subclasses by standardizing the generation and validation of these components.
+
+    Attributes
+    ----------
+    _IGNORED : list of str
+        List of class names that are exempt from the metaclass processing. Typically includes
+        abstract base classes like ``CoordinateSystem`` and ``RadialCoordinateSystem``.
+
+    """
     _IGNORED = ['CoordinateSystem','RadialCoordinateSystem']
+
     def __new__(mcs, name, bases, namespace, **kwargs):
+        r"""
+        Create a new coordinate system class.
+
+        Processes the class namespace to construct symbolic representations for axes and parameters,
+        and to validate and process the Lame coefficient functions.
+
+        Raises
+        ------
+        ValueError
+            If required attributes (e.g., ``AXES``, ``PARAMETERS``, ``NDIM``, or Lame coefficient functions) are missing.
+        """
         if name not in mcs._IGNORED:
             # @ SYMBOL CONSTRUCTION @ #
             # The metaclass now processes the axes and parameters from the namespace to
@@ -187,9 +77,14 @@ class CoordinateSystemMeta(ABCMeta):
 
     @classmethod
     def _construct_axes_symbols(mcs, namespace):
-        # This private method constructs the symbols for each of the
-        # axes in the coordinate system. It should NOT be altered in
-        # subclasses.
+        r"""
+        Constructs symbolic representations for the coordinate system's axes.
+
+        Raises
+        ------
+        ValueError
+            If the ``AXES`` attribute is not defined in the class namespace.
+        """
         if 'AXES' not in namespace:
             raise ValueError("AXES not in namespace")
 
@@ -198,9 +93,14 @@ class CoordinateSystemMeta(ABCMeta):
 
     @classmethod
     def _construct_parameter_symbols(mcs, namespace):
-        # This private method constructs the symbols for each of the
-        # parameters in the coordinate system. It should NOT be altered in
-        # subclasses.
+        r"""
+        Constructs symbolic representations for the coordinate system's parameters.
+
+        Raises
+        ------
+        ValueError
+            If the ``PARAMETERS`` attribute is not defined in the class namespace or is not a dictionary.
+        """
         if 'PARAMETERS' not in namespace:
             raise ValueError("PARAMETERS not in namespace")
 
@@ -209,9 +109,19 @@ class CoordinateSystemMeta(ABCMeta):
 
     @classmethod
     def _process_lame_coefficients(mcs, namespace):
-        # Identify the Lame Coefficient functions in the class. This could
-        # be modified to achieve a different scheme for identifying Lame coefficients.
-        #
+        r"""
+        Validates and processes the Lame coefficient functions for the coordinate system.
+
+        Lame coefficient functions define the scaling factors for differential operations
+        in orthogonal coordinate systems. This method validates their existence and generates
+        symbolic expressions for them.
+
+        Raises
+        ------
+        ValueError
+            If the ``NDIM`` attribute is missing or if any required Lame coefficient function
+            (e.g., ``lame_0``, ``lame_1``, etc.) is not implemented.
+        """
         # Currently, we seek out the lame coefficients based on name and raise
         # errors if the function is missing from the class.
         #
@@ -241,39 +151,48 @@ class CoordinateSystemMeta(ABCMeta):
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker
 class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
-    """
+    r"""
     Abstract base class representation of an orthogonal coordinate system.
 
     This class serves as a base for specific orthogonal coordinate systems, defining key
     mathematical methods to compute differential operators, transformations, and basis
-    functions. It utilizes a ``sympy`` based backend to compute critical coefficients for differential
+    functions. It utilizes a `Sympy <https://www.sympy.org>`_ based backend to compute critical coefficients for differential
     operators and then ``lambdify``-s them into numpy function for rapid execution.
 
-    Attributes
-    ----------
-    NDIM : int
-        Number of dimensions in the coordinate system.
-    AXES : list of str
-        Names of the coordinate system axes, defaulting to ``['x', 'y', 'z']``.
+    For a detailed user reference, we suggest :ref:`geometry_overview` and :ref:`geometry_theory`.
 
     Notes
     -----
     An orthogonal coordinate system is defined by a set of coordinate surfaces that intersect
-    at right angles. Each coordinate axis has an associated Lame coefficient, :math:`h_i`, which
+    at right angles. Each coordinate axis has an associated Lame coefficient, :math:`\lambda_i`, which
     scales differential elements along that axis.
 
     Orthogonal coordinate systems allow the computation of fundamental operators (gradient,
     divergence, and Laplacian) based on Lame coefficients.
 
     """
+    # @@ CLASS FLAGS @@ #
+    #
+    # _SKIP_LAMBDIFICATION: Fill with any derived symbols that should not be lambdified automatically.
+    # _handler_class_name: The name of the geometry handler subclass to handle this type of coordinate system.
+    _SKIP_LAMBDIFICATION = []
+    _handler_class_name = 'GeometryHandler'
+
     # @@ CLASS ATTRIBUTES @@ #
     # DEVELOPERS: these should be set in any subclass of CoordinateSystem. The axes
     #  should follow standard convention and the parameters and axes will become the
     #  symbolic attributes of the class.
     NDIM: int = 3
+    """int: The number of dimensions in this coordinate system.
+    """
     AXES: list[str] = ['x','y','z']
+    """list of str: The axes (coordinate variables) in this coordinate system."""
     PARAMETERS: Dict[str, Any] = {}
-    _SKIP_LAMBDIFICATION = []
+    """ dict of str, Any: The parameters for this coordinate system and their default values.
+    
+    Each of the parameters in :py:attr:`~pisces.geometry.base.CoordinateSystem.PARAMETERS` may be provided as a ``kwarg`` when creating
+    a new instance of this class.
+    """
 
     # @@ DYNAMICALLY GENERATED ATTRIBUTES @@ #
     # These attributes are generated dynamically in the metaclass
@@ -282,7 +201,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # DEVELOPERS: If changes are made to the metaclass, new variables could be added here
     #  to ensure that IntelliJ understands what's going on.
     SYMBAXES: List[sp.Symbol] = None
+    """ list of Symbol: The sympy symbols for each of the coordinate variables."""
     SYMBPARAMS: Dict[str, sp.Symbol] = None
+    """ dict of str, Symbol: The sympy symbols for each of the parameters specified in :py:attr:`~pisces.geometry.base.CoordinateSystem.PARAMETERS`."""
     _lame_symbolic: Dict[str, sp.Basic] = None
 
     # @@ INITIALIZATION @@ #
@@ -290,6 +211,37 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # to permit easy overwriting for developers. Subclasses may re-implement any of the
     # methods below as needed.
     def __init__(self, **kwargs):
+        r"""
+        Initialize an instance of the :py:class:`CoordinateSystem` class.
+
+        This constructor sets up the parameters, Lame coefficients, and derived attributes
+        required for the coordinate system. It processes symbolic attributes into callable
+        numerical functions for efficient computations and initializes attributes for
+        differential operators and transformations.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Keyword arguments for initializing the coordinate system parameters. These should
+            match the keys defined in the :py:attr:`~pisces.geometry.base.CoordinateSystem.PARAMETERS` class attribute of the subclass.
+
+        Notes
+        -----
+        - Parameters provided in ``kwargs`` are validated against the :py:attr:`~pisces.geometry.base.CoordinateSystem.PARAMETERS` attribute
+          of the subclass to ensure consistency.
+        - Lame coefficients are symbolic representations that are lambdified into efficient
+          numerical functions using NumPy.
+        - Derived symbolic attributes (e.g., Jacobian, divergence terms) are computed and
+          stored as both symbolic and numerical forms for use in differential operations.
+        - The initialization process may take a few seconds for complex coordinate systems
+          due to the symbolic simplifications and lambdifications.
+
+        Raises
+        ------
+        ValueError
+            If unknown parameters are provided in ``kwargs`` that are not defined in the subclass's
+            :py:attr:`~pisces.geometry.base.CoordinateSystem.PARAMETERS` attribute.
+        """
         # @ PARSE parameters @ #
         # Convert kwargs to self.parameters attribute.
         self._setup_parameters(**kwargs)
@@ -312,6 +264,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         self._lambdify_derived_attributes()
 
     def _setup_parameters(self, **kwargs):
+        # DEVELOPERS: This method can be overwritten in special circumstances
+        # however; it is important that all of the relevant parameters end up in self.parameters.
         self.parameters = self.__class__.PARAMETERS.copy()
         self.parameters.update(kwargs)
 
@@ -319,7 +273,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             raise ValueError("Unknown parameter '%s'" % self.parameters)
 
     def _setup_lame_coefficients(self):
-        """
+        r"""
         Prepares the Lame coefficient functions by binding parameters and lambdifying.
         Ensures that constants are converted to array-compatible expressions.
         """
@@ -349,7 +303,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             mylog.debug(f"\t [COMPLETE] Lambdifyed attribute {sym_attr_name}...")
 
     def lambdify_expression(self, expression: Union[str, sp.Basic]) -> Callable:
-        """
+        r"""
         Convert an expression into a callable numpy function using the attributes and
         coordinates of this coordinate system.
 
@@ -390,18 +344,178 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # DEVELOPER NOTE: These generally do NOT need to be changed in subclasses, but may be changed
     #  if the developer so needs.
     def get_derived_attribute_symbolic(self, attribute_name: str) -> sp.Basic:
+        r"""
+        Retrieve a symbolic representation of a derived attribute.
+
+        Parameters
+        ----------
+        attribute_name : str
+            The name of the derived attribute to retrieve.
+
+        Returns
+        -------
+        sp.Basic
+            The symbolic representation of the requested derived attribute.
+
+        Raises
+        ------
+        ValueError
+            If the attribute is not defined symbolically for the current class.
+
+        Notes
+        -----
+        Derived attributes are computed symbolically during initialization or dynamically
+        when explicitly set using :py:meth:`~pisces.geometry.base.CoordinateSystem.set_derived_attribute_symbolic`.
+
+        See Also
+        --------
+        pisces.geometry.base.CoordinateSystem.set_derived_attribute_symbolic
+        pisces.geometry.base.CoordinateSystem.get_derived_attribute_function
+        pisces.geometry.base.CoordinateSystem.set_derived_attribute_function
+
+        """
         try:
             return self._symbolic_attributes[attribute_name]
         except KeyError:
             raise ValueError(
-                f'Attribute `{attribute_name}` is not defined symbolically for class `{self.__class__.__name__}`.')
+                f'Attribute `{attribute_name}` is not defined symbolically for class `{self.__class__.__name__}`.'
+            )
 
-    def get_derived_attribute_function(self, attribute_name: str) -> Callable:
+    def set_derived_attribute_symbolic(self, attribute_name: str, symbolic_attribute: sp.Basic, overwrite: bool = False):
+        r"""
+        Define or overwrite a symbolic representation of a derived attribute.
+
+        Parameters
+        ----------
+        attribute_name : str
+            The name of the derived attribute to define.
+        symbolic_attribute : sp.Basic
+            The symbolic representation of the attribute to store.
+        overwrite : bool, optional
+            If True, overwrite an existing attribute. Default is False.
+
+        Raises
+        ------
+        ValueError
+            If the attribute already exists and overwrite is not allowed.
+
+        Notes
+        -----
+        This method is useful for dynamically defining symbolic attributes that were not
+        computed during initialization.
+
+        See Also
+        --------
+        pisces.geometry.base.CoordinateSystem.get_derived_attribute_symbolic
+        pisces.geometry.base.CoordinateSystem.get_derived_attribute_function
+        pisces.geometry.base.CoordinateSystem.set_derived_attribute_function
+        """
+        if (attribute_name in self._symbolic_attributes) and not overwrite:
+            raise ValueError(
+                f'Attribute `{attribute_name}` is already defined for class `{self.__class__.__name__}`.'
+            )
+
+        self._symbolic_attributes[attribute_name] = symbolic_attribute
+
+    def get_derived_attribute_function(self, attribute_name: str, convert_symbolic: bool = False) -> Callable:
+        r"""
+        Retrieve a numerical function representation of a derived attribute.
+
+        Parameters
+        ----------
+        attribute_name : str
+            The name of the derived attribute to retrieve.
+        convert_symbolic : bool, optional
+            If True, attempt to convert the symbolic representation of the attribute
+            into a numerical function if it does not exist. Default is False.
+
+        Returns
+        -------
+        Callable
+            The numerical function representation of the requested derived attribute.
+
+        Raises
+        ------
+        ValueError
+            If the attribute is not defined numerically and cannot be converted from
+            a symbolic representation.
+
+        Notes
+        -----
+        If ``convert_symbolic`` is True and the numerical function does not exist, the method
+        attempts to retrieve the symbolic attribute, lambdify it, and store the resulting
+        function.
+
+        See Also
+        --------
+        pisces.geometry.base.CoordinateSystem.get_derived_attribute_symbolic
+        pisces.geometry.base.CoordinateSystem.set_derived_attribute_symbolic
+        pisces.geometry.base.CoordinateSystem.set_derived_attribute_function
+        """
         try:
             return self._lambdified_attributes[attribute_name]
-        except KeyError:
+        except KeyError as e:
+            if convert_symbolic:
+                try:
+                    # Retrieve the symbolic attribute
+                    _symbolic = self.get_derived_attribute_symbolic(attribute_name)
+                except ValueError:
+                    raise e  # Re-raise the original KeyError if symbolic conversion fails
+
+                # Convert symbolic to numerical and store
+                try:
+                    self.set_derived_attribute_function(
+                        attribute_name,
+                        self.lambdify_expression(_symbolic),
+                        overwrite=True
+                    )
+                except Exception as ex:
+                    raise ValueError(
+                        f"Failed to convert symbolic attribute `{attribute_name}` to numerical: {ex}"
+                    ) from e
+
+                # Return the newly created numerical function
+                return self.get_derived_attribute_function(attribute_name, convert_symbolic=False)
+
             raise ValueError(
-                f'Attribute `{attribute_name}` is not defined symbolically for class `{self.__class__.__name__}`.')
+                f'Attribute `{attribute_name}` is not defined numerically for class `{self.__class__.__name__}`.'
+            )
+
+    def set_derived_attribute_function(self, attribute_name: str, function: Callable, overwrite: bool = False):
+        r"""
+        Define or overwrite a numerical function representation of a derived attribute.
+
+        Parameters
+        ----------
+        attribute_name : str
+            The name of the derived attribute to define.
+        function : Callable
+            The numerical function representation of the attribute to store.
+        overwrite : bool, optional
+            If True, overwrite an existing attribute. Default is False.
+
+        Raises
+        ------
+        ValueError
+            If the attribute already exists and overwrite is not allowed.
+
+        Notes
+        -----
+        This method is useful for dynamically defining numerical functions for derived
+        attributes that were not lambdified during initialization.
+
+        See Also
+        --------
+        pisces.geometry.base.CoordinateSystem.get_derived_attribute_symbolic
+        pisces.geometry.base.CoordinateSystem.set_derived_attribute_symbolic
+        pisces.geometry.base.CoordinateSystem.get_derived_attribute_function
+        """
+        if (attribute_name in self._lambdified_attributes) and not overwrite:
+            raise ValueError(
+                f'Attribute `{attribute_name}` is already defined for class `{self.__class__.__name__}`.'
+            )
+
+        self._lambdified_attributes[attribute_name] = function
 
     def _eval_der_attr_func(self, attribute_name: str, coordinates: np.ndarray) -> np.ndarray:
         coordinates = CoordinateArray(coordinates, self.NDIM)
@@ -439,13 +553,57 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         return self._eval_der_attr_func('jacobian', coordinates)
 
-    def get_symbolic_D_term(self, axis: 'AxisAxis', basis: str):
+    def get_symbolic_D_term(self, axis: 'AxisAlias', basis: str) -> sp.Basic:
+        r"""
+        Retrieve the symbolic representation of the :math:`D`-term for a specified axis and basis.
+
+        Parameters
+        ----------
+        axis : str or int
+            The axis (or its index) for which the :math:`D`-term is computed. This can be either
+            a string representing the axis name (e.g., ``'x'``, ``'y'``, ``'z'``) or an integer index.
+        basis : str
+            The basis in which to compute the :math:`D`-term. Supported values are:
+            - ``'unit'``: The unit basis.
+            - ``'covariant'``: The covariant basis.
+            - ``'contravariant'``: The contravariant basis.
+
+        Returns
+        -------
+        sp.Basic
+            The symbolic expression of the :math:`D`-term for the specified axis and basis.
+
+        Raises
+        ------
+        ValueError
+            If the specified basis is not valid or recognized.
+
+        Notes
+        -----
+        The :math:`D`-term represents a contribution to the divergence in orthogonal coordinate systems
+        and is defined as:
+
+        .. math::
+
+            D_k = \frac{1}{J} \partial_k \left( \frac{J}{\lambda_k^\text{scale}} \right),
+
+        where:
+
+        - :math:`\lambda_k` is the Lame coefficient for the :math:`k`-th axis.
+        - :math:`J` is the Jacobian determinant of the coordinate transformation.
+        - The scale factor depends on the basis: ``-1`` for unit, ``-2`` for contravariant, and ``0`` for covariant.
+
+        The :math:`D`-term is a key component of the divergence and Laplacian operators in orthogonal coordinates.
+        """
         # VALIDATION: construct the axis index and the d_term name.
         axis_index = self.ensure_axis_numeric(axis)
         D_name = f"D_{axis_index}_{basis}"
 
         # CONSTRUCT the symbol first.
         if D_name not in self._symbolic_attributes:
+            if basis not in ['unit', 'covariant', 'contravariant']:
+                raise ValueError(f"Invalid basis `{basis}`. Expected one of 'unit', 'covariant', or 'contravariant'.")
+
             _scale = dict(unit=-1, contravariant=-2, covariant=0)[basis]
             _lame = self.get_lame_symbolic(axis)
             J = self.get_derived_attribute_symbolic('jacobian')
@@ -453,7 +611,6 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             self._symbolic_attributes[D_name] = D
 
         return self._symbolic_attributes[D_name]
-
 
     def D_term(self, coordinates: np.ndarray, axis: 'AxisAlias', basis: str) -> np.ndarray:
         r"""
@@ -505,6 +662,34 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return self._eval_der_attr_func(D_name, coordinates)
 
     def get_symbolic_L_term(self, axis: 'AxisAlias'):
+        r"""
+        Retrieve the symbolic representation of the :math:`L`-term for the Laplacian along a given axis.
+
+        Parameters
+        ----------
+        axis : str or int
+            The axis (or its index) for which the :math:`L`-term is computed.
+
+        Returns
+        -------
+        sp.Basic
+            The symbolic expression of the :math:`L`-term for the specified axis.
+
+        Notes
+        -----
+        The :math:`L`-term for the Laplacian in orthogonal coordinates is defined as:
+
+        .. math::
+
+            L_k = \frac{1}{J} \partial_k \left( \frac{J}{\lambda_k^2} \right),
+
+        where:
+
+        - :math:`\lambda_k` is the Lame coefficient for the :math:`k`-th axis.
+        - :math:`J` is the Jacobian determinant of the coordinate transformation.
+
+        The :math:`L`-term accounts for the geometric contributions to the Laplacian operator.
+        """
         return self.get_symbolic_D_term( axis, basis='contravariant')
 
     def L_term(self, coordinates: np.ndarray, axis: 'AxisAlias') -> np.ndarray:
@@ -566,10 +751,12 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         ----------
         field : Union[np.ndarray, Callable]
             The field to differentiate:
+
             - A numpy array for numerical input. This must be a ``(...,)`` array matching the shape of the
               ``coordinates`` argument (up to the final dimension).
             - A callable function returning a numpy array for functional input. This should have signature
               ``f(x_0,...,x_1)`` and return an array of the same shape as each of the input coordinates.
+
         coordinates : np.ndarray
             Array of coordinates with shape ``(..., NDIM)``, where ``NDIM`` is the number of dimensions.
         axes : str or int or List[str] or List[int]
@@ -639,6 +826,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         ----------
         field : Union[np.ndarray, Callable]
             The scalar field to take the gradient of:
+
             - A numpy array for numerical input. This must be a ``(...,)`` array matching the shape of the
               ``coordinates`` argument (up to the final dimension).
             - A callable function returning a numpy array for functional input. This should have signature
@@ -653,7 +841,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             Array of coordinates with shape ``(..., NDIM)``, where ``NDIM`` is the number of dimensions. If numerical
             derivatives are necessary, then ``(..., NDIM)`` must be a grid with more stringent shape ``(N_1,...,N_NDIM,N_DIM)``,
             where ``N_i`` may be any number of grid points.
-        axes : Union['AxisAlias', List['AxisAlias']]
+        axes : AxisAlias or List or AxisAlias
             The axes along which to compute the gradient.
         derivatives : Union[np.ndarray,List[Callable]], optional
             Known derivatives along specific axes to be used instead of numerical differentiation. If the ``field``
@@ -782,16 +970,18 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         ----------
         field : Union[np.ndarray, Callable]
             The vector field to compute the divergence of:
+
             - A numpy array for numerical input. This must be a ``(...,axes)`` array matching the shape of the
               ``coordinates`` argument (up to the final dimension) and then the number of axes specified.
             - A callable function returning a numpy array for functional input. This should have signature
               ``f(x_0,...,x_1)`` and return an array of shape ``(...,axes)`` as output.
+
         coordinates : np.ndarray
             The coordinates over which the divergence should be computed. In general, these may be ``(...,NDIM)`` in shape;
             however, if ``derivatives = None`` and the ``field`` is an ``np.ndarray``, then the coordinates must be a proper
             coordinate grid with generic shape ``(N_1,...,N_NDIM, NDIM)`` where each ``N_i`` may be any integer corresponding
             to the number of points along the grid in that dimension.
-        axes : Union['AxisAlias', List['AxisAlias']]
+        axes : AxisAlias or List or AxisAlias
             The axes along which the field components are defined.
         derivatives : Union[np.ndarray,List[Callable]], optional
             Known derivatives along specific axes to be used instead of numerical differentiation. The following types
@@ -916,6 +1106,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         ----------
         field : Union[np.ndarray, Callable]
             The scalar field to take the gradient of:
+
             - A numpy array for numerical input. This must be a ``(...,)`` array matching the shape of the
               ``coordinates`` argument (up to the final dimension).
             - A callable function returning a numpy array for functional input. This should have signature
@@ -936,7 +1127,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                 The free dimensions are those which are free **after** the operation, not before it. Thus,
                 if a gradient computation breaks symmetry, the coordinates must include the now-free coordinates.
                 
-        axes : Union['AxisAlias', List['AxisAlias']], optional
+        axes : AxisAlias or List or AxisAlias
             The axes along which the Laplacian is computed.
         basis : {'unit', 'covariant', 'contravariant'}, optional
             The basis in which to compute the Laplacian. Default is 'unit'.
@@ -948,7 +1139,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             index.
         second_derivatives : List[Optional[Union[np.ndarray, Callable]]], optional
             Precomputed second derivatives along the specified axes. The structure is similar to
-            `first_derivatives`.
+            ``first_derivatives``.
         **kwargs
             Additional keyword arguments for numerical differentiation.
 
@@ -1085,7 +1276,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return laplacian
 
     def analytical_gradient(self, expression: sp.Basic) -> Dict[str, sp.Basic]:
-        """
+        r"""
         Compute the gradient of a scalar expression in the coordinate system.
 
         Parameters
@@ -1105,7 +1296,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return gradient
 
     def analytical_divergence(self, vector_field: Dict[str, sp.Basic]) -> sp.Basic:
-        """
+        r"""
         Compute the divergence of a vector field in the coordinate system.
 
         Parameters
@@ -1127,7 +1318,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return sp.simplify(divergence)
 
     def analytical_laplacian(self, expression: sp.Basic) -> sp.Basic:
-        """
+        r"""
         Compute the Laplacian of a scalar expression in the coordinate system.
 
         Parameters
@@ -1158,12 +1349,86 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # This is where the developer should implement the relevant Lame coefficient functions and
     # the various utilities for fetching those functions are placed.
     def get_lame_symbolic(self, axis: 'AxisAlias') -> sp.Basic:
+        r"""
+        Retrieve the symbolic Lame coefficient for a specified axis.
+
+        Parameters
+        ----------
+        axis : str or int
+            The axis (or its index) for which to retrieve the Lame coefficient.
+            Can be either:
+            - A string representing the axis name (e.g., ``'x'``, ``'y'``, ``'z'``), or
+            - An integer index corresponding to the axis position.
+
+        Returns
+        -------
+        sp.Basic
+            The symbolic Lame coefficient for the specified axis.
+
+        Notes
+        -----
+        The Lame coefficients are fundamental scaling factors that characterize
+        the geometry of orthogonal coordinate systems. They are used in the computation
+        of differential operators such as gradients, divergence, and Laplacian.
+        """
         return self._lame_inst_symbols[self.ensure_axis_string(axis)]
 
     def get_lame_function(self, axis: 'AxisAlias') -> Callable:
+        r"""
+        Retrieve the numerical function representing the Lame coefficient for a specified axis.
+
+        Parameters
+        ----------
+        axis : str or int
+            The axis (or its index) for which to retrieve the numerical Lame coefficient.
+            Can be either:
+
+            - A string representing the axis name (e.g., ``'x'``, ``'y'``, ``'z'``), or
+            - An integer index corresponding to the axis position.
+
+        Returns
+        -------
+        Callable
+            A numerical function that computes the Lame coefficient for the specified axis.
+
+        Notes
+        -----
+        The Lame coefficient function is generated by lambdifying the symbolic representation
+        of the coefficient, enabling efficient numerical evaluation for given coordinates.
+        """
         return self._lame_functions[self.ensure_axis_numeric(axis)]
 
     def eval_lame(self, coordinates, axes: Optional[List['AxisAlias'] | 'AxisAlias'] = None) -> np.ndarray:
+        r"""
+        Evaluate the Lame coefficients at specified coordinates for given axes.
+
+        Parameters
+        ----------
+        coordinates : np.ndarray
+            An array of coordinates with shape ``(..., NDIM)``, where ``NDIM`` is the number of
+            dimensions in the coordinate system. The coordinates are expected to correspond to
+            the axes of this coordinate system.
+        axes : List[str] or str or None, optional
+            The axes for which to evaluate the Lame coefficients. If not provided, all axes in
+            the coordinate system will be evaluated.
+
+        Returns
+        -------
+        np.ndarray
+            An array of Lame coefficients with shape ``(..., len(axes))``. The output matches the
+            shape of the input coordinates, with an additional dimension for the evaluated axes.
+
+        Raises
+        ------
+        ValueError
+            If any of the specified axes are not valid for this coordinate system.
+
+        Notes
+        -----
+        The Lame coefficients are calculated by evaluating the lambdified numerical functions
+        for each specified axis at the given coordinates. The coefficients are fundamental in
+        transforming differential operators in non-Cartesian coordinate systems.
+        """
         # COERCE coordinates
         coordinates = CoordinateArray(coordinates, self.NDIM)
         c_shape = coordinates.shape
@@ -1183,7 +1448,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return output_array
 
     def scale_by_lame(self, coordinates, field, axes=None, order=1):
-        """
+        r"""
         Scale a scalar or vector field by the Lame coefficients of the coordinate system.
 
         Parameters
@@ -1192,18 +1457,19 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             Array of coordinates with shape (..., NDIM).
         field : np.ndarray
             The field to scale. Can be:
-            - A scalar field with shape (...), matching the spatial grid of `coordinates`.
-            - A vector field with shape (..., N), where `N` corresponds to the number of axes.
+
+            - A scalar field with shape (...), matching the spatial grid of ``coordinates``.
+            - A vector field with shape (..., N), where ``N`` corresponds to the number of axes.
         axes : List[str] or None, optional
             The axes along which the field components are defined. If not provided, it is deduced
-            from the last dimension of `field`.
+            from the last dimension of ``field``.
         order : int, optional
             The order of scaling by Lame coefficients. Default is 1.
 
         Returns
         -------
         np.ndarray
-            The scaled field with the same shape as the input `field`.
+            The scaled field with the same shape as the input ``field``.
 
         Raises
         ------
@@ -1246,7 +1512,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # The _convert_native_to_cartesian and _convert_cartesian_to_native methods
     # should be implemented uniquely for each subclass and the rest is performed automatically.
     def to_cartesian(self, coordinates) -> np.ndarray:
-        """
+        r"""
         Convert native coordinates of this coordinate system to Cartesian coordinates.
 
         This method transforms coordinates from the system defined by this instance to the standard
@@ -1289,7 +1555,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             raise ConversionError(f"Failed to convert from {self.__class__.__name__} to cartesian: {e}")
 
     def from_cartesian(self, coordinates) -> np.ndarray:
-        """
+        r"""
         Convert Cartesian coordinates to the native coordinates of this coordinate system.
 
         This method converts points from the Cartesian coordinate system into the coordinates
@@ -1333,7 +1599,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             raise ConversionError(f"Failed to convert from cartesian to  {self.__class__.__name__}: {e}")
 
     def convert_to(self, target_coord_system: 'CoordinateSystem', *args: Any) -> np.ndarray:
-        """
+        r"""
         Convert coordinates from this system to another specified coordinate system.
 
         This method provides a general mechanism for transforming coordinates between any two
@@ -1383,26 +1649,113 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # @@ UTILITY FUNCTIONS @@ #
     # These are basic helper functions to be used in various other methods.
     def ensure_axis_numeric(self, axis: 'AxisAlias') -> int:
+        r"""
+        Ensure the given axis is represented as its numeric index.
+
+        Parameters
+        ----------
+        axis : str or int
+            The axis to be validated or converted. Can be either:
+            - A string representing the axis name (e.g., ``'x'``, ``'y'``, ``'z'``), or
+            - An integer index corresponding to the axis position.
+
+        Returns
+        -------
+        int
+            The numeric index of the axis.
+
+        Raises
+        ------
+        ValueError
+            If the axis name is not valid or does not exist in the AXES list.
+
+        Notes
+        -----
+        This method is used to standardize axis representation as a numeric index,
+        enabling consistent indexing for operations.
+        """
         if isinstance(axis, str):
             return self.AXES.index(axis)
         else:
             return axis
 
     def ensure_axis_string(self, axis: 'AxisAlias') -> str:
+        r"""
+        Ensure the given axis is represented as its string name.
+
+        Parameters
+        ----------
+        axis : int or str
+            The axis to be validated or converted. Can be either:
+            - An integer index corresponding to the axis position, or
+            - A string representing the axis name (e.g., ``'x'``, ``'y'``, ``'z'``).
+
+        Returns
+        -------
+        str
+            The string name of the axis.
+
+        Raises
+        ------
+        IndexError
+            If the axis index is out of bounds for the AXES list.
+
+        Notes
+        -----
+        This method is used to standardize axis representation as a string name,
+        making it more interpretable for certain operations.
+        """
         if isinstance(axis, int):
             return self.AXES[axis]
         else:
             return axis
 
     def ensure_axis_order(self, axes):
+        r"""
+        Ensure the given axes are ordered consistently with the AXES list.
+
+        Parameters
+        ----------
+        axes : list of str or int
+            The axes to be reordered. Can be a mix of string names and integer indices.
+
+        Returns
+        -------
+        list of str
+            A list of axis names ordered consistently with the AXES list.
+
+        Notes
+        -----
+        This method is useful for ensuring that a subset of axes follows the
+        expected order of the full AXES list in the coordinate system.
+        """
         axes = [self.ensure_axis_string(ax) for ax in axes]
         return [ax for ax in self.AXES if ax in axes]
+
+    def build_axes_mask(self, axes: List['AxisAlias']) -> np.ndarray[bool]:
+        """
+        Construct a boolean mask array indicating which axes are in ``axes``.
+
+        Parameters
+        ----------
+        axes: list of str or int
+
+        Returns
+        -------
+        np.ndarray[bool]
+        A boolean mask array indicating which axes are in ``axes``.
+        """
+        # setup the indices array
+        indices = np.array([self.ensure_axis_numeric(ax) for ax in axes],dtype=int)
+        mask = np.zeros((self.NDIM,), dtype=bool)
+        mask[indices] = True
+        return mask
 
     # @@ IO OPERATIONS @@ #
     # These provide method for reading and writing coordinate systems to disk. They
     # generally do not need to be overwritten in custom implementations.
     def to_file(self, file_obj, fmt: str = 'json'):
-        """
+        r"""
         Save the coordinate system configuration to a file or group.
 
         Parameters
@@ -1423,7 +1776,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
     @classmethod
     def from_file(cls, file_obj, fmt: str = 'json'):
-        """
+        r"""
         Load the coordinate system configuration from a file or group.
 
         Parameters
@@ -1448,7 +1801,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             raise ValueError(f"Unsupported format '{fmt}'. Use 'json', 'yaml', or 'hdf5'.")
 
     def _to_json(self, file_obj):
-        """
+        r"""
         Save configuration to JSON format.
 
         Parameters
@@ -1465,7 +1818,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
     @classmethod
     def _from_json(cls, file_obj):
-        """
+        r"""
         Load configuration from JSON format.
 
         Parameters
@@ -1485,7 +1838,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return _cls(**data['kwargs'])
 
     def _to_yaml(self, file_obj):
-        """
+        r"""
         Save configuration to YAML format.
 
         Parameters
@@ -1502,7 +1855,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
     @classmethod
     def _from_yaml(cls, file_obj):
-        """
+        r"""
         Load configuration from YAML format.
 
         Parameters
@@ -1522,7 +1875,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return _cls(**data['kwargs'])
 
     def _to_hdf5(self, group_obj):
-        """
+        r"""
         Save configuration to HDF5 format.
 
         Parameters
@@ -1542,7 +1895,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
     @classmethod
     def _from_hdf5(cls, group_obj):
-        """
+        r"""
         Load configuration from HDF5 format.
 
         Parameters
@@ -1575,10 +1928,10 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         return _cls(**data['kwargs'])
 
     def __hash__(self):
-        """
+        r"""
         Compute a hash value for the CoordinateSystem instance.
 
-        The hash is based on the class name, positional arguments (`_args`), and keyword arguments (`_kwargs`).
+        The hash is based on the class name, positional arguments (``_args``), and keyword arguments (``_kwargs``).
         This ensures that two instances with the same class and initialization parameters produce the same hash.
 
         Returns
@@ -1592,11 +1945,23 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         ))
 
 class RadialCoordinateSystem(CoordinateSystem, ABC):
-    """
+    r"""
     Base class for radially defined coordinate systems.
 
-    A coordinate system is **Radial** if its first axis has level surfaces which form shells around
-    the origin. In this case, several additional operations are made considerably simpler.
+    A radial coordinate system is one where the first axis defines level surfaces
+    that form concentric shells around the origin. This structure simplifies several
+    mathematical operations, such as integration over shells or to infinity.
+
+    This class extends the generic :py:class:`CoordinateSystem` to include additional methods
+    and attributes for radial systems. It serves as a base class for specific radial
+    coordinate systems, such as spherical or cylindrical coordinates.
+
+    Notes
+    -----
+    Radial coordinate systems allow for efficient integration and transformation
+    in problems with spherical or cylindrical symmetry. These systems extend the
+    capabilities of the base :py:class:`CoordinateSystem` by adding methods specifically
+    for integration over radial shells or to infinity.
     """
     # @@ CLASS ATTRIBUTES @@ #
     # DEVELOPERS: these should be set in any subclass of CoordinateSystem. The axes
@@ -1620,10 +1985,33 @@ class RadialCoordinateSystem(CoordinateSystem, ABC):
     def integrate_in_shells(self,
                             field: Union[np.ndarray,Callable],
                             radii: np.ndarray):
-        pass
+        """
+        Integrate a scalar field over concentric shells in the radial coordinate.
 
-    @abstractmethod
-    def integrate_to_infinity(self,
-                              field: Union[np.ndarray,Callable],
-                              radii: np.ndarray):
+        Parameters
+        ----------
+        field : Union[np.ndarray, Callable]
+            The scalar field to integrate. Can be either:
+
+            - A numpy array containing field values at specified points, or
+            - A callable function that takes coordinates as input and returns field values.
+
+        radii : np.ndarray
+            A 1D array of radii defining the shells over which to integrate.
+
+        Returns
+        -------
+        float
+            The result of the integration over the specified shells.
+
+        Raises
+        ------
+        NotImplementedError
+            If the method is not implemented in the subclass.
+
+        Notes
+        -----
+        This method should be implemented in subclasses to account for the specific
+        geometry of the coordinate system.
+        """
         pass

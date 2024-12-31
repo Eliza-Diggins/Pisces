@@ -33,6 +33,12 @@ class ClusterGridManager(ModelGridManager):
     - The scaling adjustments made by `correct_scale` ensure that radial axes can
       use logarithmic scaling while angular axes remain linear.
     """
+    ALLOWED_COORDINATE_SYSTEMS = ['SphericalCoordinateSystem',
+                                  'OblateHomoeoidalCoordinateSystem',
+                                  'ProlateHomoeoidalCoordinateSystem']
+    DEFAULT_SCALE = ['log','linear','linear']
+    DEFAULT_LENGTH_UNIT = 'kpc'
+
     @staticmethod
     def correct_bbox(r_min: float, r_max: float) -> NDArray[np.floating]:
         """

@@ -5,13 +5,13 @@
 Pisces
 =========
 
-|yt-project| |docs| |testing| |Github Page| |Pylint| |coverage|
+|yt-project|
 
 .. raw:: html
 
-   <hr style="height:10px;background-color:black">
+   <hr style="height:2px;background-color:black">
 
-Pisces (or Py-ICs) is an initial conditions generator software for astrophysical simulations and modeling. Pisces is capable of
+**Pisces (or Py-ICs)** is an initial conditions generator software for astrophysical simulations and modeling. Pisces is capable of
 producing models of galaxies, galaxy clusters, early universe perturbations, and other useful systems either for use in their
 own right, or for export to simulation software. To ensure compatibility with emerging simulation softwares, Pisces maintains
 frontends which allow for easy interoperability between itself and all of the major simulation softwares.
@@ -19,8 +19,8 @@ frontends which allow for easy interoperability between itself and all of the ma
 This repository contains the core package, which is constructed modularly to facilitate easy development by users to meet
 particular scientific use cases. All of the necessary tools to get started building initial conditions are provided.
 
-Development occurs here on Github, if you encounter any bugs, issues, documentation failures, or want to suggest features, we recommend that you submit an issue on
-the issues page of the repository.
+Development occurs here on Github, if you encounter any bugs, issues, documentation failures, or want to suggest features,
+we recommend that you submit an issue on the issues page of the repository.
 
 .. raw:: html
 
@@ -35,11 +35,11 @@ Resources
     :gutter: 5
 
     .. grid-item-card::
-        :img-top: _images/index/stopwatch_icon.png
+        :img-top: images/index/stopwatch_icon.png
 
         Quickstart Guide
         ^^^^^^^^^^^^^^^^
-        New to ``cluster_generator``? The quickstart guide is the best place to start learning to use all of the
+        New to ``Pisces``? The quickstart guide is the best place to start learning to use all of the
         tools that we have to offer!
 
         +++
@@ -52,13 +52,13 @@ Resources
             To The Quickstart Page
 
     .. grid-item-card::
-        :img-top: _images/index/lightbulb.png
+        :img-top: images/index/lightbulb.png
 
         Examples
         ^^^^^^^^
-        Have some basic experience with ``cluster_generator``, but want to see a guide on how to execute a particular task? Need
-        to find some code to copy and paste? The examples page contains a wide variety of use case examples and explainations
-        for all of the various parts of the ``cluster_generator`` library.
+        Have some basic experience with ``Pisces`` but want to see a guide on how to execute a particular task? Need
+        to find some code to copy and paste? The examples page contains a wide variety of use case examples and explanations
+        for all of the various parts of the ``Pisces`` library.
 
         +++
 
@@ -70,11 +70,11 @@ Resources
             To the Examples Page
 
     .. grid-item-card::
-        :img-top: _images/index/book.svg
+        :img-top: images/index/book.svg
 
         User References
         ^^^^^^^^^^^^^^^^
-        The user guide contains comprehensive, text based explainations of the backbone components of the ``cluster_generator`` library.
+        The user guide contains comprehensive, text-based explanations of the backbone components of the ``Pisces`` library.
         If you're looking for information on the underlying code or for more details on particular aspects of the API, this is your best resource.
 
         +++
@@ -87,7 +87,7 @@ Resources
             To the User Guide
 
     .. grid-item-card::
-        :img-top: _images/index/api_icon.png
+        :img-top: images/index/api_icon.png
 
         API Reference
         ^^^^^^^^^^^^^
@@ -115,6 +115,7 @@ Contents
    :maxdepth: 1
 
    api
+   reference/index
 
 
 Indices and tables
@@ -131,12 +132,3 @@ Indices and tables
 
 .. |yt-project| image:: https://img.shields.io/static/v1?label="works%20with"&message="yt"&color="blueviolet"
    :target: https://yt-project.org
-
-.. |docs| image:: https://img.shields.io/badge/docs-latest-brightgreen.svg
-   :target: https://jzuhone.github.io/cluster_generator/build/html/index.html
-
-.. |testing| image:: https://github.com/Eliza-Diggins/cluster_generator/actions/workflows/test.yml/badge.svg
-.. |Pylint| image:: https://github.com/Eliza-Diggins/cluster_generator/actions/workflows/pylint.yml/badge.svg
-.. |Github Page| image:: https://github.com/Eliza-Diggins/cluster_generator/actions/workflows/docs.yml/badge.svg
-.. |coverage| image:: https://coveralls.io/repos/github/Eliza-Diggins/cluster_generator/badge.svg
-   :target: https://coveralls.io/github/Eliza-Diggins/cluster_generator

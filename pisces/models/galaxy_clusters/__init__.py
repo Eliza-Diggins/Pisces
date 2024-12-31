@@ -1,3 +1,3 @@
 """
-Model of galaxy clusters.
+Models of galaxy clusters and the intracluster medium.
 """

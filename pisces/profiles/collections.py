@@ -1,10 +1,49 @@
+"""
+Registry utilities for Pisces profiles.
+"""
 from typing import Iterable, Union, List
 from pisces.io.hdf5 import IndexType,  HDF5ElementCache
 from pisces.profiles.base import Profile
 import numpy as np
 
 class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
+    r"""
+    A specialized registry for storing and retrieving :py:class:`~pisces.profiles.base.Profile` objects in an HDF5 file.
+
+    This class extends :py:class:`~pisces.io.hdf5.HDF5ElementCache`, using the profile's
+    name (a string) as the index/key and the :py:class:`~pisces.profiles.base.Profile`
+    instance as the stored element. It manages reading and writing to the underlying HDF5
+    handle via the :py:meth:`Profile.from_hdf5` and :py:meth:`Profile.to_hdf5` methods.
+
+    The HDF5 structure is expected to store each profile in a distinct group/dataset under
+    the ``_index_to_key(index)`` path, typically matching the ``index`` name.
+
+    Notes
+    -----
+    - The class relies on the presence of a valid HDF5 file handle (``self._handle``) provided
+      by :py:class:`~pisces.io.hdf5.HDF5ElementCache`.
+    - The ``Profile`` class must implement ``.from_hdf5(...)`` and ``.to_hdf5(...)``
+      for loading/saving.
+    """
     def load_element(self, index: str) -> Profile:
+        """
+        Load a profile from the HDF5 handle by its name (``index``).
+
+        Parameters
+        ----------
+        index : str
+            The name (key) of the profile to load from the HDF5 file.
+
+        Returns
+        -------
+        Profile
+            An instance of :py:class:`Profile` (or subclass) reconstructed from HDF5.
+
+        Raises
+        ------
+        KeyError
+            If the specified profile index does not exist in the HDF5 handle.
+        """
         return Profile.from_hdf5(self._handle,index)
 
     def _set_element_in_handle(self, index: str, value: Profile):
@@ -46,6 +85,19 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
         self[index] = profile
 
     def remove_profile(self,index: str):
+        """
+        Remove a profile from the registry by name.
+
+        Parameters
+        ----------
+        index : str
+            The name of the profile to remove.
+
+        Raises
+        ------
+        KeyError
+            If the profile does not exist.
+        """
         del self[index]
 
     def get_profile_summary(self) -> Union[str, List[List[str]]]:

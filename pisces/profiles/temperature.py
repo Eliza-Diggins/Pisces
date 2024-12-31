@@ -1,21 +1,24 @@
 """
 Temperature profiles for astrophysical modeling.
 """
-from pisces.profiles.base import Profile
+from pisces.profiles.base import RadialProfile
 from typing import Dict, Any, List
 import sympy as sp
 
-class RadialTemperatureProfile(Profile):
+class RadialTemperatureProfile(RadialProfile):
+    r"""
+    Base class for radial temperature profiles with fixed axes, units, and parameters.
+    """
     _IS_ABC = True
 
     # @@ CLASS ATTRIBUTES @@ #
     AXES =  ['r']
-    PARAMETERS = None
-    UNITS: str = "keV"
+    DEFAULT_PARAMETERS = None
+    DEFAULT_UNITS: str = "keV"
 
 class VikhlininTemperatureProfile(RadialTemperatureProfile):
     r"""
-    Vikhlinin Temperature Profile.
+    Vikhlinin Temperature Profile :footcite:p:`VikhlininProfile`.
 
     This profile models the temperature distribution in galaxy clusters, incorporating both
     a core and a declining profile at large radii. It also accounts for a potential cooling region.
@@ -35,7 +38,7 @@ class VikhlininTemperatureProfile(RadialTemperatureProfile):
 
     References
     ----------
-    .. [Vik06] Vikhlinin et al., 2006.
+    .. footbibliography::
 
     Example
     -------
@@ -71,7 +74,7 @@ class VikhlininTemperatureProfile(RadialTemperatureProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "a": 0.1,
         "b": 0.5,
@@ -91,7 +94,8 @@ class VikhlininTemperatureProfile(RadialTemperatureProfile):
 
 class AM06TemperatureProfile(RadialTemperatureProfile):
     r"""
-    An & Zhao (2006) Temperature Profile (AM06).
+    Ascasibar and Markevitch (2006) Temperature Profile :footcite:p:`AM06Profile`.
+
 
     This profile describes a general temperature distribution for galaxy clusters with flexible
     inner and outer slopes.
@@ -108,7 +112,7 @@ class AM06TemperatureProfile(RadialTemperatureProfile):
 
     References
     ----------
-    .. [An06] An, J., & Zhao, H. S., 2006.
+    .. footbibliography::
 
     Example
     -------
@@ -142,7 +146,7 @@ class AM06TemperatureProfile(RadialTemperatureProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 4.0,
         "a": 300.0,
         "a_c": 50.0,
@@ -201,7 +205,7 @@ class UniversalPressureTemperatureProfile(RadialTemperatureProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_s": 300.0,
     }
@@ -257,7 +261,7 @@ class IsothermalTemperatureProfile(RadialTemperatureProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
     }
 
@@ -268,7 +272,7 @@ class IsothermalTemperatureProfile(RadialTemperatureProfile):
 
 class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
     r"""
-    Cooling Flow Temperature Profile.
+    Cooling Flow Temperature Profile :footcite:p:`CoolingFlowsProfile`.
 
     This profile models the temperature decline in regions experiencing significant cooling flows.
 
@@ -281,6 +285,9 @@ class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
     - :math:`r_c` is the core radius.
     - :math:`a` controls the slope of the temperature decline.
 
+    References
+    ----------
+    .. footbibliography::
 
     Example
     -------
@@ -314,7 +321,7 @@ class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_c": 100.0,
         "a": 0.8,
@@ -327,7 +334,7 @@ class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
 
 class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
     r"""
-    Double Beta Temperature Profile.
+    Double Beta Temperature Profile :footcite:p:`DoubleBetaModel`.
 
     This profile combines two beta models to represent systems with two distinct temperature components.
 
@@ -342,6 +349,10 @@ class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
     - :math:`\beta_1` controls the slope of the first component.
     - :math:`T_1` is the central temperature of the second component.
     - :math:`\beta_2` controls the slope of the second component.
+
+    References
+    ----------
+    .. footbibliography::
 
     Example
     -------
@@ -377,7 +388,7 @@ class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_c": 100.0,
         "beta_1": 0.8,
@@ -392,7 +403,7 @@ class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
 
 class BetaModelTemperatureProfile(RadialTemperatureProfile):
     r"""
-    Beta Model Temperature Profile.
+    Beta Model Temperature Profile :footcite:p:`BetaModel`.
 
     This profile describes temperature distributions with a single beta model.
 
@@ -404,6 +415,10 @@ class BetaModelTemperatureProfile(RadialTemperatureProfile):
     - :math:`T_0` is the central temperature.
     - :math:`r_c` is the core radius.
     - :math:`\beta` controls the slope of the temperature decline.
+
+    References
+    ----------
+    .. footbibliography::
 
     Example
     -------
@@ -437,7 +452,7 @@ class BetaModelTemperatureProfile(RadialTemperatureProfile):
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ['r']
-    PARAMETERS: Dict[str, Any] = {
+    DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_c": 100.0,
         "beta": 0.8,

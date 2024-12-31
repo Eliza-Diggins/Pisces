@@ -6,7 +6,8 @@
 #                                                                                                                      #
 #======================================================================================================================#
 fields:
-  # -- Contains the list of recognized fields and the details of each of those fields -- #
+  # the `fields` settings dictate the available standard fields, their units, symbols, latex representation, etc.
+  # so that they are easy to look up.
   stellar_density:
     units: 'Msun/kpc**3'
     mass_field: 'stellar_mass'

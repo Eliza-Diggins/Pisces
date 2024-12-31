@@ -181,23 +181,20 @@ set of each Lame coefficient :math:`h_i`, and let the coordinate system be :math
 
 2. **Gradient**:
 
-    The gradient may also interfere with a particular symmetry. The :math:`k`-th element of the gradient is
+   The gradient may also interfere with a particular symmetry. The :math:`k`-th element of the gradient is
 
-    .. math::
-
+   .. math::
         \nabla_k \phi = e^k \partial_k \phi,
 
-    Thus, in the contravariant basis, gradient operates on symmetries the same way that a partial derivative does. In the
-    unit and covariant bases, this is not the case. Instead,
+   Thus, in the contravariant basis, gradient operates on symmetries the same way that a partial derivative does. In the
+   unit and covariant bases, this is not the case. Instead,
 
-    .. math::
-
+   .. math::
         \nabla_k \phi = \hat{e}^k \frac{\partial_k \phi}{h_k},
 
-    and the symmetry then becomes
+   and the symmetry then becomes
 
-    .. math::
-
+   .. math::
         \nabla_k \mathcal{S} = \mathcal{S} \setminus S_k.
 
 3. **Divergence**:
@@ -235,3 +232,73 @@ set of each Lame coefficient :math:`h_i`, and let the coordinate system be :math
 In summary, the symmetry properties of an operation depend on both the symmetry of the field and the symmetry of the Lame
 coefficients. Understanding how these factors interact is essential for ensuring that specific symmetries are maintained
 through various operations in Pisces.
+
+Efficient Numerical Computation
+-------------------------------
+
+A particularly difficult aspect of implementing general coordinate systems is the necessity for both efficient and robust
+approaches for computing the various, relevant, differential operations. Because these operations rely heavily on complex
+partial derivative expressions, catastrophic floating point error and other numerical ramifications are difficult to avoid effectively.
+
+The approach taken in Pisces is to use a mixture of symbolic mathematics (managed via `Sympy <https://www.sympy.org>`_) and
+numerical methods. In this section, we will briefly summarize the methods by which these errors have been avoided.
+
+The Gradient
+++++++++++++
+
+The gradient represents the simplest of the differential operators:
+
+.. math::
+
+    \nabla \phi({\bf x}) = \sum_i \frac{\hat{\bf e_i}}{\lambda_i({\bf x})} \frac{\partial \phi({\bf x})}{\partial x^i}.
+
+The most significant source of error in any of these computations is the evaluation of the derivative, which cannot be helped. Thus,
+the gradient is effectively a fixed-loss operation. However the derivative is computed, that is the error induced.
+
+.. note::
+
+    Error can be further mitigated by working in the contravariant basis to the extent possible. This then ensures
+    that any floating point errors involved in evaluating and dividing by the Lame coefficients is reduced.
+
+The Divergence
+++++++++++++++
+
+The divergence takes the form
+
+.. math::
+
+    \nabla \cdot {\bf F}({\bf x}) = \frac{1}{J} \sum_i \frac{\partial}{\partial x^i} \left(\frac{J}{\lambda_i} \hat{\bf F}^i\right).
+
+There are two effects of interest here concerning numerical tractability:
+
+- Relevant cancelation of :math:`J`,
+- Derivatives of composite functions.
+
+In Pisces, we instead utilize the product rule to express this as
+
+.. math::
+
+    \nabla \cdot {\bf F}({\bf x}) = \sum_i \left[\hat{\bf F}^i \underbrace{\frac{1}{J}\frac{\partial}{\partial x^i} \left(\frac{J}{\lambda_i}\right)}_{D^i({\bf x})} + \frac{1}{\lambda_i} \frac{\partial \hat{\bf F}^i}{\partial x^i}\right].
+
+The main benefit here is that the complexity of the expression within the derivative is either independent of the field or
+depends exclusively on the field. As such, we can use ``sympy`` to pre-compute (symbolically) each of the :math:`D^i({\bf x})` terms
+with infinite precision and massively improve the numerical accuracy. These :math:`D^i` terms are thus referred to as the **D-Terms**
+of the coordinate system.
+
+The Laplacian
++++++++++++++
+
+Like the divergence, the product rule can be applied to significantly improve the tractability of the Laplacian's computation. Here,
+
+.. math::
+
+    \nabla^2 \phi = \frac{1}{J} \sum_k \partial_k \left(\frac{J}{\lambda_k^2} \partial_k \phi\right).
+
+To avoid having to take derivatives of the composite functions, we use the product rule to express this as
+
+.. math::
+
+    \nabla^2 \phi = \underbrace{\frac{1}{J} \partial_k \left(\frac{J}{\lambda_k^2}\right)}_{L^k({\bf x})} \partial_k \phi + \frac{1}{\lambda_k^2} \partial_k^2 \phi,
+
+where `Einstein notation <https://en.wikipedia.org/wiki/Einstein_notation>`_ has been used. Thus, we still need
+the derivatives of the field itself; however, precomputing the :math:`L^i({\bf x})` allows for much more efficient and accurate computation.

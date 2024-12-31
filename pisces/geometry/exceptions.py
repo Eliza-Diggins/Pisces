@@ -1,3 +1,4 @@
+"""Error classes for the :py:mod:`~pisces.geometry` module."""
 class GeometryError(Exception):
     """Base exception class for geometry-related errors."""
     pass
