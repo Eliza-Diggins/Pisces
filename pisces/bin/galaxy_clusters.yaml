@@ -11,28 +11,40 @@ fields:
   stellar_density:
     units: 'Msun/kpc**3'
     mass_field: 'stellar_mass'
+    label: '$\rho_{\rm \star}$'
   gas_density:
     units: 'Msun/kpc**3'
     mass_field: 'gas_mass'
+    label: '$\rho_{\rm gas}$'
   total_density:
     units: 'Msun/kpc**3'
     mass_field: 'total_mass'
+    label: '$\rho_{\rm dyn}$'
   dark_matter_density:
     units: 'Msun/kpc**3'
     mass_field: 'dark_matter_mass'
+    label: '$\rho_{\rm dm}$'
   stellar_mass:
     units: 'Msun'
+    label: '$M_{\rm \star}$'
   gas_mass:
     units: 'Msun'
+    label: '$M_{\rm g}$'
   total_mass:
     units: 'Msun'
+    label: '$M_{\rm dyn}$'
   dark_matter_mass:
     units: 'Msun'
+    label: '$M_{\rm dm}$'
   pressure:
     units: 'atm'
+    label: '$P_{\rm g}$'
   gravitational_field:
     units: 'm/s**2'
+    label: '$\nabla \Phi$'
   gravitational_potential:
     units: 'm**2/s**2'
+    label: '$\Phi$'
   temperature:
     units: 'keV'
+    label: '$T_{\rm g}$'

@@ -12,7 +12,7 @@ Array Requirements
 
 """
 import warnings
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 from pisces.utilities.logging import devlog
 import numpy as np
 from numpy.typing import NDArray
@@ -391,7 +391,7 @@ def make_grid_fields_broadcastable(arrays, axes, coordinate_system, field_rank=0
     axes : list[list[str]]
         A list of axis specifications for each array. Each element is a list of axis names,
         indicating the dimensions along which the respective array varies.
-    coordinate_system : object
+    coordinate_system : :py:class:`~pisces.geometry.base.CoordinateSystem`
         An object representing the coordinate system, which must have an attribute ``AXES``
         containing the canonical list of valid axis names.
     field_rank : int, optional
@@ -457,3 +457,67 @@ def make_grid_fields_broadcastable(arrays, axes, coordinate_system, field_rank=0
 
     return arrays
 
+
+def build_image_coordinate_array(extent: np.ndarray, resolution: np.ndarray, axis: str, position: float):
+    """
+    Generates a 3D array of Cartesian coordinates to act as the backing for image generation scripts.
+
+    Parameters
+    ----------
+    extent: np.ndarray[float]
+        A ``(2,2)`` array specifying the lower (``[0,:]``) and upper (``[1,:]``) bounds of the image coordinate
+        grid excluding the fixed axis specified by ``axis``.
+    resolution: np.ndarray[float]
+        A length 2 array specifying the number of pixels along each dimension of the grid.
+    axis: str
+        One of ``x``,``y``, or ``z``. The axis along which to fix the grid. This axis is perpendicular to
+        the generated grid.
+    position: float
+        The position along which the grid is placed.
+
+    Returns
+    -------
+    np.ndarray:
+        A ``(*resolution, 3)`` array of Cartesian coordinates.
+    """
+    # Validate inputs: ensure that the resolution, extent, and position are each
+    # reasonable values for the arguments.
+    extent = np.array(extent, dtype=float)
+    resolution = np.array(resolution,dtype=np.uint32)
+
+    if len(extent) != 4:
+        raise ValueError(f"Argument `extent` should have 4 elements, not {len(extent)}.")
+    if len(resolution) != 2:
+        raise ValueError(f"Argument `resolution` should have 2 elements, not {len(resolution)}.")
+
+    extent = np.reshape(extent, (2,2))
+    # Determine the fixed axis index from the provided `axis` argument. Raise
+    # an error if the axis doesn't exist. For the remaining axes, we need to
+    # know the correct indices for them.
+    axis_map: Dict[str, int] =  dict(x=0,y=1,z=2)
+    if axis not in axis_map:
+        raise ValueError("Axis must be one of 'x', 'y', or 'z'.")
+    fixed_axis = axis_map[axis]
+
+    # Create the ranges for the two variable axes
+    axes_indices = np.array([v for k,v in axis_map.items() if k != axis], dtype=int)
+
+    # Construct the grid ranges and the resulting meshgrid from the
+    # specified extent and resolution.
+    # NOTE: The resulting meshgrid is (2, *RESOLUTION)
+    grid_linspaces = [
+        np.linspace(*extent[i],resolution[i]) for i in range(2)
+    ]
+    meshgrid = np.stack(np.meshgrid(*grid_linspaces, indexing='ij'), axis = 0)
+
+    # reshape the meshgrid to (*RESOLUTION,2 )
+    meshgrid = np.moveaxis(meshgrid, 0, -1)
+
+    # Construct the full coordinate set. We use the meshgrid
+    # to fill in the relevant axes and then the position to fill the final axis.
+    # Create an empty array for the coordinates
+    coordinate_array = np.empty((*resolution, 3), dtype=float)
+    coordinate_array[...,axes_indices] = meshgrid
+    coordinate_array[...,fixed_axis] = position
+
+    return coordinate_array

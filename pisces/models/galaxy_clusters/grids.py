@@ -75,7 +75,7 @@ class ClusterGridManager(ModelGridManager):
         - `[r_max, pi/2, pi/2]` for the maximum values of [r, theta, phi].
         This restricts the grid to the first octant.
         """
-        return np.array([[r_min, 0, 0], [r_max, np.pi / 2, np.pi / 2]], dtype='f8')
+        return np.array([[r_min, 0, -np.pi], [r_max, np.pi, np.pi]], dtype='f8')
 
     @staticmethod
     def correct_scale(scale: Union[List[str], str]) -> List[str]:

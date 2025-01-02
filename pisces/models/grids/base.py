@@ -9,20 +9,22 @@ For details on the use of this module, consult :ref:`model_grid_management`.
 
 """
 from pathlib import Path
-from typing import Union, Optional, List, Iterable, Iterator, Callable, TYPE_CHECKING
+from typing import Union, Optional, List, Iterable, Iterator, Callable, TYPE_CHECKING, Tuple, Any, Dict
 
 import h5py
 import numpy as np
 import unyt
 from numpy.typing import NDArray, ArrayLike
+from scipy.interpolate import RegularGridInterpolator
 from tqdm.auto import tqdm
 
 from pisces.geometry import GeometryHandler
 from pisces.geometry.coordinate_systems import CoordinateSystem
 from pisces.io import HDF5_File_Handle, HDF5ElementCache
 from pisces.models.grids.structs import BoundingBox, DomainDimensions, ChunkIndex
-from pisces.utilities.array_utils import make_grid_fields_broadcastable
+from pisces.utilities.array_utils import make_grid_fields_broadcastable, build_image_coordinate_array, CoordinateArray
 from pisces.utilities.config import pisces_params
+from pisces.utilities.containers import LRUCacheDescriptor
 from pisces.utilities.logging import devlog
 
 if TYPE_CHECKING:
@@ -82,6 +84,8 @@ class ModelGridManager:
     
     If the class does not specify any coordinate systems here, then all coordinate systems are permitted.
     """
+    interpolator_cache: LRUCacheDescriptor = LRUCacheDescriptor(max_size=pisces_params['system.cache.cache_sizes.grid_interpolator_cache_size'])
+    """ :py:class:`~pisces.utilities.containers.LRUCacheDescriptor`: LRU cache for storing grid interpolators."""
 
     def __init__(self,
                  path: Union[str, Path],
@@ -446,66 +450,300 @@ class ModelGridManager:
 
     # @@ COORDINATE MANAGEMENT @@ #
     # These methods are used for coordinate determinations.
+    def _get_coordinate_parameters(self,
+                                   axes_mask: np.ndarray[bool],
+                                   chunk_index: Optional[np.ndarray] = None,
+                                   stencil_kwargs: Optional[dict] = None,
+                                   use_complex: bool = False,
+                                   ) -> List[Tuple[float, float, int]]:
+        """
+        Compute coordinate parameters for generating grids.
+
+        This function calculates the coordinate ranges and resolutions required for generating
+        grids using either meshgrid or linspace. It can account for chunks and stencil regions.
+
+        Parameters
+        ----------
+        axes_mask : np.ndarray[bool]
+            A boolean mask specifying the axes for which coordinates are computed.
+        chunk_index : :py:class:`~pisces.models.grids.structs.ChunkIndex`, optional
+            The index of the chunk for which coordinates are computed. If `None`, compute for the entire grid.
+        stencil_kwargs : dict, optional
+            Parameters for defining a stencil around the chunk. Should include:
+            - `stencil_size` (int): Size of the stencil (in chunks).
+            - `stencil_alignment` (str): Alignment of the stencil (`'center'`, `'left'`, or `'right'`).
+            Default is `{'stencil_size': 1, 'stencil_alignment': 'center'}`.
+        use_complex : bool, optional
+            If `True`, slices will use complex numbers for the step, which is compatible with `np.mgrid`.
+            If `False`, slices will use integer steps.
+
+        Returns
+        -------
+        list of tuples
+            A list of tuples for each axis in the `axes_mask`, where each tuple contains:
+            - Start coordinate.
+            - End coordinate.
+            - Number of points (complex if `use_complex=True`).
+
+        Raises
+        ------
+        ValueError
+            If invalid axes, chunk indices, or stencil parameters are provided.
+        Warning
+            If `stencil_kwargs` are provided without a `chunk_index`.
+
+        Notes
+        -----
+        - If `chunk_index` is provided, the bounding box and shape are determined for the chunk or stencil.
+        - If `stencil_kwargs` are not provided, defaults are used when `chunk_index` is specified.
+        - The bounding box is always scaled to ensure uniform spacing.
+
+        """
+        import warnings
+
+        # Validate stencil and chunk arguments. If we have a ``chunk_index`` and no ``stencil_kwargs``, we need
+        # to set the default stencil kwargs. Otherwise, we need to raise a warning if ``chunk_index`` is not specified
+        # and the stencil is because we don't use the stencil unless there is a specified chunk.
+        if chunk_index is None and stencil_kwargs is not None:
+            warnings.warn(
+                "Stencil kwargs provided without a chunk index. This is redundant and will be ignored."
+            )
+        if chunk_index is not None and stencil_kwargs is None:
+            stencil_kwargs = {} # All these functions use kwargs with built-in defaults.
+
+        # Determine bounding box and shape
+        if chunk_index is not None:
+            chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
+            shape = self.CHUNK_SHAPE[axes_mask]
+
+            if stencil_kwargs.get('stencil_size', 0) > 0: # Fails by default.
+                # We have a stencil that is larger than a single chunk. We can then proceed.
+                bbox = self.get_stencil_bbox(
+                    chunk_index=chunk_index,
+                    axes=list(np.array(self.coordinate_system.AXES)[axes_mask]),
+                    scale=True,
+                    **stencil_kwargs
+                )
+            else:
+                bbox = self.get_chunk_bbox(
+                    chunk_index=chunk_index,
+                    axes=list(np.array(self.coordinate_system.AXES)[axes_mask]),
+                    scale=True
+                )
+        else:
+            bbox = self.SCALED_BBOX[:, axes_mask]
+            shape = self.GRID_SHAPE[axes_mask]
+
+        # Get cell size for each axis
+        cell_size = self.CELL_SIZE[axes_mask]
+
+        # Generate coordinate slices
+        def slice_constructor(i):
+            start = bbox[0, i] + 0.5 * cell_size[i]
+            end = bbox[1, i] - 0.5 * cell_size[i]
+            points = shape[i] * (1j if use_complex else 1)
+            return start, end, points
+
+        return [slice_constructor(i) for i in range(np.sum(axes_mask))]
+
     def get_coordinates(
             self,
-            chunk_index: Optional[ChunkIndex] = None,
+            chunk_index: Optional[np.ndarray] = None,
             axes: Optional[AxesSpecifier] = None,
+            stencil_kwargs: Optional[dict] = None,
+            scaled: bool = False,
     ) -> NDArray[np.float64]:
         """
         Compute the cell-centered coordinates for the grid or a specific chunk.
 
+        This method generates the coordinates for the grid cells, either for the entire grid or a specific chunk,
+        depending on the `chunk_index` parameter. The coordinates are computed based on the grid's bounding box,
+        grid shape, and scaling (linear or logarithmic) configuration.
+
         Parameters
         ----------
         chunk_index : :py:class:`~pisces.models.grids.structs.ChunkIndex`, optional
-            The index of the chunk for which coordinates are computed. If `None`, compute for the entire grid.
+            The index of the chunk for which coordinates are computed. If `None`, the coordinates are computed
+            for the entire grid.
         axes : Optional[AxesSpecifier], optional
-            The axes for which coordinates are computed. If `None`, use all axes.
+            The axes for which coordinates are computed. If `None`, coordinates are computed for all axes defined
+            by the grid's coordinate system.
+        scaled : bool, optional
+            If `True`, the coordinates are returned in their scaled (logarithmic) form for axes that are
+            logarithmically scaled. This means the values for logarithmic axes will remain in their base-10
+            logarithmic representation, preserving rectilinearity of the grid structure.
+
+            If `False` (default), the coordinates for logarithmic axes are transformed back into linear space
+            using a base-10 exponential transformation.
+        stencil_kwargs : Optional[dict], optional
+                Parameters defining a stencil region around the chunk. Should include:
+
+                - `stencil_size` (int): Size of the stencil in chunks to include around the specified chunk. Default is 0.
+                - `stencil_alignment` (str): Alignment of the stencil relative to the chunk, with options:
+
+                    - `'center'`: Stencil is symmetrically centered around the chunk.
+                    - `'left'`: Stencil extends entirely to the right of the chunk (default).
+                    - `'right'`: Stencil extends entirely to the left of the chunk.
+
+                If `chunk_index` is not provided, `stencil_kwargs` are ignored. If `chunk_index` is specified but
+                `stencil_kwargs` is `None`, a default stencil of size 1 (centered) is used.
 
         Returns
         -------
         NDArray[np.float64]
-            An array of cell-centered coordinates with shape ``(*GRID_SHAPE, len(axes))`` (see :py:attr:`GRID_SHAPE`).
-            If a value is provided for ``chunk_index``, then the returned array will have shape ``(*CHUNK_SHAPE, len(axes))``
-            (see :py:attr:`CHUNK_SHAPE`).
+            An array of cell-centered coordinates with shape ``(*GRID_SHAPE, len(axes))`` (if `chunk_index` is `None`)
+            or ``(*CHUNK_SHAPE, len(axes))`` (if `chunk_index` is specified). Each entry represents the center of
+            a grid cell in the requested coordinate system.
 
         Raises
         ------
         ValueError
             If invalid axes or chunk indices are provided.
+
         """
         # Validation. Ensure that we have a set of axes. Construct the axes mask.
         if axes is None:
             axes = self.coordinate_system.AXES
         axes_mask = self.coordinate_system.build_axes_mask(axes)
 
-        # Look up the relevant bounding box for either the chunk or the entire grid.
-        # We want this in scaled axes so that we can later correct it for the log-ed axes.
-        if chunk_index is not None:
-            chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
-            bbox = self.get_chunk_bbox(chunk_index,axes=axes,scale=True)
-            shape = self.CHUNK_SHAPE[axes_mask]
-        else:
-            bbox = self.SCALED_BBOX[:,axes_mask]
-            shape = self.GRID_SHAPE[axes_mask]
+        # Obtain the slice data for the meshgrid. This performs all the
+        # necessary validation and handles chunks vs. full grid.
+        # NOTE: The reason we do this is because we might want just the slice
+        #   data for other reasons in other methods.
+        slice_data = self._get_coordinate_parameters(axes_mask,
+                                                     chunk_index=chunk_index,
+                                                     stencil_kwargs=stencil_kwargs,
+                                                     use_complex=True)
 
-        cell_size = self.CELL_SIZE[axes_mask]
-
-        # Construct the slices. These should run (in the scaled space) from the bottom
-        # of the bbox to the top in increments of the cell_size (scaled).
-        # We only build slices for the coordinates we actually want.
-        slices = [
-            slice(bbox[0, i] + 0.5 * cell_size[i],
-                  bbox[1, i] - 0.5 * cell_size[i],
-                  shape[i] * 1j)
-            for i in np.arange(len(axes))
-        ]
+        slice_data = [slice(*slc_data) for slc_data in slice_data]
 
         # Create the coordinate grid. This requires moving the axis to the
         # correct position and then rescaling for the log components.
-        coordinates = np.moveaxis(np.mgrid[*slices], 0, -1)
+        coordinates = np.moveaxis(np.mgrid[*slice_data], 0, -1)
+        if not scaled:
+            coordinates[..., self.is_log_mask[axes_mask]] = 10**coordinates[..., self.is_log_mask[axes_mask]]
 
-        coordinates[..., self.is_log_mask[axes_mask]] = 10**coordinates[..., self.is_log_mask[axes_mask]]
         return coordinates
+
+    # @@ INTERPOLATION @@ #
+    # These methods are focused on robust interpolation of the fields in the
+    # FIELDS attribute container.
+    def build_field_interpolator(self,
+                                 field_name: str,
+                                 chunk_index: Optional[Any] = None,
+                                 stencil_kwargs: Dict[str, Any] = None,
+                                 cache: bool = True,
+                                 overwrite: bool = False,
+                                 **kwargs):
+        """
+        Build an interpolator for a specified field.
+
+        This method creates a ``RegularGridInterpolator`` for a given field, enabling interpolation
+        of the field values over a rectilinear grid defined by the field's coordinate system. The
+        interpolator can be cached for repeated use, and caching behavior can be customized.
+
+        Parameters
+        ----------
+        field_name : str
+            The name of the field for which to build the interpolator.
+        chunk_index : Optional[Any], optional
+            The index of the chunk for which to build the interpolator. If ``None``, the interpolator
+            is built for the entire grid.
+        stencil_kwargs : Dict[str, Any], optional
+            Arguments for generating a stencil around a specific chunk. These arguments define
+            the size and alignment of the stencil. Only relevant if ``chunk_index`` is specified.
+        cache : bool, optional
+            Whether to cache the interpolator for future use. Default is ``True``.
+        overwrite : bool, optional
+            If ``True``, any existing cached interpolator for the specified field and chunk is replaced.
+            Default is ``False``.
+        **kwargs : dict, optional
+            Additional arguments passed to the ``RegularGridInterpolator``.
+
+        Returns
+        -------
+        RegularGridInterpolator
+            An interpolator object for the specified field.
+
+        Raises
+        ------
+        ValueError
+            If the specified field does not exist in the grid manager.
+
+        Notes
+        -----
+        - The interpolator is built over a scaled (linearly spaced) grid to ensure rectilinear behavior.
+        - If ``chunk_index`` is provided, the interpolator is built for the specified chunk or stencil
+          region. Otherwise, it is built for the entire grid.
+        - If ``cache`` is ``True``, the interpolator is stored in an internal cache for reuse. The cache
+          key is a tuple of ``(field_name, chunk_index)``. To avoid cache conflicts, use ``overwrite=True``
+          when necessary.
+        """
+        # Validate that the field exists -- if not, raise error indicating.
+        if field_name not in self.FIELDS:
+            raise ValueError(f"Field {field_name} is not defined.")
+
+        # Retrieve the field reference and its associated axes
+        field_reference = self.FIELDS[field_name]
+        axes_mask = self.coordinate_system.build_axes_mask(field_reference.AXES)
+
+        # Before proceeding with any other aspect of the procedure, check the cache
+        # for an existing interpolator. If we find an interpolator in the cache,
+        # we should simply pass it back immediately.
+        if chunk_index is not None:
+            chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
+            _chunk_cache_key = tuple(chunk_index)
+        else:
+            _chunk_cache_key = 'all'
+
+        if cache and (not overwrite):
+            cache_key = (field_name, _chunk_cache_key)
+            if cache_key in self.interpolator_cache:
+                return self.interpolator_cache[cache_key]
+
+        # Manage the chunking initialization. If we have a chunk index, we need
+        # to validate it and then determine the chunking mask within the relevant stencil
+        # around the specified chunk.
+        #
+        # Additionally: we want a baseline stencil no-matter-what for interpolation, so
+        # the default stencil kwargs need to be constructed.
+        if chunk_index is not None:
+            chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
+
+            # Fix up the stencil kwargs to ensure that we have a stencil
+            if stencil_kwargs is None:
+                stencil_kwargs = dict(stencil_size=1, stencil_alignment='center')
+
+            coordinate_parameters = self._get_coordinate_parameters(axes_mask,
+                                                                    use_complex=False,
+                                                                    chunk_index=chunk_index,
+                                                                    stencil_kwargs=stencil_kwargs)
+        else:
+            # Fetch the full grid coordinate parameters
+            coordinate_parameters = self._get_coordinate_parameters(axes_mask, use_complex=False)
+        # Construct the interpolation points via the list of linspaces generated
+        # from the coordinate parameters obtained. Additionally, load the field data.
+        points = [
+            np.linspace(*cparams) for cparams in coordinate_parameters
+        ]
+        data = field_reference[...].d
+
+        # Construct and return the interpolator
+        interpolator = RegularGridInterpolator(points, data, **kwargs)
+
+        if cache:
+            # Add the interpolator to the cache.
+            if chunk_index is None:
+                _chunk_cache_key = 'all'
+            else:
+                _chunk_cache_key = tuple(chunk_index)
+            chunk_key = (field_name, _chunk_cache_key)
+
+            self.interpolator_cache[chunk_key] = interpolator
+        else:
+            pass
+
+        return RegularGridInterpolator(points, data, **kwargs)
 
     # @@ CHUNK UTILITIES @@ #
     # These methods are utilities for performing operations in
@@ -527,6 +765,7 @@ class ModelGridManager:
         scale: bool, optional
             If ``True``, will return the scaled bounding box section (see :py:attr:`SCALED_BBOX`). Otherwise, will
             return the standard bbox.
+
         Returns
         -------
         BoundingBox
@@ -563,7 +802,7 @@ class ModelGridManager:
         """
         Construct the mask of the full grid corresponding to a specific ``chunk_index``.
 
-        Given a set of ``axes``, the total grid has some shape ``(N_0,...,N_k)``. A chunk occupies some subset of
+        Given a set of ``axes``, the total grid has some shape ``(N_0,...,N_k)``. A chunk occupies some subset
         of that grid space. This function produces a list of slices to select only the relevant section corresponding
         to the desired chunk.
 
@@ -595,6 +834,190 @@ class ModelGridManager:
 
         return [slice(s, e) for s, e in zip(start, end)]
 
+    @staticmethod
+    def _get_stencil_start_end(
+            chunk_index: np.ndarray,
+            stencil_size: int,
+            stencil_alignment: str
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute the start and end indices for a stencil region around a specific chunk index.
+
+        Parameters
+        ----------
+        chunk_index : np.ndarray
+            An array of chunk indices specifying the chunk's location along each axis.
+        stencil_size : int
+            The size of the stencil, expressed in the number of chunks to include around the chunk index.
+        stencil_alignment : str
+            Specifies how the stencil is aligned with the chunk. Options are:
+            - 'center': The stencil extends symmetrically around the chunk (default).
+            - 'left': The stencil extends entirely to the right of the chunk.
+            - 'right': The stencil extends entirely to the left of the chunk.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            A tuple containing:
+            - id_min: The start indices for the stencil region along each axis.
+            - id_max: The end indices for the stencil region along each axis.
+
+        Raises
+        ------
+        ValueError
+            If `stencil_alignment` is invalid or unsupported.
+
+        Notes
+        -----
+        - The indices returned are inclusive for `id_min` and exclusive for `id_max`.
+        - The function ensures that the alignment rules are consistent with the specified `stencil_alignment`.
+        """
+        # Compute stencil boundaries based on alignment
+        if stencil_alignment == 'center':
+            id_min = chunk_index - stencil_size
+            id_max = chunk_index + 1 + stencil_size
+        elif stencil_alignment == 'left':
+            id_min = chunk_index
+            id_max = chunk_index + 1 + (2 * stencil_size)
+        elif stencil_alignment == 'right':
+            id_min = chunk_index - (2 * stencil_size)
+            id_max = chunk_index + 1
+        else:
+            raise ValueError(
+                f"Invalid stencil_alignment: {stencil_alignment}. "
+                f"Expected one of 'center', 'left', or 'right'."
+            )
+
+        return id_min, id_max
+
+    def get_chunk_stencil(self,
+                          chunk_index: ChunkIndex,
+                          stencil_size: int = 0,
+                          stencil_alignment: str = 'center',
+                          axes: Optional[AxesSpecifier] = None
+                          ) -> List[slice]:
+        """
+        Construct the mask of the grid corresponding to a stencil around a specific ``chunk_index``.
+
+        This function generates slices for selecting a region of the grid that includes a stencil around a specific chunk.
+        The stencil size and alignment can be specified to control the region of interest.
+
+        Parameters
+        ----------
+        chunk_index : ChunkIndex
+            The index of the chunk for which the stencil is computed.
+        stencil_size : int, optional
+            The size of the stencil (in cells) to include around the chunk. This applies symmetrically unless specified otherwise.
+            By default, ``stencil_size`` is set to 1.
+        stencil_alignment : str, optional
+
+            Determines the alignment of the stencil relative to the chunk. Options are:
+            - ``'center'``: Stencil extends symmetrically around the chunk (default).
+            - ``'before'``: Stencil is offset before the chunk.
+            - ``'after'``: Stencil is offset after the chunk.
+
+        axes : Optional[AxesSpecifier], optional
+            The axes for which the stencil slices are computed. Defaults to all axes.
+
+        Returns
+        -------
+        list of slice
+            A list of slices defining the stencil region. Each slice corresponds to the specified axis
+            and selects the region in the grid for the stencil.
+
+        Raises
+        ------
+        ValueError
+            If invalid axes, chunk indices, or stencil alignment is provided.
+        ValueError
+            If the calculated stencil boundaries exceed the grid dimensions.
+
+        Notes
+        -----
+        - The stencil is defined in terms of the chunk boundaries and extended by the stencil size.
+        - The function accounts for the grid's total dimensions to prevent out-of-bounds indices.
+        """
+        # Construct a generic axes mask from the provided axes and generate
+        # the chunk index from ChunkIndex using the chunk boundaries.
+        if axes is None:
+            axes = self.coordinate_system.AXES
+        axes_mask = self.coordinate_system.build_axes_mask(axes)
+        chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
+
+        # Construct the id min and id max for the stencils
+        id_min,id_max = self._get_stencil_start_end(chunk_index,
+                                                    stencil_size,
+                                                    stencil_alignment)
+
+        # Construct the stencil start and end points based on the
+        # chunk shapes.
+        stencil_start,stencil_end = id_min*self.CHUNK_SHAPE[axes_mask], id_max*self.CHUNK_SHAPE[axes_mask]
+        return [slice(s, e) for s, e in zip(stencil_start, stencil_end)]
+
+    def get_stencil_bbox(self,
+                         chunk_index: np.ndarray,
+                         stencil_size: int = 0,
+                         stencil_alignment: str = 'center',
+                         axes: Optional[List[str]] = None,
+                         scale: bool = False) -> BoundingBox:
+        """
+        Compute the bounding box for a stencil region around a specific chunk.
+
+        Parameters
+        ----------
+        chunk_index: np.ndarray
+            The index of the chunk. Should be an iterable of length ``NDIM`` with the index of
+            the chunk along each axis.
+        stencil_size : int, optional
+            The size of the stencil (in cells) to include around the chunk. This applies symmetrically unless specified otherwise.
+            Default is 1. See ``stencil_alignment`` for details on how the stencil size affects the behavior.
+        stencil_alignment : str, optional
+
+            Determines the alignment of the stencil relative to the chunk. Options are:
+            - ``'center'``: Stencil extends symmetrically around the chunk (default).
+            - ``'before'``: Stencil is offset before the chunk.
+            - ``'after'``: Stencil is offset after the chunk.
+        axes: Optional[List[str]], optional
+            The axes along which the ``chunk_index`` and stencil are specified. By default, we assume a complete chunk index.
+        scale: bool, optional
+            If ``True``, will return the scaled bounding box section (see :py:attr:`SCALED_BBOX`). Otherwise, will
+            return the standard bbox.
+
+        Returns
+        -------
+        BoundingBox
+            The bounding box of the stencil region in scaled or physical coordinates.
+
+        Raises
+        ------
+        ValueError
+            If invalid axes or chunk indices are provided.
+        """
+        # Validate the axes, construct the axes mask, and then ensure that the chunk index is
+        # valid.
+        if axes is None:
+            axes = self.coordinate_system.AXES
+        axes_mask = self.coordinate_system.build_axes_mask(axes)
+        chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
+
+        # Determine the left and right corners of the stencil chunk id range
+        id_min,id_max = self._get_stencil_start_end(chunk_index,
+                                                    stencil_size,
+                                                    stencil_alignment)
+
+        # Pull out the positions for the stencil region and then build the bounding box
+        # to return.
+        left = self._scaled_bbox[0, axes_mask] + id_min * self.CHUNK_SIZE[axes_mask]
+        right = self._scaled_bbox[0, axes_mask] + id_max * self.CHUNK_SIZE[axes_mask]
+        _bbox = np.stack((left, right), axis=-1)
+
+        # Account for scaling and return.
+        if scale:
+            return BoundingBox(_bbox)
+        else:
+            _bbox[:, self.is_log_mask[axes_mask]] = 10 ** _bbox[:, self.is_log_mask[axes_mask]]
+            return BoundingBox(_bbox)
+
     def iterate_over_chunks(self, axes: Optional[List[str]] = None) -> Iterator[ChunkIndex]:
         """
         Iterate over all chunks along the specified axes.
@@ -622,6 +1045,60 @@ class ModelGridManager:
 
         for chunk_index in index_array:
             yield chunk_index
+
+    def get_chunk_map(self, coordinate_array: 'CoordinateArray', axes: List[str] = None):
+        """
+        Map a set of coordinates to the corresponding chunk indices in the grid and return the unique chunks.
+
+        Parameters
+        ----------
+        coordinate_array : CoordinateArray
+            Array of coordinates to map to chunks. Must align with the grid's bounding box and scaled axes.
+        axes : List[str], optional
+            List of axes over which the mapping is computed. Defaults to all axes in the coordinate system.
+
+        Returns
+        -------
+        tuple
+            A tuple containing:
+            - np.ndarray: An array of chunk indices corresponding to the input coordinates.
+            - List[tuple]: A list of unique chunk indices present in the chunk map.
+
+        Raises
+        ------
+        ValueError
+            If any points in the coordinate array are outside the grid.
+        """
+        # Use all axes if none are specified
+        if axes is None:
+            axes = self.coordinate_system.AXES
+
+        # Build the axes mask and validate the coordinate array
+        axes_mask = self.coordinate_system.build_axes_mask(axes)
+        coordinate_array = CoordinateArray(coordinate_array, len(axes))
+
+        # Convert coordinates to scaled coordinates for uniform chunking
+        scaled_bbox = self.SCALED_BBOX[:, axes_mask]  # Shape: (2, len(axes))
+        is_log_mask = self.is_log_mask[axes_mask]
+
+        # Apply logarithmic scaling where necessary
+        coordinate_array[..., is_log_mask] = np.log10(coordinate_array[..., is_log_mask])
+
+        # Shift the coordinates to align with the bounding box
+        coordinate_array -= scaled_bbox[0, :]
+
+        # Check for out-of-bounds coordinates
+        if np.any(coordinate_array < 0) or np.any(coordinate_array > scaled_bbox[1, :] - scaled_bbox[0, :], axis=-1):
+            raise ValueError("Invalid coordinate array: some points are outside of the grid.")
+
+        # Convert scaled coordinates to chunk indices
+        scaled_chunk_size = self.CHUNK_SIZE[axes_mask]  # Shape: (len(axes),)
+        chunk_indices = np.floor_divide(coordinate_array, scaled_chunk_size).astype(int)
+
+        # Generate the list of unique chunks
+        unique_chunks = list({tuple(chunk) for chunk in chunk_indices.reshape(-1, chunk_indices.shape[-1])})
+
+        return chunk_indices, unique_chunks
 
     # @@ UTILITY FUNCTIONS @@ #
     # These methods provide backend utilities for various processes
@@ -927,6 +1404,88 @@ class ModelGridManager:
         else:
             return tabulate(axes_info, headers=["Axis", "Min.", "Max.", "N", "N Chunks",
                                                 "Cell Size", "Chunk Size", "Scale"], tablefmt="grid")
+
+    def generate_slice_image_array(self,
+                                   field_name: str,
+                                   view_axis: str,
+                                   extent: np.ndarray,
+                                   resolution: np.ndarray,
+                                   position: Optional[float] = 0):
+        """
+        Generate a 2D slice image array for a given field.
+
+        This method computes a slice of a field along a specified axis, interpolating the field
+        values at grid points to produce a 2D image array.
+
+        Parameters
+        ----------
+        field_name : str
+            The name of the field to generate the slice for.
+        view_axis : str
+            The axis along which the slice is taken. Must be one of the coordinate system's axes.
+        extent : np.ndarray[np.floating]
+            A ``(2, 2)`` array specifying the minimum and maximum bounds for the slice in the two
+            dimensions perpendicular to ``view_axis``.
+        resolution : np.ndarray[np.int_]
+            A ``(2,)`` array specifying the resolution (number of pixels) along the two slice dimensions.
+        position : Optional[float], optional
+            The position along the ``view_axis`` at which the slice is taken. Defaults to ``0``.
+
+        Returns
+        -------
+        np.ndarray
+            A 2D array representing the interpolated field values on the slice. The array shape
+            matches the specified ``resolution``.
+
+        Raises
+        ------
+        ValueError
+            If the specified field does not exist or if the input parameters are invalid.
+
+        Notes
+        -----
+        - The method uses ``build_image_coordinate_array`` to construct a coordinate grid for the slice.
+        - The grid is then transformed to match the field's coordinate system.
+        - Logarithmic scaling is applied to coordinates where applicable.
+        - A field interpolator is used to compute the field values on the slice grid.
+        """
+        # Validate that the field exists and pull the reference to the
+        # field out of the FIELDS attribute.
+        if field_name not in self.FIELDS:
+            raise ValueError(f"Cannot create image if field `{field_name}`: failed to find field in {self}.")
+
+        field_ref = self.FIELDS[field_name]
+        axes_mask = self.coordinate_system.build_axes_mask(field_ref.AXES)
+
+        # Construct and convert the underlying coordinate grid. This will require generating the
+        # coordinate grid for the slice and then converting it to the expected coordinate system.
+        image_coordinates = build_image_coordinate_array(extent,
+                                                         resolution,
+                                                         view_axis,
+                                                         position)
+        image_coordinates = self.coordinate_system.from_cartesian(image_coordinates)
+
+        # Convert image coordinates so that they are log scaled where necessary
+        # and cut down to the axes cut.
+        image_coordinates = image_coordinates[...,axes_mask]
+        image_coordinates[...,self.is_log_mask[axes_mask]] = np.log10(image_coordinates[...,self.is_log_mask[axes_mask]])
+        image_shape = image_coordinates.shape[:-1]
+
+        # Perform the interpolation procedure to figure out what values the
+        # field takes on the image coordinate grid.
+        interpolator = self.build_field_interpolator(field_name,bounds_error=False,fill_value=None)
+
+        # Construct the image array by calling the interpolator.
+        # The interpolator exists (N, NDIM) as input -> we have (*RES, NDIM).
+        image_coordinates = np.reshape(image_coordinates, (-1,len(field_ref.AXES)))
+        image = np.array(interpolator(image_coordinates))
+
+        # Reconstruct image shape
+        image = image.reshape(image_shape)
+        return image
+
+
+
 
     # @@ PROPERTIES @@ #
     # For the most part, these all point to private

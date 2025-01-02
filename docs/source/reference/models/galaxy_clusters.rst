@@ -1,4 +1,4 @@
-.. _galaxy_clusters_models::
+.. _galaxy_clusters_models:
 Galaxy Cluster Modeling
 =======================
 

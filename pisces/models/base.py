@@ -2,16 +2,21 @@
 Pisces astrophysics modeling base classes.
 """
 from pathlib import Path
-from typing import Union, List, Dict, Optional, TYPE_CHECKING, Type, Any, Tuple, Callable
+from typing import Union, List, Dict, Optional, TYPE_CHECKING, Type, Any, Tuple, Callable, Literal
+
+import numpy as np
 import unyt
 from numpy.typing import ArrayLike
+from scipy.interpolate import InterpolatedUnivariateSpline
 
-from pisces.models.utilities import ModelConfigurationDescriptor
 from pisces.geometry import GeometryHandler
 from pisces.geometry.base import CoordinateSystem
+from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
 from pisces.io.hdf5 import HDF5_File_Handle
 from pisces.models.grids.base import ModelGridManager
+from pisces.models.grids.structs import BoundingBox
 from pisces.models.solver import ModelSolver
+from pisces.models.utilities import ModelConfigurationDescriptor
 from pisces.profiles.base import Profile
 from pisces.profiles.collections import HDF5ProfileRegistry
 from pisces.utilities.logging import LogDescriptor, devlog
@@ -20,6 +25,8 @@ if TYPE_CHECKING:
     from logging import Logger
     from pisces.models.grids.base import ModelFieldContainer, ModelField
     from pisces.utilities.config import YAMLConfig
+    from matplotlib.figure import Figure
+    from matplotlib.axes import Axes
 
 # noinspection PyProtectedMember
 class ModelMeta(type):
@@ -378,7 +385,7 @@ class Model(metaclass=ModelMeta):
     # : _IS_ABC : marks whether the model should seek out pathways or not.
     # : _INHERITS_PATHWAYS: will allow subclasses to inherit the pathways of their parent class.
     _IS_ABC: bool = True
-    _INHERITS_PATHWAYS: bool = True # TODO: Not implemented.
+    _INHERITS_PATHWAYS: bool = True
 
     # @@ CLASS PARAMETERS @@ #
     # The class parameters define several "standard" behaviors for the class.
@@ -955,72 +962,137 @@ class Model(metaclass=ModelMeta):
             raise ValueError(f"Pathway {pathway} is not recognized for models of class {self.__class__.__name__}.\n"
                              f"Recognized pathways are {list(self._solver.list_pathways())}.")
 
+    # @@ UTILITY FUNCTIONS @@ #
+    # These utility functions are used throughout the model generation process for various things
+    # and are not sufficiently general to be worth implementing elsewhere.
+    def _assign_default_units_and_add_field(
+            self,
+            field_name: str,
+            field_data: unyt.unyt_array,
+            create_field: bool = True,
+            axes: Optional[List[str]] = None
+    ) -> unyt.unyt_array:
+        """
+        Assigns the appropriate units to a field and optionally adds it to the model's field container.
+
+        This utility method ensures that a given field has the correct physical units before being
+        integrated into the model's field container. It facilitates consistency and correctness
+        in the model's physical quantities by enforcing unit assignments and managing field
+        registrations.
+
+        Parameters
+        ----------
+        field_name : str
+            The name of the field to process. This name is used both for logging purposes and
+            when adding the field to the model's field container.
+
+        field_data : unyt.unyt_array
+            The raw data of the field as a `unyt.unyt_array`. This array contains both the
+            numerical values and their associated units.
+
+        create_field : bool, optional
+            A flag indicating whether the processed field should be added to the model's
+            field container (`self.FIELDS`). If `True`, the field is registered; if `False`,
+            the field is only processed for unit consistency.
+
+        axes : Optional[List[str]], default=None
+            A list of axis names that the field depends on (e.g., `['r']` for radial dependence).
+            If not provided, it defaults to `['r']`, assuming radial dependence.
+
+        Returns
+        -------
+        unyt.unyt_array
+            The processed field data with the correct units assigned.
+
+        Raises
+        ------
+        ValueError
+            If the specified `field_name` does not have a corresponding default unit defined
+            within the model. This ensures that all fields have predefined unit expectations.
+        """
+        # Validate the input axes. By default, we'll just adopt the standard initial axes and / or
+        # rely on the full axes set from the coordinate system.
+        if (axes is None) and (self.INIT_FREE_AXES is not None):
+            axes = self.INIT_FREE_AXES
+        elif axes is None:
+            axes = self.coordinate_system.AXES
+        else:
+            pass
+
+        # Attempt to look up the default units from the configuration file. If the configuration
+        # doesn't exist, this will cause an error to be raised.
+        try:
+            units = self.get_default_units(field_name)
+        except KeyError as e:
+            raise ValueError(f"No default units defined for field '{field_name}'.") from e
+
+        field_data = field_data.to(units)
+
+        # Manage the field creation process. If we are adding the field, it can just be passed off
+        # to the field manager as normal. The logging statement is standardized across all
+        # models inheriting this method.
+        if create_field:
+            # Add the field to the model's field container
+            self.FIELDS.add_field(
+                field_name,
+                axes=axes,
+                units=str(units),
+                data=field_data.d,
+            )
+            self.logger.debug(
+                "[EXEC] Added field '%s' (units=%s, ndim=%s).",
+                field_name,
+                units,
+                field_data.ndim
+            )
+
+        # Return the field so that it can be accessed if this was just a unit validation method.
+        return field_data
+
+    def _validate_field_dependencies(self, field_name: str, required_fields: dict):
+        """
+        Validate that all required fields exist for the equation of state computation.
+        """
+        missing = [f for f in required_fields[field_name] if f not in self.FIELDS]
+        if missing:
+            raise ValueError(f"Cannot compute {field_name}. Missing fields: {missing}")
+
+    def _coerce_extent_for_plots(self, extent: Any) -> Tuple[unyt.unyt_array, np.ndarray]:
+        """
+        Basic utility function to coerce extent args passed to plotting
+        routines.
+
+        Parameters
+        ----------
+        extent: Any
+        The extent to coerce.
+        """
+        if isinstance(extent, tuple):
+            # Extent provided as (array, unit) tuple.
+            try:
+                extent = unyt.unyt_array(extent[0],extent[1])
+            except Exception as e:
+                raise ValueError(f"Invalid extent parameter: {e}.") from e
+        elif not isinstance(extent, unyt.unyt_array):
+            # Attempt to convert to unyt_array using the built-in length units.
+            try:
+                extent = unyt.unyt_array(extent, self.grid_manager.length_unit)
+            except Exception as e:
+                raise ValueError(f"Invalid extent parameter: {e}.") from e
+        else:
+            # naturally an unyt array.
+            pass
+
+        extent_scaled = extent.to_value(self.grid_manager.length_unit)
+        extent = extent
+
+        return extent, extent_scaled
+
     # @@ CORE METHODS @@ #
     # These are the standard methods of the class. They
     # should generally not need to be changed. Any subclass-specific
     # capabilities are reserved for implementation in the
     # relevant subclass.
-    def solve_model(self, overwrite: bool = False, pathway: str = None):
-        """
-        Solve this model using one of the solution pathways associated with it.
-
-        Every physical model in Pisces implements one (or many) solution "pathways" which take
-        the model from an "empty" state to a completed state. This process is called "solving" the model
-        and is achieved by calling the :py:meth:`solve_model` method on the model in question.
-
-        Parameters
-        ----------
-        overwrite : bool, optional
-            If ``True``, then the :py:class:`Model` will be solved even if it has already been solved.
-            This will overwrite any data that was written during a previous solution if necessary.
-
-            .. warning::
-
-                This can be disastrous if done unintentionally! Make sure you do not set ``overwrite=True`` lightly.
-                Solving models can be expensive and time-consuming. Loosing all your data to have to solve the model again
-                is both inefficient and potentially frustrating.
-
-        pathway : Optional[str], optional
-
-            The solution pathway to execute. If ``pathway`` is not specified, then the solver will attempt to use
-            the default pathway (:py:attr:`default_pathway`). If no default pathway exists, an error is raised insisting
-            that a pathway choice be provided.
-
-        Raises
-        ------
-        RuntimeError
-            If the solver is already solved and ``overwrite`` is False.
-        ValueError
-            If the pathway is not valid or cannot be executed.
-        """
-        # Validate that the solver exists for this class and set the pathway / default pathway.
-        # produce some logging information for the user.
-        if not hasattr(self, '_solver') or self._solver is None:
-            raise RuntimeError("The solver is not initialized. This error shouldn't be possible...")
-
-        pathway = pathway or self.default_pathway
-        if pathway is None:
-            raise ValueError(f"No `pathway` was provided and {self} has no default pathway set.\n"
-                             f"Please specify a pathway or a default pathway to solve the model.")
-
-
-        # Produce the basic logging information for the user.
-        self.logger.info("[EXEC] Solving model %s. ", self)
-        self.logger.info("[EXEC] \tPATHWAY = %s. ", pathway)
-        self.logger.info("[EXEC] \tNUM_STEPS = %s. ", self.get_pathway_length(pathway))
-
-        # Pass the runtime off to the solver to continue the solution procedure.
-        try:
-            self._solver(pathway=pathway, overwrite=overwrite)
-        except RuntimeError as e:
-            self.logger.error("[EXEC] Runtime error during execution of pathway '%s': %s", pathway, e)
-            raise
-        except Exception as e:
-            self.logger.error("[EXEC] Error during execution of pathway '%s': %s", pathway, e)
-            raise
-        else:
-            self.logger.info("[EXEC] Successfully executed pathway '%s'.", pathway or self._solver.default)
-
     @classmethod
     def get_pathway(cls, pathway: str) -> Tuple[Dict[str, Any], List[str]]:
         """
@@ -1276,6 +1348,67 @@ class Model(metaclass=ModelMeta):
         except Exception as e:
             raise ValueError(f"Failed to convert string unit {_unit_str} to unyt.Unit object: {e}")
 
+    def solve_model(self, overwrite: bool = False, pathway: str = None):
+        """
+        Solve this model using one of the solution pathways associated with it.
+
+        Every physical model in Pisces implements one (or many) solution "pathways" which take
+        the model from an "empty" state to a completed state. This process is called "solving" the model
+        and is achieved by calling the :py:meth:`solve_model` method on the model in question.
+
+        Parameters
+        ----------
+        overwrite : bool, optional
+            If ``True``, then the :py:class:`Model` will be solved even if it has already been solved.
+            This will overwrite any data that was written during a previous solution if necessary.
+
+            .. warning::
+
+                This can be disastrous if done unintentionally! Make sure you do not set ``overwrite=True`` lightly.
+                Solving models can be expensive and time-consuming. Loosing all your data to have to solve the model again
+                is both inefficient and potentially frustrating.
+
+        pathway : Optional[str], optional
+
+            The solution pathway to execute. If ``pathway`` is not specified, then the solver will attempt to use
+            the default pathway (:py:attr:`default_pathway`). If no default pathway exists, an error is raised insisting
+            that a pathway choice be provided.
+
+        Raises
+        ------
+        RuntimeError
+            If the solver is already solved and ``overwrite`` is False.
+        ValueError
+            If the pathway is not valid or cannot be executed.
+        """
+        # Validate that the solver exists for this class and set the pathway / default pathway.
+        # produce some logging information for the user.
+        if not hasattr(self, '_solver') or self._solver is None:
+            raise RuntimeError("The solver is not initialized. This error shouldn't be possible...")
+
+        pathway = pathway or self.default_pathway
+        if pathway is None:
+            raise ValueError(f"No `pathway` was provided and {self} has no default pathway set.\n"
+                             f"Please specify a pathway or a default pathway to solve the model.")
+
+
+        # Produce the basic logging information for the user.
+        self.logger.info("[EXEC] Solving model %s. ", self)
+        self.logger.info("[EXEC] \tPATHWAY = %s. ", pathway)
+        self.logger.info("[EXEC] \tNUM_STEPS = %s. ", self.get_pathway_length(pathway))
+
+        # Pass the runtime off to the solver to continue the solution procedure.
+        try:
+            self._solver(pathway=pathway, overwrite=overwrite)
+        except RuntimeError as e:
+            self.logger.error("[EXEC] Runtime error during execution of pathway '%s': %s", pathway, e)
+            raise
+        except Exception as e:
+            self.logger.error("[EXEC] Error during execution of pathway '%s': %s", pathway, e)
+            raise
+        else:
+            self.logger.info("[EXEC] Successfully executed pathway '%s'.", pathway or self._solver.default)
+
     def summary(self) -> None:
         r"""
         Display a comprehensive console summary of the current model state.
@@ -1365,6 +1498,57 @@ class Model(metaclass=ModelMeta):
         print(gtable)
 
         print("\n=========================================================\n")
+
+
+
+    def plot_slice(self,
+                   field_name: str,
+                   extent: Any,
+                   view_axis: Optional[Literal["x","y","z"]] = 'z',
+                   figure: Optional['Figure'] = None,
+                   axes: Optional['Axes'] = None,
+                   resolution: Optional[Tuple[float,float]] = (500,500),
+                   view_axis_position: Optional[Any] = 0,
+                   **kwargs):
+        import matplotlib.pyplot as plt
+        from pisces.utilities.plotting import construct_subplot
+
+        # Setup the subplot / figure to ensure that they
+        # are present
+        figure, axes = construct_subplot(figure,axes)
+
+        # Validate the extent attribute. May be an unyt_array or Tuple(list, str) or simply
+        # a basic list-like object. All cases need to be handled naturally.
+        extent_image, extent_backend = self._coerce_extent_for_plots(extent)
+
+        # Construct the image array from inputs.
+        image_array = self.grid_manager.generate_slice_image_array(
+            field_name,str(view_axis),extent_backend,np.array(resolution,dtype=np.uint16), view_axis_position
+        )
+
+        # Check for non-plotting calls. This allows users more control over
+        # plot routines by simply getting the image out on its own.
+        if kwargs.pop("noplot",False):
+            return image_array, figure, axes
+
+        # Add the image to the plot. Utilize the normalization passed via kwargs
+        # if necessary and the colormap.
+        imshow_object = axes.imshow(image_array.T,extent=extent_image.d,**kwargs)
+
+
+        # Managing axes labels, ticks, etc.
+        _axes_labels = [ax for ax in ['x','y','z'] if ax != view_axis]
+        axes.set_xlabel(r"$%s$ / $\left[%s\right]$" % (_axes_labels[0], extent_image.units.latex_repr))
+        axes.set_ylabel(r"$%s$ / $\left[%s\right]$" % (_axes_labels[1], extent_image.units.latex_repr))
+
+        field_label = self.config[f'fields.{field_name}.label']
+        if field_label is None:
+            field_label = field_name
+
+        figure.colorbar(imshow_object, ax=axes, label=r'%s / $\left[%s\right]$'%(field_label,self.FIELDS[field_name].units.latex_repr))
+
+        return image_array, figure, axes
+
 
     # noinspection PyIncorrectDocstring
     def add_field_from_function(self,
@@ -1510,3 +1694,356 @@ class Model(metaclass=ModelMeta):
         # Produce the output log.
         if __logging__:
             self.logger.debug("[SLVR] Field '%s' added from internal profile.", field_name)
+
+    def convert_profile_to_field(self,
+                                 profile_name: str,
+                                 field_name: Optional[str] = None,
+                                 overwrite: bool = False):
+        """
+        Convert a profile to a model field.
+
+        Ensures that a specified profile in :py:attr:`profiles` is converted into a field within the model.
+        If ``field_name`` is not provided, it defaults to ``profile_name``.
+
+        Parameters
+        ----------
+        profile_name : str
+            The name of the profile to convert to a field. Must exist within :py:attr:`profiles`.
+
+        field_name : str, optional
+            The desired name for the resulting field. Defaults to ``profile_name`` if not provided.
+
+        overwrite : bool, default=False
+            If ``True``, existing field with the same name will be overwritten. If ``False`` and the
+            field already exists, a ``ValueError`` is raised.
+
+        Raises
+        ------
+        ValueError
+            If ``profile_name`` does not exist in :py:attr:`profiles` or if ``overwrite`` is ``False`` and
+            the field already exists.
+
+        """
+        # Look up the provided profile and ensure that it exists as expected.
+        if profile_name not in self.profiles:
+            raise ValueError(f"The profile `{profile_name}` does not appear to be present in {self}.")
+        profile = self.profiles[profile_name]
+
+        # Validate the field name. If the field name is not provided, we assume it
+        # matches the profile name.
+        if field_name is None:
+            field_name = profile_name
+
+        # Look up the correct units for the field based on that profile.
+        _units = self.get_default_units(field_name)
+
+        # Add the profile directly
+        self.add_field_from_profile(
+            profile,
+            field_name=field_name,
+            chunking=False,
+            units=str(_units),
+            logging=False,
+            overwrite=overwrite,
+        )
+        self.logger.debug("[EXEC] \t\tAdded field `%s` (units=%s) from profile.", field_name, str(_units))
+
+
+
+class _RadialModel(Model):
+    r"""
+    Private extended base class of the standard model class for models
+    which have a default radial symmetry. Provides basic utility functions for
+    descendant methods which inherit from this model.
+    """
+    # @@ VALIDATION MARKERS @@ #
+    # These validation markers are used by the Model to constrain the valid
+    # parameters for the model. Subclasses can modify the validation markers
+    # to constrain coordinate system compatibility.
+    #
+    # : _IS_ABC : marks whether the model should seek out pathways or not.
+    # : _INHERITS_PATHWAYS: will allow subclasses to inherit the pathways of their parent class.
+    _IS_ABC: bool = True
+    _INHERITS_PATHWAYS: bool = False
+
+    # @@ CLASS PARAMETERS @@ #
+    # The class parameters define several "standard" behaviors for the class.
+    # These can be altered in subclasses to produce specific behaviors.
+    DEFAULT_COORDINATE_SYSTEM = SphericalCoordinateSystem
+    INIT_FREE_AXES = ['r']
+
+    # @@ UTILITY FUNCTIONS @@ #
+    # These utility functions are used throughout the model generation process for various things
+    # and are not sufficiently general to be worth implementing elsewhere.
+    def get_radii(self) -> unyt.unyt_array:
+        """
+        Retrieve the radial coordinates in the appropriate length units.
+        """
+        return unyt.unyt_array(self.grid_manager.get_coordinates(axes=['r']).ravel(),
+                               self.grid_manager.length_unit)
+
+    def construct_radial_spline(self,
+                                field_name: str,
+                                radii: Optional[Union[unyt.unyt_array,np.ndarray]] = None):
+        """
+        Generate a radial spline for the specified field.
+
+        Parameters
+        ----------
+        field_name : str
+            Name of the field to spline.
+        radii : unyt.unyt_array, optional
+            Radial coordinates for interpolation. Defaults to the model's radial coordinates.
+
+        Returns
+        -------
+        InterpolatedUnivariateSpline
+            Spline of the field over the radial grid.
+
+        Raises
+        ------
+        ValueError
+            If the field does not exist or is not defined over the radial axis.
+        """
+        # Validate the input field name and fetch the necessary field data and
+        # base units. Ensure that field exists and that it is actually a radial field.
+        if field_name not in self.FIELDS:
+            raise ValueError(f"Field '{field_name}' does not exist in the model.")
+        if set(self.FIELDS[field_name].AXES) != {'r'}:
+            raise ValueError(f"Field '{field_name}' is not defined over the radial axis.")
+
+        # Manage the radii construction as needed based on the input.
+        if radii is None:
+            radii = self.get_radii().d
+        else:
+            radii = radii.d if hasattr(radii, 'units') else radii
+
+        field_data = self.FIELDS[field_name][...].ravel()
+        return InterpolatedUnivariateSpline(radii, field_data.d)
+
+    def integrate_radial_density_field(self,
+                                       density_field: str,
+                                       mass_field: Optional[str] = None,
+                                       mass_unit: Optional[Union[str, unyt.Unit]] = None,
+                                       create_field: bool = False,
+                                       overwrite: bool = False):
+        """
+        Integrate a radial density field to compute the enclosed mass profile.
+
+        This method takes a specified radial density field (e.g., gas, stellar, dark matter density),
+        integrates it over the radial grid, and computes the enclosed mass profile. The resulting mass
+        profile is returned as a `unyt.unyt_array` with appropriate units. Optionally, the computed mass
+        can be added to the model's field container.
+
+        Parameters
+        ----------
+        density_field : str
+            Name of the density field to integrate. Must be one of:
+            ['total_density', 'gas_density', 'stellar_density', 'dark_matter_density'].
+
+        mass_field : str, optional
+            Name of the mass field to create. If not provided, it is retrieved from the model's
+            configuration under `fields.{density_field}.mass_field`.
+
+        mass_unit : str or unyt.Unit, optional
+            Units for the mass field. If not provided, it is retrieved from the model's configuration
+            under `fields.{density_field}.mass_unit`.
+
+        create_field : bool, default=False
+            If `True`, the integrated mass field will be added to the model's field container (`self.FIELDS`).
+            Defaults to `False`.
+
+        overwrite : bool, default=False
+            If `True`, overwrite an existing mass field with the same name. If `False` and the field
+            already exists, a `ValueError` is raised. Defaults to `False`.
+
+        Returns
+        -------
+        unyt.unyt_array
+            The integrated mass profile with appropriate units.
+
+        Raises
+        ------
+        ValueError
+            If `density_field` does not exist in the model or is not defined over the radial ('r') axis.
+
+        KeyError
+            If `mass_field` cannot be determined from the configuration and is not provided, or if
+            `mass_unit` is missing.
+
+        Notes
+        -----
+        This method assumes that the specified `density_field` is defined over the radial axis ('r'). The
+        integration is performed using the coordinate system's `integrate_in_shells` method, which should
+        handle the specifics of the geometry.
+
+        """
+        # Retrieve and validate the input field. It must be a valid radial field. Additionally, if we cannot locate
+        # a mass field, we need to be given the mass field name and the units.
+        if density_field not in self.FIELDS:
+            raise ValueError(f"Density field `{density_field}` does not exist in {self}.")
+        if set(self.FIELDS[density_field].AXES) != {'r'}:
+            raise ValueError(f"Field '{density_field}' is not defined over the radial ('r') axis.")
+
+        # Grab the density field.
+        density_field_name = density_field
+        density_field = self.FIELDS[density_field]
+
+        # Look for a mass field / mass units. If we cannot find them, we need to raise errors.
+        if mass_field is None:
+            # We didn't get a mass field so we need to look it up and try to grab the default units.
+            try:
+                mass_field = self.config[f'fields.{density_field_name}.mass_field']
+                mass_unit = self.get_default_units(mass_field)
+            except KeyError:
+                raise KeyError(f"Mass field for '{density_field_name}' could not be found in configuration or was "
+                               f"missing units / reference to a mass field.\nIf it is not configured, it should be provided manually.")
+        elif mass_unit is None:
+            # We still need to look up the mass unit.
+            try:
+                mass_unit = self.get_default_units(mass_field)
+            except KeyError:
+                raise KeyError(f"Mass field for '{density_field_name}' could not be found in configuration or was "
+                               f"missing units.\nIf it is not configured, it should be provided manually.")
+        else:
+            # We have everything provided by the input arguments.
+            pass
+
+        # Construct the coordinates, build the interpolated spline and then
+        # perform the shell integration routine. This should be adaptable
+        # for any radial coordinate system due to the implementation of
+        # integrate_in_shells.
+        radii, spline = self.get_radii(), self.construct_radial_spline(density_field_name)
+
+        # noinspection PyUnresolvedReferences
+        # We can skip inspection here because we know coordinate system is a subclass of CoordinateSystem.
+        enclosed_mass = self.coordinate_system.integrate_in_shells(spline, radii.d)
+
+        # Manage the boundary estimate. We assume constant density and perform a second integrate in shells to
+        # obtain the total enclosed.
+        interior_density = spline(radii.d[0])
+        integrand = lambda _r: interior_density * np.ones_like(_r)
+        # noinspection PyUnresolvedReferences
+        enclosed_mass += self.coordinate_system.integrate_in_shells(integrand,[0,radii.d[0]])[1]
+
+
+        # Manage the units. We compute `mass_units` which is the natural unit of the
+        # computation and then covert to a target unit.
+        base_mass_unit = density_field.units * unyt.Unit(self.grid_manager.length_unit) ** 3
+        enclosed_mass = unyt.unyt_array(enclosed_mass, base_mass_unit).to(mass_unit)
+
+        # Optionally add the computed mass field to the field container
+        if create_field:
+            self.FIELDS.add_field(
+                mass_field,
+                data=enclosed_mass,
+                units=str(mass_unit),
+                overwrite=overwrite,
+                axes=['r'],
+            )
+
+        return enclosed_mass
+
+    def compute_spherical_density_from_mass(self,
+                                            mass_field: str,
+                                            density_field: Optional[str] = None,
+                                            density_unit: Optional[Union[str, unyt.Unit]] = None,
+                                            create_field: bool = False,
+                                            overwrite: bool = False):
+        """
+        Differentiate a radial mass field to compute the density profile.
+
+        This method takes a specified radial mass field (e.g., gas, stellar, dark matter mass),
+        differentiates it over the radial grid, and computes the enclosed density profile.
+
+        Parameters
+        ----------
+        mass_field : str
+            Name of the mass field to integrate. Must be one of:
+            ['total_mass', 'gas_mass', 'stellar_mass', 'dark_matter_mass'].
+
+        density_field : str, optional
+            Name of the density field to create. If not provided, it is retrieved from the model's
+            configuration under by searching for a corresponding field linked to the ``mass_field``.
+
+        density_unit : str or unyt.Unit, optional
+            Units for the density field. If not provided, it is retrieved from the model's configuration
+            under `fields.{density_field}.unit`.
+
+        create_field : bool, default=False
+            If `True`, the density field will be added to the model's field container (`self.FIELDS`).
+            Defaults to `False`.
+
+        overwrite : bool, default=False
+            If `True`, overwrite an existing density field with the same name. If `False` and the field
+            already exists, a `ValueError` is raised. Defaults to `False`.
+
+        Returns
+        -------
+        unyt.unyt_array
+            The density profile with appropriate units.
+        """
+        # Retrieve and validate the input field. It must be a valid radial field. Additionally, if we cannot locate
+        # a mass field, we need to be given the mass field name and the units.
+        if mass_field not in self.FIELDS:
+            raise ValueError(f"Mass field `{mass_field}` does not exist in {self}.")
+        if set(self.FIELDS[mass_field].AXES) != {'r'}:
+            raise ValueError(f"Field '{mass_field}' is not defined over the radial ('r') axis.")
+        if self.coordinate_system.__class__.__name__ != 'SphericalCoordinateSystem':
+            raise ValueError(f"The `compute_spherical_density_from_mass` method only works for SphericalCoordinateSystems.")
+
+        # Grab the mass field.
+        mass_field_name = mass_field
+        mass_field = self.FIELDS[mass_field]
+
+        # Look for a density field / density units. If we cannot find them, we need to raise errors.
+        if density_field is None:
+            # We didn't get a density field so we need to look it up and try to grab the default units.
+            try:
+                _valid_dfields = [field for field in self.FIELDS if self.config['fields.{field}.mass_field'] == mass_field_name]
+
+                if len(_valid_dfields) != 1:
+                    raise KeyError()
+
+                density_field = _valid_dfields[0]
+                density_unit = self.get_default_units(density_field)
+            except KeyError:
+                raise KeyError(f"Mass field for '{density_field}' could not be found in configuration or was "
+                               f"missing units / reference to a density field. \nIf it is not configured, it should be provided manually.")
+        elif density_unit is None:
+            # We still need to look up the density unit.
+            try:
+                density_unit = self.get_default_units(density_field)
+            except KeyError:
+                raise KeyError(f"Mass field for '{density_field}' could not be found in configuration or was "
+                               f"missing units.\nIf it is not configured, it should be provided manually.")
+        else:
+            # We have everything provided by the input arguments.
+            pass
+
+        # Construct the coordinates, build the interpolated spline and then
+        # perform the shell integration routine. This should be adaptable
+        # for any radial coordinate system due to the implementation of
+        # integrate_in_shells.
+        radii, spline = self.get_radii(), self.construct_radial_spline(density_field)
+
+        # Compute the density by taking the derivative
+        density_data = spline(radii.d,1)/(4*np.pi*radii.d**2)
+
+
+        # Manage the units. We compute `mass_units` which is the natural unit of the
+        # computation and then covert to a target unit.
+        base_density_unit = mass_field.units / unyt.Unit(self.grid_manager.length_unit) ** 3
+        density_data = unyt.unyt_array(density_data, base_density_unit).to(density_unit)
+
+        # Optionally add the computed mass field to the field container
+        if create_field:
+            self.FIELDS.add_field(
+                density_field,
+                data=density_data,
+                units=str(density_unit),
+                overwrite=overwrite,
+                axes=['r'],
+            )
+
+        return density_data

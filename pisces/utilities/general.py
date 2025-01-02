@@ -6,6 +6,7 @@ This module provides general-purpose utilities for dynamic class discovery and o
 
 """
 from typing import Type, TypeVar
+import sys
 
 _T = TypeVar('_T')
 
@@ -64,3 +65,36 @@ def find_in_subclasses(base_class: Type[_T], class_name: str) -> Type[_T]:
             return result
 
     raise ValueError(f"Failed to find subclass of {base_class.__name__} named {class_name}.")
+
+def get_deep_size(obj, seen_ids=None):
+    """
+    Recursively calculate the total memory size of an object and its nested contents.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to calculate the size of.
+    seen_ids : set, optional
+        Set of object IDs that have already been processed (to handle cycles).
+
+    Returns
+    -------
+    int
+        The total size of the object in bytes.
+    """
+    if seen_ids is None:
+        seen_ids = set()
+
+    object_id = id(obj)
+    if object_id in seen_ids:
+        return 0
+
+    seen_ids.add(object_id)
+    size = sys.getsizeof(obj)
+
+    if isinstance(obj, dict):
+        size += sum(get_deep_size(k, seen_ids) + get_deep_size(v, seen_ids) for k, v in obj.items())
+    elif isinstance(obj, (list, tuple, set, frozenset)):
+        size += sum(get_deep_size(i, seen_ids) for i in obj)
+
+    return size

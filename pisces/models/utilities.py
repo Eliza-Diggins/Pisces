@@ -1,11 +1,14 @@
 """
 Utility functions and classes for Pisces models.
 """
-from typing import Optional
-
+from typing import Optional, TYPE_CHECKING
+import warnings
 from pisces.utilities.config import YAMLConfig, config_directory
 from pathlib import Path
 import os
+
+if TYPE_CHECKING:
+    from pisces.models.base import Model
 
 class ModelConfigurationDescriptor:
     """
@@ -63,7 +66,7 @@ class ModelConfigurationDescriptor:
         # setup the reference object.
         self._reference: Optional[YAMLConfig] = None
 
-    def __get__(self, _, owner) -> YAMLConfig:
+    def __get__(self, _, owner: 'Model') -> Optional[YAMLConfig]:
         """
         Retrieve the YAML configuration.
 
@@ -80,8 +83,11 @@ class ModelConfigurationDescriptor:
             An instance of `YAMLConfig` initialized with the path to the configuration file.
         """
         # Validate
-        if self.filename is None:
-            raise NotImplementedError("This is a dummy YAML configuration descriptor because no filename was provided.")
+        if (self.filename is None) and owner._IS_ABC:
+            warnings.warn("This is a dummy YAML configuration descriptor because no filename was provided.")
+            return None
+        elif self.filename is None:
+            raise RuntimeError("This is a dummy YAML configuration descriptor because no filename was provided.")
 
         # Check for the reference and create it if necessary.
         if self._reference is None:

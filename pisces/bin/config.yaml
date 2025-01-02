@@ -12,8 +12,13 @@ system:
   preferences:
     # General user preferences
     disable_progress_bars: false    # Change to true to disable all progress bars in the module.
+  cache:
+    # Settings regarding internal cache storage during runtime.
+    cache_sizes:
+      # Settings for cache size restrictions.
+      grid_interpolator_cache_size: 100 # Set's maximum cache size for interpolator storage to 100 Mb.
 logging:
-  # -- Settings pertaining to the logging system in pyXMIP -- #
+  # -- Settings pertaining to the logging system in Pisces -- #
   # There are 2 loggers in the Pisces module: mainlog and devlog.
   mylog:
     # Settings for the mainlog. This is the log which displays to stdout for most processes.
@@ -39,6 +44,11 @@ physics:
 #======================================================================================================================#
 plotting:
   # These are options for any of the default plots generated in cluster generator.
+  figures:
+    # Default settings for figure sizes, DPI, etc.
+    figure_size: [10,10]
+  colormaps:
+    default_colormap: 'inferno'
   defaults:
     # -- Latex settings -- #
     text.usetex: false
