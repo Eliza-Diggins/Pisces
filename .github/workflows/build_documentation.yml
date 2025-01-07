@@ -43,7 +43,7 @@ jobs:
       run: pip install .
 
     - name: Install dependencies
-      run: pip install
+      run: pip install -r requirements.txt
 
     - name: run
       run: |
