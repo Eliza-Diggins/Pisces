@@ -77,6 +77,8 @@ with these classes.
     ./profiles/profiles_developer
 
 
+
+
 :material-regular:`functions;2em` Mathematics
 ++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -86,10 +88,32 @@ with these classes.
 
 These documents give an overview of the mathematical details that are relevant for this software.
 
+System Geometry
+'''''''''''''''
+
 .. toctree::
     :titlesonly:
     :glob:
     :numbered:
 
     ./geometry/geometry_overview
+
+Mathematical Physics
+''''''''''''''''''''
+
+.. toctree::
+    :titlesonly:
+    :glob:
+    :numbered:
+
     ./geometry/poisson_equation
+
+Statistical Methods
+'''''''''''''''''''
+
+.. toctree::
+    :titlesonly:
+    :glob:
+    :numbered:
+
+    ./particles/sampling

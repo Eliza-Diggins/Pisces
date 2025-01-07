@@ -20,6 +20,7 @@ from pisces.models.utilities import ModelConfigurationDescriptor
 from pisces.profiles.base import Profile
 from pisces.profiles.collections import HDF5ProfileRegistry
 from pisces.utilities.logging import LogDescriptor, devlog
+from pisces.models.samplers import ModelSampler
 
 if TYPE_CHECKING:
     from logging import Logger
@@ -436,6 +437,11 @@ class Model(metaclass=ModelMeta):
     model class's grid structures. Implementing a custom grid manager class specific to particular model constraints is made
     possible by altering this attribute of the model class to point to the custom manager class.
     """
+    SAMPLE_TYPE: Type['ModelSampler'] = ModelSampler
+    """ Type[:py:class:`~pisces.models.samplers.ModelSampler`]: The sampler class to initialize when the
+    model is asked to produce particles from its distributions.
+    """
+    # TODO: better doc.
     logger: 'Logger' = LogDescriptor()
     """ Logger: The specialized logger for this model class.
     
@@ -931,6 +937,18 @@ class Model(metaclass=ModelMeta):
         be stored in the HDF5 file and retrieved for further computations.
         """
         return self._profiles
+
+    @property
+    def particle_sampler(self) -> ModelSampler:
+        """
+        The model sampler attached to this model.
+        """
+        # TODO: better doc.
+        if not hasattr(self, '_particle_sampler'):
+            self._particle_sampler = ModelSampler(self)
+
+        return self._particle_sampler
+
 
     @property
     def is_solved(self) -> bool:
