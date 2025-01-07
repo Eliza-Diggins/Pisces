@@ -1,15 +1,16 @@
 """
 Core numerical functions commonly used in Pisces.
 """
+from typing import Any, Callable, List, Literal, Optional, Union
+
 import numpy as np
-from typing import List, Any, Union, Callable, Literal, TYPE_CHECKING, Optional
-from scipy.integrate import quad, quad_vec
 from numpy.typing import NDArray
-if TYPE_CHECKING:
-    from pisces.geometry.base import CoordinateSystem
+from scipy.integrate import quad, quad_vec
 
 
-def compute_grid_spacing(coordinates: np.ndarray, axes: Union[List[int], None] = None) -> List[np.ndarray]:
+def compute_grid_spacing(
+    coordinates: np.ndarray, axes: Union[List[int], None] = None
+) -> List[np.ndarray]:
     """
     Extracts 1D coordinate arrays along each specified axis from a coordinate grid.
 
@@ -44,20 +45,25 @@ def compute_grid_spacing(coordinates: np.ndarray, axes: Union[List[int], None] =
     # Slice through the correct coordinate array.
     try:
         return [
-            coordinates[(0,)*axis + (slice(None),) + (ndim-axis-1)*(0,) + (axis,)]
+            coordinates[
+                (0,) * axis + (slice(None),) + (ndim - axis - 1) * (0,) + (axis,)
+            ]
             for axis in axes
         ]
     except Exception as e:
         raise ValueError(f"Failed to compute grid spacing: {e}")
 
-def partial_derivative(coordinates: np.ndarray,
-                       field: np.ndarray,
-                       /,
-                       spacing: Any = None,
-                       *,
-                       axes: Union[List[int], int, None] = None,
-                       __validate__: bool = True,
-                       **kwargs) -> np.ndarray:
+
+def partial_derivative(
+    coordinates: np.ndarray,
+    field: np.ndarray,
+    /,
+    spacing: Any = None,
+    *,
+    axes: Union[List[int], int, None] = None,
+    __validate__: bool = True,
+    **kwargs,
+) -> np.ndarray:
     """
     Compute partial derivatives of a field over specified axes, using custom spacing if provided.
 
@@ -128,19 +134,19 @@ def partial_derivative(coordinates: np.ndarray,
     if spacing is None:
         spacing = compute_grid_spacing(coordinates, axes=axes)
 
-
     # Handle np.gradient call for partial derivatives along specified axes
     if len(axes) > 1:
-        return np.stack(np.gradient(field, *spacing, axis=axes, **kwargs),axis=-1)
+        return np.stack(np.gradient(field, *spacing, axis=axes, **kwargs), axis=-1)
     else:
         return np.gradient(field, *spacing, axis=axes, **kwargs)
 
+
 def function_partial_derivative(
-        func: Callable[[np.ndarray,...],np.ndarray],
-        coordinates: np.ndarray,
-        axes: Union[int, List[int]],
-        method: Literal['forward', 'backward', 'central'] = 'central',
-        h: float = 1e-5
+    func: Callable[[np.ndarray, ...], np.ndarray],
+    coordinates: np.ndarray,
+    axes: Union[int, List[int]],
+    method: Literal["forward", "backward", "central"] = "central",
+    h: float = 1e-5,
 ) -> np.ndarray:
     """
     Computes numerical partial derivatives of a function at specified coordinates along
@@ -185,18 +191,17 @@ def function_partial_derivative(
     # Coerce axes so that we always have an array of axes ints.
     if isinstance(axes, int):
         axes = [axes]
-    axes = np.array(axes,dtype='uint32')
+    axes = np.array(axes, dtype="uint32")
 
     # Ensure that coordinates are a valid structure.
     # We take a transpose here so that we can use *args later.
     if coordinates.ndim == 1:
-        coordinates = coordinates.reshape(1,-1)
+        coordinates = coordinates.reshape(1, -1)
     else:
-        coordinates = np.moveaxis(coordinates, -1,0)
-
+        coordinates = np.moveaxis(coordinates, -1, 0)
 
     # Prepare an empty array for the outputs.
-    partial_derivatives = np.empty((axes.size,*coordinates.shape[1:]))
+    partial_derivatives = np.empty((axes.size, *coordinates.shape[1:]))
 
     # Perform the differencing method and proceed.
     for i, axis in enumerate(axes):
@@ -205,29 +210,38 @@ def function_partial_derivative(
         backward_coords = np.copy(coordinates)
 
         # Adjust coordinates for forward and backward steps
-        forward_coords[axis,...] += h
-        backward_coords[axis,...] -= h
+        forward_coords[axis, ...] += h
+        backward_coords[axis, ...] -= h
 
-        if method == 'forward':
+        if method == "forward":
             # Forward difference: f(x + h) - f(x) / h
-            partial_derivatives[i,...] = (func(*forward_coords) - func(*coordinates)) / h
-        elif method == 'backward':
+            partial_derivatives[i, ...] = (
+                func(*forward_coords) - func(*coordinates)
+            ) / h
+        elif method == "backward":
             # Backward difference: f(x) - f(x - h) / h
-            partial_derivatives[i,...] = (func(*coordinates) - func(*backward_coords)) / h
-        elif method == 'central':
+            partial_derivatives[i, ...] = (
+                func(*coordinates) - func(*backward_coords)
+            ) / h
+        elif method == "central":
             # Central difference: (f(x + h) - f(x - h)) / (2 * h)
-            partial_derivatives[i,...] = (func(*forward_coords) - func(*backward_coords)) / (2 * h)
+            partial_derivatives[i, ...] = (
+                func(*forward_coords) - func(*backward_coords)
+            ) / (2 * h)
         else:
-            raise ValueError("Unsupported method. Use 'forward', 'backward', or 'central'.")
+            raise ValueError(
+                "Unsupported method. Use 'forward', 'backward', or 'central'."
+            )
 
     return partial_derivatives
 
+
 # noinspection PyTypeChecker
 def integrate(
-        function: Callable[[float], float],
-        x: NDArray[np.floating],
-        x_0: Optional[float] = None,
-        minima: bool = False
+    function: Callable[[float], float],
+    x: NDArray[np.floating],
+    x_0: Optional[float] = None,
+    minima: bool = False,
 ) -> NDArray[np.floating]:
     r"""
     Perform definite integration of a function from each value in ``x`` to ``x_0``.
@@ -271,12 +285,13 @@ def integrate(
 
     return -result if minima else result
 
+
 # noinspection PyTypeChecker
 def integrate_vectorized(
-        function: Callable[[float], float],
-        x: NDArray[np.floating],
-        x_0: Optional[float] = None,
-        minima: bool = False
+    function: Callable[[float], float],
+    x: NDArray[np.floating],
+    x_0: Optional[float] = None,
+    minima: bool = False,
 ) -> NDArray[np.floating]:
     r"""
     Perform vectorized definite integration of a function from each value in ``x`` to ``x_0``.
@@ -312,14 +327,14 @@ def integrate_vectorized(
     x_0 = x_0 if x_0 is not None else np.amax(x)
 
     for i, _x in enumerate(x):
-        result[i,...] = quad_vec(function, _x, x_0)[0]
+        result[i, ...] = quad_vec(function, _x, x_0)[0]
 
     return -result if minima else result
 
+
 # noinspection PyTypeChecker
 def integrate_from_zero(
-        function: Callable[[float], float],
-        x: NDArray[np.floating]
+    function: Callable[[float], float], x: NDArray[np.floating]
 ) -> NDArray[np.floating]:
     r"""
     Compute definite integration of a function from zero to each value in the input array ``x``.
@@ -366,11 +381,9 @@ def integrate_from_zero(
     return result
 
 
-
 # noinspection PyTypeChecker
 def integrate_toinf(
-        function: Callable[[float], float],
-        x: NDArray[np.floating]
+    function: Callable[[float], float], x: NDArray[np.floating]
 ) -> NDArray[np.floating]:
     r"""
     Perform definite integration of a function from each value in ``x`` to infinity.
@@ -406,4 +419,3 @@ def integrate_toinf(
         result[i] = quad(function, _x, np.inf)[0]
 
     return result
-

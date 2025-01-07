@@ -6,9 +6,10 @@ Written by: Eliza Diggins
 Last Updated: 01/04/24
 """
 import os
-from setuptools import setup, find_packages, Extension
+
 import numpy as np
 from Cython.Build import cythonize
+from setuptools import Extension, find_packages, setup
 
 print(os.path)
 # @@ CYTHON UTILITIES @@ #
@@ -37,7 +38,10 @@ setup(
     author="Eliza C. Diggins",
     author_email="eliza.diggins@utah.edu",
     url="https://github.com/eliza-diggins/pisces",
-    setup_requires=["numpy", "cython"],  # Ensure numpy and cython are installed before setup
+    setup_requires=[
+        "numpy",
+        "cython",
+    ],  # Ensure numpy and cython are installed before setup
     download_url="https://github.com/eliza-diggins/pisces/tarbar/0.0.1",
     packages=find_packages(),
     install_requires=[
@@ -48,7 +52,7 @@ setup(
         "tqdm",
         "ruamel.yaml",
         "h5py",
-        "sympy"
+        "sympy",
     ],
     classifiers=[
         "Intended Audience :: Science/Research",

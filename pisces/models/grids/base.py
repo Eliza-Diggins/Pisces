@@ -9,29 +9,46 @@ For details on the use of this module, consult :ref:`model_grid_management`.
 
 """
 from pathlib import Path
-from typing import Union, Optional, List, Iterable, Iterator, Callable, TYPE_CHECKING, Tuple, Any, Dict
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import h5py
 import numpy as np
 import unyt
-from numpy.typing import NDArray, ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from scipy.interpolate import RegularGridInterpolator
 from tqdm.auto import tqdm
 
 from pisces.geometry import GeometryHandler
 from pisces.geometry.coordinate_systems import CoordinateSystem
 from pisces.io import HDF5_File_Handle, HDF5ElementCache
-from pisces.models.grids.structs import BoundingBox, DomainDimensions, ChunkIndex
-from pisces.utilities.array_utils import make_grid_fields_broadcastable, build_image_coordinate_array, CoordinateArray
+from pisces.models.grids.structs import BoundingBox, ChunkIndex, DomainDimensions
+from pisces.utilities.array_utils import (
+    CoordinateArray,
+    build_image_coordinate_array,
+    make_grid_fields_broadcastable,
+)
 from pisces.utilities.config import pisces_params
 from pisces.utilities.containers import LRUCacheDescriptor
 from pisces.utilities.logging import devlog
 
 if TYPE_CHECKING:
+    from pisces.geometry._typing import AxisAlias
     from pisces.profiles.base import Profile
 
-AxesSpecifier = Iterable['AxisAlias']
+AxesSpecifier = Iterable["AxisAlias"]
 AxesMask = NDArray[np.bool_]
+
 
 class ModelGridManager:
     r"""
@@ -67,38 +84,42 @@ class ModelGridManager:
     # @@ CLASS ATTRIBUTES @@ #
     # These flags / defaults can be set in subclasses to
     # refine the standard behavior of subclasses.
-    DEFAULT_LENGTH_UNIT: Union[str, unyt.Unit] = 'kpc'
+    DEFAULT_LENGTH_UNIT: Union[str, unyt.Unit] = "kpc"
     """ str or unyt.Unit: The default length unit for this class.
-    
+
     The default length unit can be overwritten / bypassed by providing the ``length_unit``
     argument when initializing this class.
     """
-    DEFAULT_SCALE: Union[str, List[str]] = 'linear'
+    DEFAULT_SCALE: Union[str, List[str]] = "linear"
     """ str or list of str: The default scale for this class.
-    
+
     Unless provided during class generation, the default scale determines the :py:attr:`scale` of the
     grid manager.
     """
     ALLOWED_COORDINATE_SYSTEMS: Optional[List[str]] = None
     """ list of str: The names of the permitted coordinate systems for this manager class.
-    
+
     If the class does not specify any coordinate systems here, then all coordinate systems are permitted.
     """
-    interpolator_cache: LRUCacheDescriptor = LRUCacheDescriptor(max_size=pisces_params['system.cache.cache_sizes.grid_interpolator_cache_size'])
+    interpolator_cache: LRUCacheDescriptor = LRUCacheDescriptor(
+        max_size=pisces_params["system.cache.cache_sizes.grid_interpolator_cache_size"]
+    )
     """ :py:class:`~pisces.utilities.containers.LRUCacheDescriptor`: LRU cache for storing grid interpolators."""
 
-    def __init__(self,
-                 path: Union[str, Path],
-                 /,
-                 coordinate_system: CoordinateSystem = None,
-                 bbox: ArrayLike = None,
-                 grid_shape: ArrayLike = None,
-                 chunk_shape: ArrayLike = None,
-                 *,
-                 overwrite: bool = False,
-                 length_unit: str = None,
-                 scale: Union[List[str], str] = None):
-        """
+    def __init__(
+        self,
+        path: Union[str, Path],
+        /,
+        coordinate_system: CoordinateSystem = None,
+        bbox: ArrayLike = None,
+        grid_shape: ArrayLike = None,
+        chunk_shape: ArrayLike = None,
+        *,
+        overwrite: bool = False,
+        length_unit: str = None,
+        scale: Union[List[str], str] = None,
+    ):
+        r"""
         Initialize a :py:class:`ModelGridManager` instance.
 
         Parameters
@@ -188,7 +209,7 @@ class ModelGridManager:
                 )
 
             # Build the skeleton
-            self._handle = HDF5_File_Handle(self.path, mode='w')
+            self._handle = HDF5_File_Handle(self.path, mode="w")
             self.build_skeleton(
                 self._handle,
                 coordinate_system,
@@ -196,13 +217,13 @@ class ModelGridManager:
                 grid_shape,
                 chunk_shape,
                 length_unit=length_unit,
-                scale=scale
+                scale=scale,
             )
             # Switch the handle so that we can read data as well.
-            self._handle = self._handle.switch_mode('r+')
+            self._handle = self._handle.switch_mode("r+")
         else:
             # Open an existing file
-            self._handle = HDF5_File_Handle(self.path, mode='r+')
+            self._handle = HDF5_File_Handle(self.path, mode="r+")
 
         # LOAD and compute attributes.
         #   These methods load the relevant attributes from the HDF5 file structure
@@ -239,13 +260,20 @@ class ModelGridManager:
         self._length_unit: unyt.Unit = unyt.Unit(self.handle.attrs["LUNIT"])
 
         # Load the coordinate system from the handle coordinates system group.
-        self._coordinate_system: CoordinateSystem = CoordinateSystem.from_file(self.handle['CSYS'], fmt='hdf5')
+        self._coordinate_system: CoordinateSystem = CoordinateSystem.from_file(
+            self.handle["CSYS"], fmt="hdf5"
+        )
 
         # ensure that the coordinate system is a valid coordinate system.
         if self.__class__.ALLOWED_COORDINATE_SYSTEMS is not None:
-            if self._coordinate_system.__class__.__name__ not in self.__class__.ALLOWED_COORDINATE_SYSTEMS:
-                raise ValueError(f'Attempted to load invalid GridManager with coordinate system class {self._coordinate_system.__class__.__name__}.\n'
-                                 f'{self.__class__.__name__} only supports {self.__class__.ALLOWED_COORDINATE_SYSTEMS}.')
+            if (
+                self._coordinate_system.__class__.__name__
+                not in self.__class__.ALLOWED_COORDINATE_SYSTEMS
+            ):
+                raise ValueError(
+                    f"Attempted to load invalid GridManager with coordinate system class {self._coordinate_system.__class__.__name__}.\n"
+                    f"{self.__class__.__name__} only supports {self.__class__.ALLOWED_COORDINATE_SYSTEMS}."
+                )
 
     def _load_fields(self):
         """
@@ -267,26 +295,31 @@ class ModelGridManager:
         - Computes chunk size and cell size in scaled units.
         """
         # Manage scaling
-        self._log_mask = np.array([ax == 'log' for ax in self.scale], dtype=bool)
+        self._log_mask = np.array([ax == "log" for ax in self.scale], dtype=bool)
         self._scaled_bbox = self.BBOX[...]
-        self._scaled_bbox[:, self._log_mask] = np.log10(self._scaled_bbox[:, self._log_mask])
+        self._scaled_bbox[:, self._log_mask] = np.log10(
+            self._scaled_bbox[:, self._log_mask]
+        )
 
         # Compute chunk and cell sizes
         self._NCHUNKS = self.GRID_SHAPE // self.CHUNK_SHAPE
-        self._CHUNK_SIZE = (self._scaled_bbox[1, :] - self._scaled_bbox[0, :]) / self._NCHUNKS
+        self._CHUNK_SIZE = (
+            self._scaled_bbox[1, :] - self._scaled_bbox[0, :]
+        ) / self._NCHUNKS
         self._CELL_SIZE = self._CHUNK_SIZE / self.CHUNK_SHAPE
 
     @classmethod
-    def build_skeleton(cls,
-                       handle: HDF5_File_Handle,
-                       coordinate_system: CoordinateSystem,
-                       bbox: NDArray[np.floating],
-                       grid_shape: NDArray[np.int_],
-                       chunk_shape: Optional[NDArray[np.int_]] = None,
-                       length_unit: str = None,
-                       scale: Union[List[str] | str] = None,
-                       ) -> HDF5_File_Handle:
-        """
+    def build_skeleton(
+        cls,
+        handle: HDF5_File_Handle,
+        coordinate_system: CoordinateSystem,
+        bbox: NDArray[np.floating],
+        grid_shape: NDArray[np.int_],
+        chunk_shape: Optional[NDArray[np.int_]] = None,
+        length_unit: str = None,
+        scale: Union[List[str] | str] = None,
+    ) -> HDF5_File_Handle:
+        r"""
         Construct a "skeleton" for the :py:class:`ModelGridManager` class.
 
         The skeleton is the base structure necessary to load an HDF5 file as this object.
@@ -352,10 +385,15 @@ class ModelGridManager:
         # Validate the coordinate system.
         if cls.ALLOWED_COORDINATE_SYSTEMS is not None:
             # The allowed coordinate systems need to be checked.
-            if coordinate_system.__class__.__name__ not in cls.ALLOWED_COORDINATE_SYSTEMS:
-                raise ValueError(f"Failed to build skeleton for {cls.__name__}:\n"
-                                 f"Input coordinate system was a {coordinate_system.__class__.__name__} instance, but "
-                                 f"{cls.__name__} only supports the following: {cls.ALLOWED_COORDINATE_SYSTEMS}.")
+            if (
+                coordinate_system.__class__.__name__
+                not in cls.ALLOWED_COORDINATE_SYSTEMS
+            ):
+                raise ValueError(
+                    f"Failed to build skeleton for {cls.__name__}:\n"
+                    f"Input coordinate system was a {coordinate_system.__class__.__name__} instance, but "
+                    f"{cls.__name__} only supports the following: {cls.ALLOWED_COORDINATE_SYSTEMS}."
+                )
 
         coordinates_ndim = coordinate_system.NDIM
         bbox, grid_shape = BoundingBox(bbox), DomainDimensions(grid_shape)
@@ -368,18 +406,24 @@ class ModelGridManager:
         chunk_shape = DomainDimensions(chunk_shape)
 
         # check that the dimensions are uniform.
-        if len({bbox.shape[-1], len(grid_shape), len(chunk_shape), coordinates_ndim}) != 1:
+        if (
+            len({bbox.shape[-1], len(grid_shape), len(chunk_shape), coordinates_ndim})
+            != 1
+        ):
             raise ValueError(
                 f"Detected inconsistent dimensions while building skeleton: dimensions for bbox, grid_shape,"
                 f" chunk_shape, and coordinate system were"
-                f" {[bbox.shape[-1], len(grid_shape), len(chunk_shape), coordinates_ndim]} respectively.")
+                f" {[bbox.shape[-1], len(grid_shape), len(chunk_shape), coordinates_ndim]} respectively."
+            )
 
         # Check that the grid shape can be divided by the chunk shape.
         # This ensures that we don't get any partial chunks.
         # Check that the chunks fit
         if np.any(grid_shape % chunk_shape != 0):
-            raise ValueError(f"Grid shape {grid_shape} must be divisible by chunk shape {chunk_shape}."
-                             f" Pisces does not support partial chunking.")
+            raise ValueError(
+                f"Grid shape {grid_shape} must be divisible by chunk shape {chunk_shape}."
+                f" Pisces does not support partial chunking."
+            )
 
         # Coerce the scale to be a format that we like.
         if scale is None:
@@ -397,7 +441,7 @@ class ModelGridManager:
             if len(scale) != coordinate_system.NDIM:
                 raise ValueError(f"Scale {scale} must be specified for all dimensions.")
 
-        if any(k not in ['linear', 'log'] for k in scale):
+        if any(k not in ["linear", "log"] for k in scale):
             raise ValueError(f"Scale {scale} must be linear or log.")
 
         # Validate the length unit.
@@ -409,14 +453,14 @@ class ModelGridManager:
         # the structure.
         #
         # Add the coordinate system to the file at the CSYS group position.
-        coordinate_system.to_file(handle.require_group('CSYS'), fmt='hdf5')
+        coordinate_system.to_file(handle.require_group("CSYS"), fmt="hdf5")
 
         # WRITE parameters to disk
-        handle.attrs['LUNIT'] = str(length_unit)
-        handle.attrs['SCALE'] = scale
-        handle.attrs['CHUNK_SHAPE'] = chunk_shape
-        handle.attrs['BBOX'] = bbox
-        handle.attrs['GRID_SHAPE'] = grid_shape
+        handle.attrs["LUNIT"] = str(length_unit)
+        handle.attrs["SCALE"] = scale
+        handle.attrs["CHUNK_SHAPE"] = chunk_shape
+        handle.attrs["BBOX"] = bbox
+        handle.attrs["GRID_SHAPE"] = grid_shape
 
         return handle
 
@@ -430,10 +474,10 @@ class ModelGridManager:
     def __repr__(self):
         return self.__str__()
 
-    def __getitem__(self,field: str) -> 'ModelField':
+    def __getitem__(self, field: str) -> "ModelField":
         return self.FIELDS[field]
 
-    def __setitem__(self,field: str, value: NDArray[np.floating]) -> None:
+    def __setitem__(self, field: str, value: NDArray[np.floating]) -> None:
         self.FIELDS[field][...] = value
 
     def __len__(self):
@@ -450,12 +494,13 @@ class ModelGridManager:
 
     # @@ COORDINATE MANAGEMENT @@ #
     # These methods are used for coordinate determinations.
-    def _get_coordinate_parameters(self,
-                                   axes_mask: np.ndarray[bool],
-                                   chunk_index: Optional[np.ndarray] = None,
-                                   stencil_kwargs: Optional[dict] = None,
-                                   use_complex: bool = False,
-                                   ) -> List[Tuple[float, float, int]]:
+    def _get_coordinate_parameters(
+        self,
+        axes_mask: np.ndarray[bool],
+        chunk_index: Optional[np.ndarray] = None,
+        stencil_kwargs: Optional[dict] = None,
+        use_complex: bool = False,
+    ) -> List[Tuple[float, float, int]]:
         """
         Compute coordinate parameters for generating grids.
 
@@ -509,26 +554,28 @@ class ModelGridManager:
                 "Stencil kwargs provided without a chunk index. This is redundant and will be ignored."
             )
         if chunk_index is not None and stencil_kwargs is None:
-            stencil_kwargs = {} # All these functions use kwargs with built-in defaults.
+            stencil_kwargs = (
+                {}
+            )  # All these functions use kwargs with built-in defaults.
 
         # Determine bounding box and shape
         if chunk_index is not None:
             chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
             shape = self.CHUNK_SHAPE[axes_mask]
 
-            if stencil_kwargs.get('stencil_size', 0) > 0: # Fails by default.
+            if stencil_kwargs.get("stencil_size", 0) > 0:  # Fails by default.
                 # We have a stencil that is larger than a single chunk. We can then proceed.
                 bbox = self.get_stencil_bbox(
                     chunk_index=chunk_index,
                     axes=list(np.array(self.coordinate_system.AXES)[axes_mask]),
                     scale=True,
-                    **stencil_kwargs
+                    **stencil_kwargs,
                 )
             else:
                 bbox = self.get_chunk_bbox(
                     chunk_index=chunk_index,
                     axes=list(np.array(self.coordinate_system.AXES)[axes_mask]),
-                    scale=True
+                    scale=True,
                 )
         else:
             bbox = self.SCALED_BBOX[:, axes_mask]
@@ -547,11 +594,11 @@ class ModelGridManager:
         return [slice_constructor(i) for i in range(np.sum(axes_mask))]
 
     def get_coordinates(
-            self,
-            chunk_index: Optional[np.ndarray] = None,
-            axes: Optional[AxesSpecifier] = None,
-            stencil_kwargs: Optional[dict] = None,
-            scaled: bool = False,
+        self,
+        chunk_index: Optional[np.ndarray] = None,
+        axes: Optional[AxesSpecifier] = None,
+        stencil_kwargs: Optional[dict] = None,
+        scaled: bool = False,
     ) -> NDArray[np.float64]:
         """
         Compute the cell-centered coordinates for the grid or a specific chunk.
@@ -610,10 +657,12 @@ class ModelGridManager:
         # necessary validation and handles chunks vs. full grid.
         # NOTE: The reason we do this is because we might want just the slice
         #   data for other reasons in other methods.
-        slice_data = self._get_coordinate_parameters(axes_mask,
-                                                     chunk_index=chunk_index,
-                                                     stencil_kwargs=stencil_kwargs,
-                                                     use_complex=True)
+        slice_data = self._get_coordinate_parameters(
+            axes_mask,
+            chunk_index=chunk_index,
+            stencil_kwargs=stencil_kwargs,
+            use_complex=True,
+        )
 
         slice_data = [slice(*slc_data) for slc_data in slice_data]
 
@@ -621,20 +670,24 @@ class ModelGridManager:
         # correct position and then rescaling for the log components.
         coordinates = np.moveaxis(np.mgrid[*slice_data], 0, -1)
         if not scaled:
-            coordinates[..., self.is_log_mask[axes_mask]] = 10**coordinates[..., self.is_log_mask[axes_mask]]
+            coordinates[..., self.is_log_mask[axes_mask]] = (
+                10 ** coordinates[..., self.is_log_mask[axes_mask]]
+            )
 
         return coordinates
 
     # @@ INTERPOLATION @@ #
     # These methods are focused on robust interpolation of the fields in the
     # FIELDS attribute container.
-    def build_field_interpolator(self,
-                                 field_name: str,
-                                 chunk_index: Optional[Any] = None,
-                                 stencil_kwargs: Dict[str, Any] = None,
-                                 cache: bool = True,
-                                 overwrite: bool = False,
-                                 **kwargs):
+    def build_field_interpolator(
+        self,
+        field_name: str,
+        chunk_index: Optional[Any] = None,
+        stencil_kwargs: Dict[str, Any] = None,
+        cache: bool = True,
+        overwrite: bool = False,
+        **kwargs,
+    ):
         """
         Build an interpolator for a specified field.
 
@@ -694,7 +747,7 @@ class ModelGridManager:
             chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
             _chunk_cache_key = tuple(chunk_index)
         else:
-            _chunk_cache_key = 'all'
+            _chunk_cache_key = "all"
 
         if cache and (not overwrite):
             cache_key = (field_name, _chunk_cache_key)
@@ -712,20 +765,22 @@ class ModelGridManager:
 
             # Fix up the stencil kwargs to ensure that we have a stencil
             if stencil_kwargs is None:
-                stencil_kwargs = dict(stencil_size=1, stencil_alignment='center')
+                stencil_kwargs = dict(stencil_size=1, stencil_alignment="center")
 
-            coordinate_parameters = self._get_coordinate_parameters(axes_mask,
-                                                                    use_complex=False,
-                                                                    chunk_index=chunk_index,
-                                                                    stencil_kwargs=stencil_kwargs)
+            coordinate_parameters = self._get_coordinate_parameters(
+                axes_mask,
+                use_complex=False,
+                chunk_index=chunk_index,
+                stencil_kwargs=stencil_kwargs,
+            )
         else:
             # Fetch the full grid coordinate parameters
-            coordinate_parameters = self._get_coordinate_parameters(axes_mask, use_complex=False)
+            coordinate_parameters = self._get_coordinate_parameters(
+                axes_mask, use_complex=False
+            )
         # Construct the interpolation points via the list of linspaces generated
         # from the coordinate parameters obtained. Additionally, load the field data.
-        points = [
-            np.linspace(*cparams) for cparams in coordinate_parameters
-        ]
+        points = [np.linspace(*cparams) for cparams in coordinate_parameters]
         data = field_reference[...].d
 
         # Construct and return the interpolator
@@ -734,7 +789,7 @@ class ModelGridManager:
         if cache:
             # Add the interpolator to the cache.
             if chunk_index is None:
-                _chunk_cache_key = 'all'
+                _chunk_cache_key = "all"
             else:
                 _chunk_cache_key = tuple(chunk_index)
             chunk_key = (field_name, _chunk_cache_key)
@@ -748,10 +803,12 @@ class ModelGridManager:
     # @@ CHUNK UTILITIES @@ #
     # These methods are utilities for performing operations in
     # chunks.
-    def get_chunk_bbox(self,
-                       chunk_index: np.ndarray,
-                       axes: Optional[List[str]] = None,
-                       scale: bool = False) -> BoundingBox:
+    def get_chunk_bbox(
+        self,
+        chunk_index: np.ndarray,
+        axes: Optional[List[str]] = None,
+        scale: bool = False,
+    ) -> BoundingBox:
         """
         Compute the bounding box for a specific.
 
@@ -785,7 +842,9 @@ class ModelGridManager:
 
         # Pull out the positions. This is taken from the scaled bounding box because
         # the chunks have linear sizes in the scaled domain.
-        left = self._scaled_bbox[0, axes_mask] + chunk_index * self.CHUNK_SIZE[axes_mask]
+        left = (
+            self._scaled_bbox[0, axes_mask] + chunk_index * self.CHUNK_SIZE[axes_mask]
+        )
         right = left + self.CHUNK_SIZE[axes_mask]
 
         # Build the base of the bbox.
@@ -795,10 +854,14 @@ class ModelGridManager:
         if scale:
             return BoundingBox(_bbox)
         else:
-            _bbox[:,self.is_log_mask[axes_mask]] = 10**_bbox[:,self.is_log_mask[axes_mask]]
+            _bbox[:, self.is_log_mask[axes_mask]] = (
+                10 ** _bbox[:, self.is_log_mask[axes_mask]]
+            )
             return BoundingBox(_bbox)
 
-    def get_chunk_mask(self, chunk_index: ChunkIndex, axes: Optional[AxesSpecifier] = None) -> List[slice]:
+    def get_chunk_mask(
+        self, chunk_index: ChunkIndex, axes: Optional[AxesSpecifier] = None
+    ) -> List[slice]:
         """
         Construct the mask of the full grid corresponding to a specific ``chunk_index``.
 
@@ -827,7 +890,7 @@ class ModelGridManager:
         if axes is None:
             axes = self.coordinate_system.AXES
         axes_mask = self.coordinate_system.build_axes_mask(axes)
-        chunk_index = ChunkIndex(chunk_index,self.NCHUNKS[axes_mask])
+        chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
 
         start = chunk_index * self.CHUNK_SHAPE[axes_mask]
         end = (chunk_index + 1) * self.CHUNK_SHAPE[axes_mask]
@@ -836,9 +899,7 @@ class ModelGridManager:
 
     @staticmethod
     def _get_stencil_start_end(
-            chunk_index: np.ndarray,
-            stencil_size: int,
-            stencil_alignment: str
+        chunk_index: np.ndarray, stencil_size: int, stencil_alignment: str
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute the start and end indices for a stencil region around a specific chunk index.
@@ -873,13 +934,13 @@ class ModelGridManager:
         - The function ensures that the alignment rules are consistent with the specified `stencil_alignment`.
         """
         # Compute stencil boundaries based on alignment
-        if stencil_alignment == 'center':
+        if stencil_alignment == "center":
             id_min = chunk_index - stencil_size
             id_max = chunk_index + 1 + stencil_size
-        elif stencil_alignment == 'left':
+        elif stencil_alignment == "left":
             id_min = chunk_index
             id_max = chunk_index + 1 + (2 * stencil_size)
-        elif stencil_alignment == 'right':
+        elif stencil_alignment == "right":
             id_min = chunk_index - (2 * stencil_size)
             id_max = chunk_index + 1
         else:
@@ -890,12 +951,13 @@ class ModelGridManager:
 
         return id_min, id_max
 
-    def get_chunk_stencil(self,
-                          chunk_index: ChunkIndex,
-                          stencil_size: int = 0,
-                          stencil_alignment: str = 'center',
-                          axes: Optional[AxesSpecifier] = None
-                          ) -> List[slice]:
+    def get_chunk_stencil(
+        self,
+        chunk_index: ChunkIndex,
+        stencil_size: int = 0,
+        stencil_alignment: str = "center",
+        axes: Optional[AxesSpecifier] = None,
+    ) -> List[slice]:
         """
         Construct the mask of the grid corresponding to a stencil around a specific ``chunk_index``.
 
@@ -945,21 +1007,26 @@ class ModelGridManager:
         chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
 
         # Construct the id min and id max for the stencils
-        id_min,id_max = self._get_stencil_start_end(chunk_index,
-                                                    stencil_size,
-                                                    stencil_alignment)
+        id_min, id_max = self._get_stencil_start_end(
+            chunk_index, stencil_size, stencil_alignment
+        )
 
         # Construct the stencil start and end points based on the
         # chunk shapes.
-        stencil_start,stencil_end = id_min*self.CHUNK_SHAPE[axes_mask], id_max*self.CHUNK_SHAPE[axes_mask]
+        stencil_start, stencil_end = (
+            id_min * self.CHUNK_SHAPE[axes_mask],
+            id_max * self.CHUNK_SHAPE[axes_mask],
+        )
         return [slice(s, e) for s, e in zip(stencil_start, stencil_end)]
 
-    def get_stencil_bbox(self,
-                         chunk_index: np.ndarray,
-                         stencil_size: int = 0,
-                         stencil_alignment: str = 'center',
-                         axes: Optional[List[str]] = None,
-                         scale: bool = False) -> BoundingBox:
+    def get_stencil_bbox(
+        self,
+        chunk_index: np.ndarray,
+        stencil_size: int = 0,
+        stencil_alignment: str = "center",
+        axes: Optional[List[str]] = None,
+        scale: bool = False,
+    ) -> BoundingBox:
         """
         Compute the bounding box for a stencil region around a specific chunk.
 
@@ -1001,9 +1068,9 @@ class ModelGridManager:
         chunk_index = ChunkIndex(chunk_index, self.NCHUNKS[axes_mask])
 
         # Determine the left and right corners of the stencil chunk id range
-        id_min,id_max = self._get_stencil_start_end(chunk_index,
-                                                    stencil_size,
-                                                    stencil_alignment)
+        id_min, id_max = self._get_stencil_start_end(
+            chunk_index, stencil_size, stencil_alignment
+        )
 
         # Pull out the positions for the stencil region and then build the bounding box
         # to return.
@@ -1015,10 +1082,14 @@ class ModelGridManager:
         if scale:
             return BoundingBox(_bbox)
         else:
-            _bbox[:, self.is_log_mask[axes_mask]] = 10 ** _bbox[:, self.is_log_mask[axes_mask]]
+            _bbox[:, self.is_log_mask[axes_mask]] = (
+                10 ** _bbox[:, self.is_log_mask[axes_mask]]
+            )
             return BoundingBox(_bbox)
 
-    def iterate_over_chunks(self, axes: Optional[List[str]] = None) -> Iterator[ChunkIndex]:
+    def iterate_over_chunks(
+        self, axes: Optional[List[str]] = None
+    ) -> Iterator[ChunkIndex]:
         """
         Iterate over all chunks along the specified axes.
 
@@ -1039,14 +1110,20 @@ class ModelGridManager:
 
         # Construct the index arrays. np.indices generates array of shape (NDIM,*self.NCHUNKS) which can then
         # be collapsed to (NDIM, TOTAL_CHUNKS) to contain all of the chunk indices.
-        index_array = np.indices(self.NCHUNKS[axes_mask],dtype=int) # (NDIM, *self.NCHUNKS)
-        index_array = index_array.reshape(len(self.NCHUNKS[axes_mask]),-1) # (NDIM, TOTAL_CHUNKS)
-        index_array = index_array.T # (TOTAL_CHUNKS,NDIM)
+        index_array = np.indices(
+            self.NCHUNKS[axes_mask], dtype=int
+        )  # (NDIM, *self.NCHUNKS)
+        index_array = index_array.reshape(
+            len(self.NCHUNKS[axes_mask]), -1
+        )  # (NDIM, TOTAL_CHUNKS)
+        index_array = index_array.T  # (TOTAL_CHUNKS,NDIM)
 
         for chunk_index in index_array:
             yield chunk_index
 
-    def get_chunk_map(self, coordinate_array: 'CoordinateArray', axes: List[str] = None):
+    def get_chunk_map(
+        self, coordinate_array: "CoordinateArray", axes: List[str] = None
+    ):
         """
         Map a set of coordinates to the corresponding chunk indices in the grid and return the unique chunks.
 
@@ -1082,28 +1159,41 @@ class ModelGridManager:
         is_log_mask = self.is_log_mask[axes_mask]
 
         # Apply logarithmic scaling where necessary
-        coordinate_array[..., is_log_mask] = np.log10(coordinate_array[..., is_log_mask])
+        coordinate_array[..., is_log_mask] = np.log10(
+            coordinate_array[..., is_log_mask]
+        )
 
         # Shift the coordinates to align with the bounding box
         coordinate_array -= scaled_bbox[0, :]
 
         # Check for out-of-bounds coordinates
-        if np.any(coordinate_array < 0) or np.any(coordinate_array > scaled_bbox[1, :] - scaled_bbox[0, :], axis=-1):
-            raise ValueError("Invalid coordinate array: some points are outside of the grid.")
+        if np.any(coordinate_array < 0) or np.any(
+            coordinate_array > scaled_bbox[1, :] - scaled_bbox[0, :], axis=-1
+        ):
+            raise ValueError(
+                "Invalid coordinate array: some points are outside of the grid."
+            )
 
         # Convert scaled coordinates to chunk indices
         scaled_chunk_size = self.CHUNK_SIZE[axes_mask]  # Shape: (len(axes),)
         chunk_indices = np.floor_divide(coordinate_array, scaled_chunk_size).astype(int)
 
         # Generate the list of unique chunks
-        unique_chunks = list({tuple(chunk) for chunk in chunk_indices.reshape(-1, chunk_indices.shape[-1])})
+        unique_chunks = list(
+            {
+                tuple(chunk)
+                for chunk in chunk_indices.reshape(-1, chunk_indices.shape[-1])
+            }
+        )
 
         return chunk_indices, unique_chunks
 
     # @@ UTILITY FUNCTIONS @@ #
     # These methods provide backend utilities for various processes
     # underlying chunk integration and operation management.
-    def make_fields_consistent(self, arrays: List[np.ndarray], axes: List[Union[List[str]]]) -> List[np.ndarray]:
+    def make_fields_consistent(
+        self, arrays: List[np.ndarray], axes: List[Union[List[str]]]
+    ) -> List[np.ndarray]:
         """
         Ensures that multiple arrays are broadcastable based their axes.
 
@@ -1133,21 +1223,23 @@ class ModelGridManager:
             present in the canonical ``coordinate_system.AXES``, or if the arrays are not
             mutually broadcastable after reshaping.
         """
-        return make_grid_fields_broadcastable(arrays,axes,coordinate_system=self.coordinate_system)
+        return make_grid_fields_broadcastable(
+            arrays, axes, coordinate_system=self.coordinate_system
+        )
 
     # @@ FEATURES @@ #
     def add_field_from_function(
-            self,
-            function: Callable,
-            field_name: str,
-            /,
-            axes: Optional[List[str]] = None,
-            *,
-            chunking: bool = False,
-            units: Optional[str] = '',
-            dtype: str = "f8",
-            overwrite: bool = False,
-            **kwargs,
+        self,
+        function: Callable,
+        field_name: str,
+        /,
+        axes: Optional[List[str]] = None,
+        *,
+        chunking: bool = False,
+        units: Optional[str] = "",
+        dtype: str = "f8",
+        overwrite: bool = False,
+        **kwargs,
     ):
         """
         Create a :py:class:`ModelField` in this :py:class:`ModelGridManager` by evaluating the provided function.
@@ -1218,26 +1310,32 @@ class ModelGridManager:
             _field[...] = function(*np.moveaxis(coordinates, -1, 0))
         else:
             # We are going to use chunks. We now need to iterate through each chunk.
-            _progress_bar = tqdm(desc=f'(Chunked) Building field {field_name}',
-                                 total=int(np.prod(self.NCHUNKS[axes])),
-                                 leave = False,
-                                 disable= pisces_params['system.preferences.disable_progress_bars'])
+            _progress_bar = tqdm(
+                desc=f"(Chunked) Building field {field_name}",
+                total=int(np.prod(self.NCHUNKS[axes])),
+                leave=False,
+                disable=pisces_params["system.preferences.disable_progress_bars"],
+            )
             for _ci in self.iterate_over_chunks(axes):
-                _chunk_mask, _chunk_coordinates = self.get_chunk_mask(_ci,axes=axes), self.get_coordinates(chunk_index=_ci,axes=axes)
+                _chunk_mask, _chunk_coordinates = self.get_chunk_mask(
+                    _ci, axes=axes
+                ), self.get_coordinates(chunk_index=_ci, axes=axes)
                 _field[*_chunk_mask] = function(*np.moveaxis(_chunk_coordinates, -1, 0))
                 _progress_bar.update(1)
             _progress_bar.close()
 
-    def add_field_from_profile(self,
-                               profile: 'Profile',
-                               field_name: str,
-                               /,
-                               *,
-                               chunking: bool = False,
-                               units: Optional[str] = None,
-                               dtype: str = "f8",
-                               overwrite: bool = False,
-                               **kwargs):
+    def add_field_from_profile(
+        self,
+        profile: "Profile",
+        field_name: str,
+        /,
+        *,
+        chunking: bool = False,
+        units: Optional[str] = None,
+        dtype: str = "f8",
+        overwrite: bool = False,
+        **kwargs,
+    ):
         """
         Create a :py:class:`ModelField` in this :py:class:`ModelGridManager` by evaluating the provided profile.
 
@@ -1372,45 +1470,80 @@ class ModelGridManager:
         # Import the tabulate method that we need to successfully run this.
         try:
             from tabulate import tabulate
+
             _use_tabulate = True
         except ImportError:
             _use_tabulate = False
-            tabulate = None  #! TRICK the IDE
+            tabulate = None  # ! TRICK the IDE
 
         axes_info = []
         for axi, ax in enumerate(self.coordinate_system.AXES):
             amin, amax = self.BBOX[0, axi], self.BBOX[1, axi]
-            Ngrid, Nchunk = self.GRID_SHAPE[axi], (self.GRID_SHAPE // self.CHUNK_SHAPE)[axi]
+            Ngrid, Nchunk = (
+                self.GRID_SHAPE[axi],
+                (self.GRID_SHAPE // self.CHUNK_SHAPE)[axi],
+            )
             Sgrid, Schunk = self.CELL_SIZE[axi], self.CHUNK_SIZE[axi]
             scale = self.scale[axi]
 
-            if scale == 'log':
-                amin, amax = np.format_float_scientific(float(10**amin), precision=3, unique=True), \
-                             np.format_float_scientific(float(10**amax), precision=3, unique=True)
+            if scale == "log":
+                amin, amax = np.format_float_scientific(
+                    float(10**amin), precision=3, unique=True
+                ), np.format_float_scientific(
+                    float(10**amax), precision=3, unique=True
+                )
                 Sgrid = f"{np.format_float_scientific(float(Sgrid), precision=2)} - log"
-                Schunk = f"{np.format_float_scientific(float(Schunk), precision=2)} - log"
+                Schunk = (
+                    f"{np.format_float_scientific(float(Schunk), precision=2)} - log"
+                )
             else:
-                amin, amax = np.format_float_scientific(float(amin), precision=2), \
-                             np.format_float_scientific(float(amax), precision=2)
+                amin, amax = np.format_float_scientific(
+                    float(amin), precision=2
+                ), np.format_float_scientific(float(amax), precision=2)
                 Sgrid = f"{np.format_float_scientific(float(Sgrid), precision=2)} - lin"
-                Schunk = f"{np.format_float_scientific(float(Schunk), precision=2)} - lin"
+                Schunk = (
+                    f"{np.format_float_scientific(float(Schunk), precision=2)} - lin"
+                )
 
-            axes_info.append([
-                ax, amin, amax, Ngrid, Nchunk, Sgrid, Schunk, scale,
-            ])
+            axes_info.append(
+                [
+                    ax,
+                    amin,
+                    amax,
+                    Ngrid,
+                    Nchunk,
+                    Sgrid,
+                    Schunk,
+                    scale,
+                ]
+            )
 
         if not _use_tabulate:
             return axes_info
         else:
-            return tabulate(axes_info, headers=["Axis", "Min.", "Max.", "N", "N Chunks",
-                                                "Cell Size", "Chunk Size", "Scale"], tablefmt="grid")
+            return tabulate(
+                axes_info,
+                headers=[
+                    "Axis",
+                    "Min.",
+                    "Max.",
+                    "N",
+                    "N Chunks",
+                    "Cell Size",
+                    "Chunk Size",
+                    "Scale",
+                ],
+                tablefmt="grid",
+            )
 
-    def generate_slice_image_array(self,
-                                   field_name: str,
-                                   view_axis: str,
-                                   extent: np.ndarray,
-                                   resolution: np.ndarray,
-                                   position: Optional[float] = 0):
+    def generate_slice_image_array(
+        self,
+        field_name: str,
+        view_axis: str,
+        extent: np.ndarray,
+        resolution: np.ndarray,
+        position: Optional[float] = 0,
+    ):
         """
         Generate a 2D slice image array for a given field.
 
@@ -1452,47 +1585,49 @@ class ModelGridManager:
         # Validate that the field exists and pull the reference to the
         # field out of the FIELDS attribute.
         if field_name not in self.FIELDS:
-            raise ValueError(f"Cannot create image if field `{field_name}`: failed to find field in {self}.")
+            raise ValueError(
+                f"Cannot create image if field `{field_name}`: failed to find field in {self}."
+            )
 
         field_ref = self.FIELDS[field_name]
         axes_mask = self.coordinate_system.build_axes_mask(field_ref.AXES)
 
         # Construct and convert the underlying coordinate grid. This will require generating the
         # coordinate grid for the slice and then converting it to the expected coordinate system.
-        image_coordinates = build_image_coordinate_array(extent,
-                                                         resolution,
-                                                         view_axis,
-                                                         position)
+        image_coordinates = build_image_coordinate_array(
+            extent, resolution, view_axis, position
+        )
         image_coordinates = self.coordinate_system.from_cartesian(image_coordinates)
 
         # Convert image coordinates so that they are log scaled where necessary
         # and cut down to the axes cut.
-        image_coordinates = image_coordinates[...,axes_mask]
-        image_coordinates[...,self.is_log_mask[axes_mask]] = np.log10(image_coordinates[...,self.is_log_mask[axes_mask]])
+        image_coordinates = image_coordinates[..., axes_mask]
+        image_coordinates[..., self.is_log_mask[axes_mask]] = np.log10(
+            image_coordinates[..., self.is_log_mask[axes_mask]]
+        )
         image_shape = image_coordinates.shape[:-1]
 
         # Perform the interpolation procedure to figure out what values the
         # field takes on the image coordinate grid.
-        interpolator = self.build_field_interpolator(field_name,bounds_error=False,fill_value=None)
+        interpolator = self.build_field_interpolator(
+            field_name, bounds_error=False, fill_value=None
+        )
 
         # Construct the image array by calling the interpolator.
         # The interpolator exists (N, NDIM) as input -> we have (*RES, NDIM).
-        image_coordinates = np.reshape(image_coordinates, (-1,len(field_ref.AXES)))
+        image_coordinates = np.reshape(image_coordinates, (-1, len(field_ref.AXES)))
         image = np.array(interpolator(image_coordinates))
 
         # Reconstruct image shape
         image = image.reshape(image_shape)
         return image
 
-
-
-
     # @@ PROPERTIES @@ #
     # For the most part, these all point to private
     # attributes elsewhere in the class structure. They shouldn't
     # need to be modified when generating a subclass.
     @property
-    def FIELDS(self) -> 'ModelFieldContainer':
+    def FIELDS(self) -> "ModelFieldContainer":
         """
         The physical fields in this manager file.
 
@@ -1506,7 +1641,9 @@ class ModelGridManager:
             The container for managing the fields in the grid.
         """
         if self._fields is None:
-            raise AttributeError("Fields container has not been initialized. Ensure the grid manager is correctly initialized.")
+            raise AttributeError(
+                "Fields container has not been initialized. Ensure the grid manager is correctly initialized."
+            )
         return self._fields
 
     @property
@@ -1567,7 +1704,7 @@ class ModelGridManager:
 
     @property
     def scale(self) -> List[str]:
-        """ The scaling between cells along each grid axis.
+        """The scaling between cells along each grid axis.
 
         Each element in :py:attr:`scale` is either ``"linear"`` or ``"log"``, indicating the spacing between
         adjacent cells along the corresponding grid axis.
@@ -1593,7 +1730,7 @@ class ModelGridManager:
 
     @property
     def length_unit(self) -> unyt.Unit:
-        """ The unit of length corresponding to the grid domain.
+        """The unit of length corresponding to the grid domain.
 
         :py:class:`ModelGridManagers` store the underlying grid as unitless values; these units allow for
         the grid domain, cell spacing, etc. to be connect to physical quantities correctly.
@@ -1753,16 +1890,16 @@ class ModelField(unyt.unyt_array):
     """
 
     def __new__(
-            cls,
-            manager: ModelGridManager,
-            name: str,
-            /,
-            axes: Optional[List[str]] = None,
-            data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
-            *,
-            overwrite: bool = False,
-            dtype: str = "f8",
-            units: str = "",
+        cls,
+        manager: ModelGridManager,
+        name: str,
+        /,
+        axes: Optional[List[str]] = None,
+        data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+        *,
+        overwrite: bool = False,
+        dtype: str = "f8",
+        units: str = "",
     ):
         # Build or retrieve the underlying HDF5 dataset.
         #    This ensures shape/units are validated and sets the dataset attributes.
@@ -1780,7 +1917,7 @@ class ModelField(unyt.unyt_array):
 
         # Extract final units and axis ordering from the dataset's attributes.
         #    These might differ from user inputs if the skeleton had to coerce them.
-        _units = dataset.attrs['units']
+        _units = dataset.attrs["units"]
         _axes = dataset.attrs["axes"]
 
         # 3) Create the unyt array instance with placeholder data to avoid
@@ -1805,16 +1942,16 @@ class ModelField(unyt.unyt_array):
 
     # noinspection PyUnusedLocal
     def __init__(
-            self,
-            manager: ModelGridManager,
-            name: str,
-            /,
-            axes: Optional[List[str]] = None,
-            data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
-            *,
-            overwrite: bool = False,
-            dtype: str = "f8",
-            units: str = "",
+        self,
+        manager: ModelGridManager,
+        name: str,
+        /,
+        axes: Optional[List[str]] = None,
+        data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+        *,
+        overwrite: bool = False,
+        dtype: str = "f8",
+        units: str = "",
     ):
         """
         Construct a new :py:class:`ModelField` instance, backed by an HDF5 dataset.
@@ -1960,9 +2097,13 @@ class ModelField(unyt.unyt_array):
         """
         # Manage the HDF5 location / existence component of the procedure. If an
         # existing element is found a reference is checked against overwrite.
-        handle = manager.handle.require_group("FIELDS") # This is the field storage location for all managers.
+        handle = manager.handle.require_group(
+            "FIELDS"
+        )  # This is the field storage location for all managers.
         if overwrite and name in handle:
-            devlog.debug("ModelField - build_skeleton: removing %s from %s.",name,handle)
+            devlog.debug(
+                "ModelField - build_skeleton: removing %s from %s.", name, handle
+            )
             del handle[name]
 
         # Look for (and return) an existing dataset of possible.
@@ -1980,8 +2121,10 @@ class ModelField(unyt.unyt_array):
 
         if any(ax not in _coordinate_system.AXES for ax in axes):
             # We have unrecognized axes.
-            raise ValueError(f"The following axes are not recognized for the {_coordinate_system.__class__.__name__}"
-                             f" coordinate system: {[ax for ax in axes if ax not in _coordinate_system.AXES]}")
+            raise ValueError(
+                f"The following axes are not recognized for the {_coordinate_system.__class__.__name__}"
+                f" coordinate system: {[ax for ax in axes if ax not in _coordinate_system.AXES]}"
+            )
 
         # ensure axes are in order
         axes = _coordinate_system.ensure_axis_order(axes)
@@ -1989,7 +2132,9 @@ class ModelField(unyt.unyt_array):
         # @@ SHAPE COORDINATION @@ #
         # We need to determine the correct shape. If data was actually provided,
         # we need to check that it has the right shape to proceed.
-        axes_indices = np.array([_coordinate_system.ensure_axis_numeric(ax) for ax in axes],dtype=int) # Convert to indices.
+        axes_indices = np.array(
+            [_coordinate_system.ensure_axis_numeric(ax) for ax in axes], dtype=int
+        )  # Convert to indices.
         shape = manager.GRID_SHAPE[axes_indices]
 
         # @@ UNITS and DATA MANAGEMENT @@ #
@@ -1997,9 +2142,11 @@ class ModelField(unyt.unyt_array):
         # we manage the data correctly as well.
         if data is not None:
             # Check the data for the correct shape.
-            if not np.array_equal(data.shape,shape):
-                raise ValueError(f"Failed to build ModelField skeleton:\n"
-                                 f"Expected shape {shape} (axes={axes}) but received shape {data.shape}.")
+            if not np.array_equal(data.shape, shape):
+                raise ValueError(
+                    f"Failed to build ModelField skeleton:\n"
+                    f"Expected shape {shape} (axes={axes}) but received shape {data.shape}."
+                )
 
             # If there is data provided to us, we need to also validate
             # that the data is what we expect it to be in terms of units and type.
@@ -2079,8 +2226,9 @@ class ModelField(unyt.unyt_array):
 
         return result
 
-
-    def __setitem__(self, key: Union[slice, int], value: Union[unyt.unyt_array, np.ndarray]):
+    def __setitem__(
+        self, key: Union[slice, int], value: Union[unyt.unyt_array, np.ndarray]
+    ):
         """
         Set a slice of the field's data.
 
@@ -2107,7 +2255,9 @@ class ModelField(unyt.unyt_array):
         if isinstance(value, np.ndarray):
             value = unyt.unyt_array(value, self.units)
         elif not isinstance(value, unyt.unyt_array):
-            raise ValueError(f"`value` must be a unyt_array or numpy.ndarray, not {type(value)}.")
+            raise ValueError(
+                f"`value` must be a unyt_array or numpy.ndarray, not {type(value)}."
+            )
 
         try:
             value = value.to_value(self.units)
@@ -2155,37 +2305,38 @@ class ModelField(unyt.unyt_array):
         List of str
             The axes names.
         """
-        return self._axes[:] # Yield a copy, non-mutable.
+        return self._axes[:]  # Yield a copy, non-mutable.
 
 
 class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
     """
-     Container class that manages :py:class:`ModelField` objects within a shared HDF5 group.
+    Container class that manages :py:class:`ModelField` objects within a shared HDF5 group.
 
-     This class extends :py:class:`~pisces.io.HDF5ElementCache` to allow dictionary-like
-     access to fields stored under ``manager.handle['FIELDS']``. Each field is keyed by
-     a string (its name) and mapped to a :py:class:`ModelField` instance.
+    This class extends :py:class:`~pisces.io.HDF5ElementCache` to allow dictionary-like
+    access to fields stored under ``manager.handle['FIELDS']``. Each field is keyed by
+    a string (its name) and mapped to a :py:class:`ModelField` instance.
 
-     Parameters
-     ----------
-     manager : ModelGridManager
-         The manager providing global grid info and the HDF5 file handle for storing fields.
-     **kwargs : dict
-         Additional keyword arguments passed to :py:class:`~pisces.io.HDF5ElementCache`.
+    Parameters
+    ----------
+    manager : ModelGridManager
+        The manager providing global grid info and the HDF5 file handle for storing fields.
+    **kwargs : dict
+        Additional keyword arguments passed to :py:class:`~pisces.io.HDF5ElementCache`.
 
-     Notes
-     -----
-     - The container ensures that when you retrieve or add a field, it is linked
-       to the same underlying HDF5 group.
-     - Fields can be referenced or created using dictionary syntax, e.g. ``my_container["density"]``.
-     - This class also provides convenience methods for copying or summarizing fields.
+    Notes
+    -----
+    - The container ensures that when you retrieve or add a field, it is linked
+      to the same underlying HDF5 group.
+    - Fields can be referenced or created using dictionary syntax, e.g. ``my_container["density"]``.
+    - This class also provides convenience methods for copying or summarizing fields.
 
-     See Also
-     --------
-     HDF5ElementCache : Base caching mechanism for HDF5-backed collections.
-     ModelField : Individual fields that store and retrieve array data from HDF5.
-     ModelGridManager : Manages global metadata (axes, bounding box, chunking) for the grid.
-     """
+    See Also
+    --------
+    HDF5ElementCache : Base caching mechanism for HDF5-backed collections.
+    ModelField : Individual fields that store and retrieve array data from HDF5.
+    ModelGridManager : Manages global metadata (axes, bounding box, chunking) for the grid.
+    """
+
     def __init__(self, manager: ModelGridManager, **kwargs):
         """
         Initialize the ModelFieldContainer.
@@ -2202,7 +2353,7 @@ class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
         # This __init__ simply generates a reference to the manager that got passed
         # through and then relies on the super class __init__ generate the structure.
         self._manager = manager
-        super().__init__(self._manager.handle.require_group('FIELDS'), **kwargs)
+        super().__init__(self._manager.handle.require_group("FIELDS"), **kwargs)
 
     def _identify_elements_from_handle(self) -> Iterable[str]:
         # Method identifies which elements in the group are included. Its simple in
@@ -2217,7 +2368,9 @@ class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
         # Sets a ``value`` in the underlying HDF5 space. Must check that
         # the ModelField we got passed is actually in the space. [Making this effectively redundant]
         if value.buffer.parent != self._handle:
-            raise ValueError("The ModelField's handle is not part of this container's handle.")
+            raise ValueError(
+                "The ModelField's handle is not part of this container's handle."
+            )
 
         # Add the Grid's handle to the container
         self._handle[self._index_to_key(index)] = value.buffer
@@ -2250,8 +2403,7 @@ class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
         - This uses the :py:class:`ModelField` constructor. The field's shape,
           axes, and other attributes are taken from the on-disk HDF5 dataset.
         """
-        return ModelField(self._manager,index)
-
+        return ModelField(self._manager, index)
 
     def copy_field(self, index: str, field: ModelField, overwrite: bool = False):
         """
@@ -2282,22 +2434,26 @@ class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
         # Handle existing grid at the index
         if target_key in self._handle:
             if not overwrite:
-                raise ValueError(f"A field already exists at index {index}. Use `overwrite=True` to replace it.")
+                raise ValueError(
+                    f"A field already exists at index {index}. Use `overwrite=True` to replace it."
+                )
             # Remove the existing group
             del self._handle[target_key]
 
         # Use h5py's copy method to copy the entire structure
         self._handle.copy(field.buffer, target_key)
 
-    def add_field(self,
-                  name: str,
-                  /,
-                  axes: Optional[Iterable[str]] = None,
-                  data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
-                  *,
-                  overwrite: bool = False,
-                  dtype: str = "f8",
-                  units: str = ""):
+    def add_field(
+        self,
+        name: str,
+        /,
+        axes: Optional[Iterable[str]] = None,
+        data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+        *,
+        overwrite: bool = False,
+        dtype: str = "f8",
+        units: str = "",
+    ):
         """
         Add a new :py:class:`ModelField` to the container.
 
@@ -2343,7 +2499,15 @@ class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
         :py:class:`ModelField`
             The newly created :py:class:`ModelField` object.
         """
-        field = ModelField(self._manager,name, axes=axes, data=data, dtype=dtype, units=units, overwrite=overwrite)
+        field = ModelField(
+            self._manager,
+            name,
+            axes=axes,
+            data=data,
+            dtype=dtype,
+            units=units,
+            overwrite=overwrite,
+        )
         self.sync()
 
         return field
@@ -2413,17 +2577,23 @@ class ModelFieldContainer(HDF5ElementCache[str, ModelField]):
         # Import the tabulate method that we need to successfully run this.
         try:
             from tabulate import tabulate
+
             _use_tabulate = True
         except ImportError:
             _use_tabulate = False
-            tabulate = None  #! TRICK the IDE
+            tabulate = None  # ! TRICK the IDE
 
         # Construct the field data
         field_info = [
-            [_fn, _fv.units, str(_fv.buffer.shape), str(_fv.AXES), str(_fv.buffer.ndim)] for _fn, _fv in self.items()
+            [_fn, _fv.units, str(_fv.buffer.shape), str(_fv.AXES), str(_fv.buffer.ndim)]
+            for _fn, _fv in self.items()
         ]
 
         if not _use_tabulate:
             return field_info
         else:
-            return tabulate(field_info, headers=["Field Name", "Units", "Shape", "Axes", "Ndim"], tablefmt="grid")
+            return tabulate(
+                field_info,
+                headers=["Field Name", "Units", "Shape", "Axes", "Ndim"],
+                tablefmt="grid",
+            )

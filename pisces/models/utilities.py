@@ -1,17 +1,19 @@
 """
 Utility functions and classes for Pisces models.
 """
-from typing import Optional, TYPE_CHECKING
-import warnings
-from pisces.utilities.config import YAMLConfig, config_directory
-from pathlib import Path
 import os
+import warnings
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional
+
+from pisces.utilities.config import YAMLConfig, config_directory
 
 if TYPE_CHECKING:
     from pisces.models.base import Model
 
+
 class ModelConfigurationDescriptor:
-    """
+    r"""
     The :py:class:`ModelConfigurationDescriptor` class serves as a descriptor for managing and accessing YAML configuration
     files within Pisces models. It encapsulates the logic for loading configuration data from a specified file,
     ensuring that configurations are loaded lazily and cached for efficient reuse.
@@ -42,8 +44,9 @@ class ModelConfigurationDescriptor:
       The `config_directory` variable must be defined in the scope where `ModelConfigurationDescriptor` is used.
       It should point to the directory containing all configuration files.
     """
+
     def __init__(self, filename: Optional[str] = None):
-        """
+        r"""
         Initialize the ModelConfigurationDescriptor.
 
         Parameters
@@ -61,13 +64,15 @@ class ModelConfigurationDescriptor:
             self.path = None
         else:
             self.filename = str(filename)
-            self.path: Optional[Path] = Path(os.path.join(config_directory, self.filename))
+            self.path: Optional[Path] = Path(
+                os.path.join(config_directory, self.filename)
+            )
 
         # setup the reference object.
         self._reference: Optional[YAMLConfig] = None
 
-    def __get__(self, _, owner: 'Model') -> Optional[YAMLConfig]:
-        """
+    def __get__(self, _, owner: "Model") -> Optional[YAMLConfig]:
+        r"""
         Retrieve the YAML configuration.
 
         If the configuration has not been loaded yet, it initializes and caches the `YAMLConfig` instance.
@@ -84,19 +89,23 @@ class ModelConfigurationDescriptor:
         """
         # Validate
         if (self.filename is None) and owner._IS_ABC:
-            warnings.warn("This is a dummy YAML configuration descriptor because no filename was provided.")
+            warnings.warn(
+                "This is a dummy YAML configuration descriptor because no filename was provided."
+            )
             return None
         elif self.filename is None:
-            raise RuntimeError("This is a dummy YAML configuration descriptor because no filename was provided.")
+            raise RuntimeError(
+                "This is a dummy YAML configuration descriptor because no filename was provided."
+            )
 
         # Check for the reference and create it if necessary.
         if self._reference is None:
             try:
                 self._reference = YAMLConfig(self.path)
             except Exception as e:
-                raise RuntimeError(f"Failed to load model configuration for class {owner.__name__} at {self.path}.") from e
+                raise RuntimeError(
+                    f"Failed to load model configuration for class {owner.__name__} at {self.path}."
+                ) from e
 
         # Return the configuration.
         return self._reference
-
-

@@ -2,18 +2,19 @@
 Particle sampling methods and classes for models.
 
 """
-from typing import Tuple, Optional, Any, TYPE_CHECKING, Type, Dict, List, Callable
-import numpy as np
 from collections import OrderedDict
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Type
+
 if TYPE_CHECKING:
     from pisces.models.base import Model
+
 
 class _SamplerMeta(type):
     def __new__(
         mcs: Type["_SamplerMeta"],
         name: str,
         bases: Tuple[Type, ...],
-        clsdict: Dict[str, Any]
+        clsdict: Dict[str, Any],
     ) -> Type[Any]:
         r"""
         Create a new class object, search through the metadata looking for any samplers that can be
@@ -41,16 +42,18 @@ class _SamplerMeta(type):
         mcs.construct_samplers(cls, clsdict)
 
         # Sort the samplers
-        cls._SAMPLERS = OrderedDict(sorted(cls._SAMPLERS.items(), key=lambda t: t[1]['priority']))
+        cls._SAMPLERS = OrderedDict(
+            sorted(cls._SAMPLERS.items(), key=lambda t: t[1]["priority"])
+        )
 
         return cls
 
     @staticmethod
-    def construct_samplers(cls: '_SamplerMeta', clsdict: Dict[str, Any]) -> None:
+    def construct_samplers(cls: "_SamplerMeta", clsdict: Dict[str, Any]) -> None:
         # Search either the entire class dictionary or the entire MRO depending on the
         # specifying flag in the base code. Look for any registered attributes and ensure
         # that they get added to the sampler dictionary with the correct restrictions.
-        _priorities_seen = set() # The set of priorities we've seen.
+        _priorities_seen = set()  # The set of priorities we've seen.
         seen_attrs = set()
         inherits_samplers = clsdict.get("_INHERITS_SAMPLERS", False)
         if inherits_samplers:
@@ -94,6 +97,7 @@ class _SamplerMeta(type):
                 else:
                     raise ValueError(f"Duplicate sampler: {_sampler_name}")
 
+
 class ModelSampler(metaclass=_SamplerMeta):
     """
     Base class for model samplers.
@@ -101,6 +105,7 @@ class ModelSampler(metaclass=_SamplerMeta):
     Each :py:class:`~pisces.models.base.Model` has a connected :py:class:`ModelSampler` class
     which controls how the user is able to sample from the model once it is generated.
     """
+
     # @@ Flags @@ #
     # The flags here are used by the meta class to dictate behavior. They
     # can be modified in subclass implementations as needed.
@@ -115,21 +120,23 @@ class ModelSampler(metaclass=_SamplerMeta):
     # These methods control construction and setup. They are
     # constructed modularly, so there is little reason to alter __init__,
     # but other methods in the process may be changed in subclasses.
-    def __init__(self,
-                 model: 'Model'):
+    def __init__(self, model: "Model"):
         # Link the model to the instance and check to ensure that this is a valid
         # sampler type for the provided model.
         self._model = self._setup_model(model)
 
         # Setup the particle -- field matched list.
-        self._field_particle_dict = self.__class__.DEFAULT_FIELD_PARTICLE_TYPE_MAP.copy()
+        self._field_particle_dict = (
+            self.__class__.DEFAULT_FIELD_PARTICLE_TYPE_MAP.copy()
+        )
 
-
-    def _setup_model(self,model: 'Model') -> 'Model':
+    def _setup_model(self, model: "Model") -> "Model":
         # Validate that the model recognizes this class as
         # its sampler.
-        if type(self) != model.SAMPLE_TYPE:
-            raise ValueError(f"Model class {model.__class__.__name__} expects sampler class {model.SAMPLE_TYPE}.")
+        if type(self) is not model.SAMPLE_TYPE:
+            raise ValueError(
+                f"Model class {model.__class__.__name__} expects sampler class {model.SAMPLE_TYPE}."
+            )
 
         # Return the model so it can be set.
         return model
@@ -143,7 +150,9 @@ class ModelSampler(metaclass=_SamplerMeta):
         return self.__str__()
 
     # @@ General Methods @@ #
-    def add_field_particle_match(self, field_name: str, particle_species: str, overwrite: bool = False):
+    def add_field_particle_match(
+        self, field_name: str, particle_species: str, overwrite: bool = False
+    ):
         """
         Add a match between a field name and a particle species.
 
@@ -162,9 +171,11 @@ class ModelSampler(metaclass=_SamplerMeta):
             If the field already has a match and overwrite is False.
         """
         if field_name in self._field_particle_dict and not overwrite:
-            raise ValueError(f"Field '{field_name}' is already matched to "
-                             f"particle '{self._field_particle_dict[field_name]}'. "
-                             f"Set overwrite=True to overwrite.")
+            raise ValueError(
+                f"Field '{field_name}' is already matched to "
+                f"particle '{self._field_particle_dict[field_name]}'. "
+                f"Set overwrite=True to overwrite."
+            )
         self._field_particle_dict[field_name] = particle_species
 
     def remove_field_particle_match(self, field_name: str):
@@ -215,13 +226,17 @@ class ModelSampler(metaclass=_SamplerMeta):
         List[str]
             A list of field names matched to the particle species.
         """
-        return [field for field, particle in self._field_particle_dict.items() if particle == particle_species]
+        return [
+            field
+            for field, particle in self._field_particle_dict.items()
+            if particle == particle_species
+        ]
 
     # @@ Properties @@ #
     # These properties can be added to, but properties should not
     # be removed to ensure consistent behavior for users.
     @property
-    def model(self) -> 'Model':
+    def model(self) -> "Model":
         """
         The :py:class:`~pisces.models.base.Model` instance this sampler belongs to.
         """
@@ -271,24 +286,25 @@ class ModelSampler(metaclass=_SamplerMeta):
         # registry. They should already be ordered by priority.
         for sampler_name, sampler_meta in self._SAMPLERS.items():
             if sampler_meta["checker"]:
-                checker = getattr(self, sampler_meta["checker"],None)
+                checker = getattr(self, sampler_meta["checker"], None)
                 if checker is None:
-                    return sampler_name, getattr(self, sampler_meta['method'])
+                    return sampler_name, getattr(self, sampler_meta["method"])
 
                 if checker(field_name):
-                    return sampler_name, getattr(self,sampler_meta['method'])
+                    return sampler_name, getattr(self, sampler_meta["method"])
 
-        return "default", getattr(self, 'default_sampler')
+        return "default", getattr(self, "default_sampler")
 
-
-    def sample_positions(self,
-                         particle_species: str,
-                         num_particles: int,
-                         /,
-                         *,
-                         sample_from: Optional[str] = None,
-                         use_sampler: Optional[str] = None,
-                         **kwargs):
+    def sample_positions(
+        self,
+        particle_species: str,
+        num_particles: int,
+        /,
+        *,
+        sample_from: Optional[str] = None,
+        use_sampler: Optional[str] = None,
+        **kwargs,
+    ):
         # Perform the validation procedures for the inputs.
         # The sample_from parameter needs to be set to determine what field is being sampled from and
         # the sampler needs to be identified.
@@ -297,11 +313,15 @@ class ModelSampler(metaclass=_SamplerMeta):
             if particle_species in self._field_particle_dict:
                 sample_from = self._field_particle_dict[particle_species]
             else:
-                raise ValueError(f"No particle species '{particle_species}' found in {self}; failed to find a field to"
-                                 f" sample from.\nIf a field should be available, try specifying it manually with `sample_from=`")
+                raise ValueError(
+                    f"No particle species '{particle_species}' found in {self}; failed to find a field to"
+                    f" sample from.\nIf a field should be available, try specifying it manually with `sample_from=`"
+                )
 
         if sample_from not in self.model.FIELDS:
-            raise ValueError(f"Cannot sample particle positions from field {sample_from} because model {self.model} has no such field.")
+            raise ValueError(
+                f"Cannot sample particle positions from field {sample_from} because model {self.model} has no such field."
+            )
 
         # Determine if they specified a sampler. If not, we need to look it up.
         if use_sampler is None:
@@ -310,16 +330,17 @@ class ModelSampler(metaclass=_SamplerMeta):
             # validate the sampler that was provided. It still needs to pass validation
             # and actually exist.
             if use_sampler not in self.samplers:
-                raise ValueError(f"The sampler '{use_sampler}' does not exist in {self}.")
+                raise ValueError(
+                    f"The sampler '{use_sampler}' does not exist in {self}."
+                )
 
             _checker = self.samplers[use_sampler]["checker"]
-            if _checker and not getattr(self,_checker)(sample_from):
-                raise ValueError(f"The sampler `{use_sampler}` failed its validation for field {sample_from}.")
-
+            if _checker and not getattr(self, _checker)(sample_from):
+                raise ValueError(
+                    f"The sampler `{use_sampler}` failed its validation for field {sample_from}."
+                )
 
         # Prepare to perform the sampling procedure.
-
-
 
 
 def sampler(name: str, checker: Optional[str] = None, priority: int = 0):
@@ -344,6 +365,7 @@ def sampler(name: str, checker: Optional[str] = None, priority: int = 0):
     Callable
         The decorated method, now registered as a sampler.
     """
+
     def decorator(func):
         # Attach metadata to the function
         setattr(func, "_is_sampler", True)
@@ -355,6 +377,6 @@ def sampler(name: str, checker: Optional[str] = None, priority: int = 0):
 
     return decorator
 
-if __name__ == '__main__':
-    print(ModelSampler(None).samplers)
 
+if __name__ == "__main__":
+    print(ModelSampler(None).samplers)

@@ -1,10 +1,13 @@
 """
 Registry utilities for Pisces profiles.
 """
-from typing import Iterable, Union, List
-from pisces.io.hdf5 import IndexType,  HDF5ElementCache
-from pisces.profiles.base import Profile
+from typing import Iterable, List, Union
+
 import numpy as np
+
+from pisces.io.hdf5 import HDF5ElementCache, IndexType
+from pisces.profiles.base import Profile
+
 
 class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
     r"""
@@ -25,6 +28,7 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
     - The ``Profile`` class must implement ``.from_hdf5(...)`` and ``.to_hdf5(...)``
       for loading/saving.
     """
+
     def load_element(self, index: str) -> Profile:
         """
         Load a profile from the HDF5 handle by its name (``index``).
@@ -44,10 +48,10 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
         KeyError
             If the specified profile index does not exist in the HDF5 handle.
         """
-        return Profile.from_hdf5(self._handle,index)
+        return Profile.from_hdf5(self._handle, index)
 
     def _set_element_in_handle(self, index: str, value: Profile):
-        value.to_hdf5(self._handle, self._index_to_key(index),overwrite=True)
+        value.to_hdf5(self._handle, self._index_to_key(index), overwrite=True)
 
     def _remove_element_from_handle(self, index: str):
         del self._handle[self._index_to_key(index)]
@@ -79,12 +83,14 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
         """
         # Use the profile's class name as the default index if not explicitly set
         if index in self._handle and not overwrite:
-            raise ValueError(f"A profile with the name '{index}' already exists. Use overwrite=True to replace it.")
+            raise ValueError(
+                f"A profile with the name '{index}' already exists. Use overwrite=True to replace it."
+            )
 
         # Save the profile to the HDF5 file
         self[index] = profile
 
-    def remove_profile(self,index: str):
+    def remove_profile(self, index: str):
         """
         Remove a profile from the registry by name.
 
@@ -123,6 +129,7 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
         # Import tabulate safely
         try:
             from tabulate import tabulate
+
             _use_tabulate = True
         except ImportError:
             _use_tabulate = False
@@ -133,12 +140,26 @@ class HDF5ProfileRegistry(HDF5ElementCache[str, Profile]):
         for name, profile in self.items():
             profile_type = profile.__class__.__name__
             profile_params = ", ".join(
-                f"{k}={np.format_float_scientific(v,precision=3)}" for k, v in profile.parameters.items() if not k.startswith("_")
+                f"{k}={np.format_float_scientific(v, precision=3)}"
+                for k, v in profile.parameters.items()
+                if not k.startswith("_")
             )
-            profile_info.append([name, profile_type, profile_params or "N/A", str(profile.AXES), str(profile.units)])
+            profile_info.append(
+                [
+                    name,
+                    profile_type,
+                    profile_params or "N/A",
+                    str(profile.AXES),
+                    str(profile.units),
+                ]
+            )
 
         # Handle output with or without tabulate
         if not _use_tabulate:
             return profile_info
         else:
-            return tabulate(profile_info, headers=["Profile Name", "Type", "Parameters", "Axes", "Units"], tablefmt="grid")
+            return tabulate(
+                profile_info,
+                headers=["Profile Name", "Type", "Parameters", "Axes", "Units"],
+                tablefmt="grid",
+            )

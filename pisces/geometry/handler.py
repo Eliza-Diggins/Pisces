@@ -11,20 +11,25 @@ invariance properties, often encountered in physical simulations and mathematica
 modeling. Symmetry management is a key feature, allowing users to optimize
 computations by leveraging axis invariance.
 """
-from typing import List, Optional, Union, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, List, Optional, Union
 
 import numpy as np
 
 from pisces.geometry.base import CoordinateSystem
-from pisces.utilities.array_utils import CoordinateArray, fill_missing_coord_axes, CoordinateGrid
+from pisces.utilities.array_utils import (
+    CoordinateArray,
+    CoordinateGrid,
+    fill_missing_coord_axes,
+)
 from pisces.utilities.general import find_in_subclasses
 from pisces.utilities.logging import devlog
 
 if TYPE_CHECKING:
     from pisces.geometry._typing import AxisAlias
 
+
 class GeometryHandler:
-    """
+    r"""
     A utility class for managing geometry operations under symmetry constraints.
 
     The :py:class:`GeometryHandler` provides methods and properties to handle computations in
@@ -54,14 +59,17 @@ class GeometryHandler:
     - The ``_handler_class_name`` attribute in the associated coordinate system determines
       the appropriate subclass to instantiate.
     """
-    def __new__(cls,
-                coordinate_system: CoordinateSystem,
-                /,
-                free_axes: Optional[List[str]] = None,
-                *args,
-                fill_values: Optional[float | List[float]] = 0.0,
-                **kwargs):
-        """
+
+    def __new__(
+        cls,
+        coordinate_system: CoordinateSystem,
+        /,
+        free_axes: Optional[List[str]] = None,
+        *args,
+        fill_values: Optional[float | List[float]] = 0.0,
+        **kwargs,
+    ):
+        r"""
         Dynamically create a :py:class:`GeometryHandler` instance based on the provided coordinate system.
 
         This method identifies the appropriate subclass of :py:class:`GeometryHandler` to handle the
@@ -106,29 +114,33 @@ class GeometryHandler:
         """
         # Retrieve the handler class name from the coordinate system that was passed. If we cannot
         # find one, then we assume the :py:class:`GeometryHandler` base class.
-        if hasattr(coordinate_system, '_handler_class_name'):
+        if hasattr(coordinate_system, "_handler_class_name"):
             # We have a handler class name specifier -> look up the class.
-            handler_class_name = getattr(coordinate_system,'_handler_class_name')
+            handler_class_name = coordinate_system._handler_class_name
             if handler_class_name == cls.__name__:
                 handler_subclass = cls
             else:
                 handler_subclass = find_in_subclasses(cls, handler_class_name)
         else:
-            devlog.warning("Failed to find a _handler_class_name attribute on CoordinateSystem subclass %s.",
-                           coordinate_system.__class__.__name__)
+            devlog.warning(
+                "Failed to find a _handler_class_name attribute on CoordinateSystem subclass %s.",
+                coordinate_system.__class__.__name__,
+            )
             handler_subclass = cls
 
         # Return the object in the class specified by the handler subclass attribute.
         return object.__new__(handler_subclass)
 
-
-    def __init__(self, coordinate_system: CoordinateSystem,
-                 /,
-                 free_axes: Optional[List[str]] = None,
-                 *_,
-                 fill_values: Optional[float|List[float]] = 0.0,
-                 **__):
-        """
+    def __init__(
+        self,
+        coordinate_system: CoordinateSystem,
+        /,
+        free_axes: Optional[List[str]] = None,
+        *_,
+        fill_values: Optional[float | List[float]] = 0.0,
+        **__,
+    ):
+        r"""
         Initialize the :py:class:`GeometryHandler` with the given coordinate system and symmetry constraints.
 
         Parameters
@@ -190,14 +202,18 @@ class GeometryHandler:
 
         # Enforce ordering.
         self._free_axes = [ax for ax in self.coordinate_system.AXES if ax in free_axes]
-        self._sym_axes = [ax for ax in self.coordinate_system.AXES if ax not in free_axes]
+        self._sym_axes = [
+            ax for ax in self.coordinate_system.AXES if ax not in free_axes
+        ]
 
         # Manage the fill values
         if isinstance(fill_values, float):
-            fill_values = np.array(len(self._sym_axes)*[fill_values])
+            fill_values = np.array(len(self._sym_axes) * [fill_values])
 
         if len(fill_values) != len(self._sym_axes):
-            raise ValueError(f"fill_values must have the same length as {len(self._sym_axes)}")
+            raise ValueError(
+                f"fill_values must have the same length as {len(self._sym_axes)}"
+            )
 
         self.fill_values = fill_values
         """ndarray: The fill values for each of the symmetric axes."""
@@ -207,8 +223,10 @@ class GeometryHandler:
         self._symmetric_mask = None
         self._free_mask = None
 
-    def get_fill_values(self, fixed_axes: Optional[Union[List[str], str]] = None) -> np.ndarray:
-        """
+    def get_fill_values(
+        self, fixed_axes: Optional[Union[List[str], str]] = None
+    ) -> np.ndarray:
+        r"""
         Fetch the fill values corresponding to the specified fixed (symmetric) axes.
 
         Parameters
@@ -235,19 +253,23 @@ class GeometryHandler:
         # Validate that the specified axes are a subset of symmetric axes
         invalid_axes = [ax for ax in fixed_axes if ax not in self._sym_axes]
         if invalid_axes:
-            raise ValueError(f"Invalid axes {invalid_axes}. Must be a subset of symmetric axes {self._sym_axes}.")
+            raise ValueError(
+                f"Invalid axes {invalid_axes}. Must be a subset of symmetric axes {self._sym_axes}."
+            )
 
         # Fetch indices and corresponding fill values
         fixed_indices = np.array([self._sym_axes.index(ax) for ax in fixed_axes])
         return np.array(self.fill_values)[fixed_indices]
 
     @classmethod
-    def coerce_coordinates(cls,
-                           coordinates: np.ndarray,
-                           coordinate_system: CoordinateSystem,
-                           free_axes: List[str],
-                           fill_values: float | List[float] = 0.0) -> np.ndarray:
-        """
+    def coerce_coordinates(
+        cls,
+        coordinates: np.ndarray,
+        coordinate_system: CoordinateSystem,
+        free_axes: List[str],
+        fill_values: float | List[float] = 0.0,
+    ) -> np.ndarray:
+        r"""
         Coerce a set of partial coordinates into full coordinates based on the specified free axes and fill values.
 
         Parameters
@@ -273,10 +295,14 @@ class GeometryHandler:
         """
         # Validate: look at the free_axes, ensure that we have those axes and generate a mask from them.
         if any(ax not in coordinate_system.AXES for ax in free_axes):
-            raise ValueError(f"Coordinates specified in `free_axes` were {free_axes}, which was not a subset of coordinate system"
-                             f" axes {coordinate_system.AXES}.")
+            raise ValueError(
+                f"Coordinates specified in `free_axes` were {free_axes}, which was not a subset of coordinate system"
+                f" axes {coordinate_system.AXES}."
+            )
 
-        free_axes_mask = np.array([ax in free_axes for ax in coordinate_system.AXES],dtype=bool)
+        free_axes_mask = np.array(
+            [ax in free_axes for ax in coordinate_system.AXES], dtype=bool
+        )
         fixed_axes_mask = ~free_axes_mask
 
         # Manage the fill values
@@ -287,19 +313,25 @@ class GeometryHandler:
         try:
             fill_values.reshape((np.sum(fixed_axes_mask),))
         except ValueError as e:
-            raise ValueError(f"`fill_values` was length {len(fill_values)}, expected {np.sum(fixed_axes_mask)}.") from e
+            raise ValueError(
+                f"`fill_values` was length {len(fill_values)}, expected {np.sum(fixed_axes_mask)}."
+            ) from e
 
         # Ensure coordinates is a correctly formatted coordinate set.
         coordinates = CoordinateArray(coordinates, np.sum(free_axes_mask))
-        return fill_missing_coord_axes(coordinates, axis_mask=free_axes_mask,fill_values=fill_values)
+        return fill_missing_coord_axes(
+            coordinates, axis_mask=free_axes_mask, fill_values=fill_values
+        )
 
     @classmethod
-    def coerce_coordinate_grid(cls,
-                               coordinates: np.ndarray,
-                               coordinate_system: CoordinateSystem,
-                               free_axes: List[str],
-                               fill_values: float | List[float] = 0.0) -> np.ndarray:
-        """
+    def coerce_coordinate_grid(
+        cls,
+        coordinates: np.ndarray,
+        coordinate_system: CoordinateSystem,
+        free_axes: List[str],
+        fill_values: float | List[float] = 0.0,
+    ) -> np.ndarray:
+        r"""
         Coerce a set of coordinates into a valid coordinate grid.
 
         Ensures that the provided coordinates conform to the full dimensions of the
@@ -357,18 +389,26 @@ class GeometryHandler:
         (100, 1, 1, 3)
         """
         # Coerce the coordinates into a valid format. This will ensure they are ``(...,NDIM)``.
-        free_axes_mask = np.array([ax in free_axes for ax in coordinate_system.AXES],dtype=bool)
-        coordinates = cls.coerce_coordinates(coordinates, coordinate_system, free_axes, fill_values)
+        free_axes_mask = np.array(
+            [ax in free_axes for ax in coordinate_system.AXES], dtype=bool
+        )
+        coordinates = cls.coerce_coordinates(
+            coordinates, coordinate_system, free_axes, fill_values
+        )
 
         # Proceed to treat them as a grid. The axes present should be just the free_axes mask.
-        return CoordinateGrid(coordinates, ndim=coordinate_system.NDIM, axes_mask=free_axes_mask)
+        return CoordinateGrid(
+            coordinates, ndim=coordinate_system.NDIM, axes_mask=free_axes_mask
+        )
 
     @classmethod
-    def coerce_function(cls,
-                        function: Callable,
-                        coordinate_system: CoordinateSystem,
-                        free_axes: List[str]) -> Callable:
-        """
+    def coerce_function(
+        cls,
+        function: Callable,
+        coordinate_system: CoordinateSystem,
+        free_axes: List[str],
+    ) -> Callable:
+        r"""
         Wrap a function to operate only on the specified free axes of a coordinate system.
 
         Parameters
@@ -419,10 +459,10 @@ class GeometryHandler:
 
         return _wrapped_function
 
-    def get_gradient_dependence(self,
-                                axes: Optional[Union[List[str], str]] = None,
-                                basis: str = 'unit') -> List[str]:
-        """
+    def get_gradient_dependence(
+        self, axes: Optional[Union[List[str], str]] = None, basis: str = "unit"
+    ) -> List[str]:
+        r"""
         Determine the symbols on which the gradient computation depends for the specified axes.
 
         Parameters
@@ -456,19 +496,25 @@ class GeometryHandler:
         axes = [ax for ax in axes if ax in self._free_axes]
 
         # Collect dependencies from the Lame coefficients
-        dependent_symbols = set(np.array(self.coordinate_system.SYMBAXES)[self.free_mask])
+        dependent_symbols = set(
+            np.array(self.coordinate_system.SYMBAXES)[self.free_mask]
+        )
 
-        if basis != 'contravariant':
+        if basis != "contravariant":
             for ax in axes:
-                dependent_symbols.update(self.coordinate_system.get_lame_symbolic(ax).free_symbols)
+                dependent_symbols.update(
+                    self.coordinate_system.get_lame_symbolic(ax).free_symbols
+                )
 
         # Return the symbols as a list of strings
-        return self.coordinate_system.ensure_axis_order([str(sym) for sym in dependent_symbols])
+        return self.coordinate_system.ensure_axis_order(
+            [str(sym) for sym in dependent_symbols]
+        )
 
-    def get_divergence_dependence(self,
-                                  axes: Optional[Union[List[str], str]] = None,
-                                  basis: str = 'unit') -> List[str]:
-        """
+    def get_divergence_dependence(
+        self, axes: Optional[Union[List[str], str]] = None, basis: str = "unit"
+    ) -> List[str]:
+        r"""
         Determine the symbols on which the divergence computation depends.
 
         Parameters
@@ -509,12 +555,14 @@ class GeometryHandler:
         axes = [ax for ax in axes if ax in self._free_axes]
 
         # Collect the dependencies
-        dependent_symbols = set(np.array(self.coordinate_system.SYMBAXES)[self.free_mask])
+        dependent_symbols = set(
+            np.array(self.coordinate_system.SYMBAXES)[self.free_mask]
+        )
 
         _scale = dict(unit=-1, contravariant=-2, covariant=0)[basis]
         for ax in axes:
-            d_term = self.coordinate_system.get_symbolic_D_term(ax,basis=basis)
-            lame_term = self.coordinate_system.get_lame_symbolic(ax)**_scale
+            d_term = self.coordinate_system.get_symbolic_D_term(ax, basis=basis)
+            lame_term = self.coordinate_system.get_lame_symbolic(ax) ** _scale
 
             s1 = d_term.free_symbols
             s2 = lame_term.free_symbols
@@ -522,11 +570,14 @@ class GeometryHandler:
             dependent_symbols.update(s1)
             dependent_symbols.update(s2)
 
-        return self.coordinate_system.ensure_axis_order([str(sym) for sym in dependent_symbols])
+        return self.coordinate_system.ensure_axis_order(
+            [str(sym) for sym in dependent_symbols]
+        )
 
-    def get_laplacian_dependence(self,
-                                 axes: Optional[Union[List[str], str]] = None) -> List[str]:
-        """
+    def get_laplacian_dependence(
+        self, axes: Optional[Union[List[str], str]] = None
+    ) -> List[str]:
+        r"""
         Determine the symbols on which the Laplacian computation depends.
 
         Parameters
@@ -558,7 +609,9 @@ class GeometryHandler:
         axes = [ax for ax in axes if ax in self._free_axes]
 
         # Collect the dependencies
-        dependent_symbols = set(np.array(self.coordinate_system.SYMBAXES)[self.free_mask])
+        dependent_symbols = set(
+            np.array(self.coordinate_system.SYMBAXES)[self.free_mask]
+        )
 
         for ax in axes:
             L_term = self.coordinate_system.get_symbolic_L_term(ax)
@@ -570,11 +623,13 @@ class GeometryHandler:
             dependent_symbols.update(s1)
             dependent_symbols.update(s2)
 
-        return self.coordinate_system.ensure_axis_order([str(sym) for sym in dependent_symbols])
+        return self.coordinate_system.ensure_axis_order(
+            [str(sym) for sym in dependent_symbols]
+        )
 
-    def get_gradient_descendant(self,
-                                axes: Optional[Union[List[str], str]] = None,
-                                basis: str = 'unit') -> 'GeometryHandler':
+    def get_gradient_descendant(
+        self, axes: Optional[Union[List[str], str]] = None, basis: str = "unit"
+    ) -> "GeometryHandler":
         """
         Create a descendant:py:class:`GeometryHandler` instance that includes only the axes necessary for gradient computations.
 
@@ -599,11 +654,14 @@ class GeometryHandler:
         This method computes the necessary dependencies for gradient computations and creates
         a new:py:class:`GeometryHandler` instance with the relevant free axes.
         """
-        return self.__class__(self.coordinate_system,free_axes=self.get_gradient_dependence(axes=axes,basis=basis))
+        return self.__class__(
+            self.coordinate_system,
+            free_axes=self.get_gradient_dependence(axes=axes, basis=basis),
+        )
 
-    def get_divergence_descendant(self,
-                                  axes: Optional[Union[List[str], str]] = None,
-                                  basis: str = 'unit') -> 'GeometryHandler':
+    def get_divergence_descendant(
+        self, axes: Optional[Union[List[str], str]] = None, basis: str = "unit"
+    ) -> "GeometryHandler":
         """
         Create a descendant:py:class:`GeometryHandler` instance that includes only the axes necessary for divergence computations.
 
@@ -628,10 +686,14 @@ class GeometryHandler:
         This method computes the necessary dependencies for divergence computations and creates
         a new:py:class:`GeometryHandler` instance with the relevant free axes.
         """
-        return self.__class__(self.coordinate_system,free_axes=self.get_divergence_dependence(axes=axes,basis=basis))
+        return self.__class__(
+            self.coordinate_system,
+            free_axes=self.get_divergence_dependence(axes=axes, basis=basis),
+        )
 
-    def get_laplacian_descendant(self,
-                                 axes: Optional[Union[List[str], str]] = None) -> 'GeometryHandler':
+    def get_laplacian_descendant(
+        self, axes: Optional[Union[List[str], str]] = None
+    ) -> "GeometryHandler":
         """
         Create a descendant:py:class:`GeometryHandler` instance that includes only the axes necessary for Laplacian computations.
 
@@ -650,18 +712,21 @@ class GeometryHandler:
         This method computes the necessary dependencies for Laplacian computations and creates
         a new:py:class:`GeometryHandler` instance with the relevant free axes.
         """
-        return self.__class__(self.coordinate_system,free_axes=self.get_laplacian_dependence(axes=axes))
+        return self.__class__(
+            self.coordinate_system, free_axes=self.get_laplacian_dependence(axes=axes)
+        )
 
-
-    def compute_gradient(self,
-                         field: Union[np.ndarray, Callable],
-                         coordinates: np.ndarray,
-                         /,
-                         axes: Union['AxisAlias', List['AxisAlias']] = None,
-                         *,
-                         derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                         basis: str = 'unit',
-                         **kwargs) -> np.ndarray:
+    def compute_gradient(
+        self,
+        field: Union[np.ndarray, Callable],
+        coordinates: np.ndarray,
+        /,
+        axes: Union["AxisAlias", List["AxisAlias"]] = None,
+        *,
+        derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        basis: str = "unit",
+        **kwargs,
+    ) -> np.ndarray:
         r"""
         Compute the gradient of a scalar field.
 
@@ -730,8 +795,10 @@ class GeometryHandler:
         #
         # Determine the dependence of this operation. This is necessary to ensure that
         # we grab the correct number of coordinates.
-        dependent_axes = self.get_gradient_dependence(axes=axes,basis=basis)
-        independent_axes = [ax for ax in self.coordinate_system.AXES if ax not in dependent_axes]
+        dependent_axes = self.get_gradient_dependence(axes=axes, basis=basis)
+        independent_axes = [
+            ax for ax in self.coordinate_system.AXES if ax not in dependent_axes
+        ]
 
         # MANAGE the number of axes
         if axes is None:
@@ -741,14 +808,23 @@ class GeometryHandler:
         # This moves (..., NDIM_SIM) -> (..., NDIM)
         # If we have derivatives unspecified and the field is not callable, then we require a grid.
         if (not callable(field)) and (derivatives is None):
-            coordinates = self.coerce_coordinate_grid(coordinates, self.coordinate_system, dependent_axes, list(self.get_fill_values(independent_axes)))
+            coordinates = self.coerce_coordinate_grid(
+                coordinates,
+                self.coordinate_system,
+                dependent_axes,
+                list(self.get_fill_values(independent_axes)),
+            )
         else:
-            coordinates = self.coerce_coordinates(coordinates,self.coordinate_system, dependent_axes, list(self.get_fill_values(independent_axes)))
-
+            coordinates = self.coerce_coordinates(
+                coordinates,
+                self.coordinate_system,
+                dependent_axes,
+                list(self.get_fill_values(independent_axes)),
+            )
 
         # COERCING the field. If the field is callable, it needs to go to a full coordinate function.
         if isinstance(field, Callable):
-            field = self.coerce_function(field,self.coordinate_system,self.free_axes)
+            field = self.coerce_function(field, self.coordinate_system, self.free_axes)
         if isinstance(field, np.ndarray):
             field = field.reshape((*coordinates.shape[:-1],))
 
@@ -758,23 +834,38 @@ class GeometryHandler:
         if derivatives is not None:
             if isinstance(derivatives, list):
                 # These are all functions.
-                derivatives = [self.coerce_function(derivative,self.coordinate_system,self.free_axes) for derivative in derivatives]
+                derivatives = [
+                    self.coerce_function(
+                        derivative, self.coordinate_system, self.free_axes
+                    )
+                    for derivative in derivatives
+                ]
             elif isinstance(derivatives, np.ndarray):
-                derivatives = np.reshape(derivatives, (*coordinates.shape[:-1],len(axes)))
+                derivatives = np.reshape(
+                    derivatives, (*coordinates.shape[:-1], len(axes))
+                )
 
         # pass to coordinate system
-        return self.coordinate_system.compute_gradient(field,coordinates,axes=axes,derivatives=derivatives,basis=basis,**kwargs)
+        return self.coordinate_system.compute_gradient(
+            field,
+            coordinates,
+            axes=axes,
+            derivatives=derivatives,
+            basis=basis,
+            **kwargs,
+        )
 
-
-    def compute_divergence(self,
-                           field: Union[np.ndarray, Callable],
-                           axes: Union['AxisAlias', List['AxisAlias']],
-                           /,
-                           coordinates: Optional[np.ndarray] = None,
-                           *,
-                           derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                           basis: str = 'unit',
-                           **kwargs) -> np.ndarray:
+    def compute_divergence(
+        self,
+        field: Union[np.ndarray, Callable],
+        axes: Union["AxisAlias", List["AxisAlias"]],
+        /,
+        coordinates: Optional[np.ndarray] = None,
+        *,
+        derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        basis: str = "unit",
+        **kwargs,
+    ) -> np.ndarray:
         r"""
         Compute the divergence of a vector field in the coordinate system.
 
@@ -822,8 +913,10 @@ class GeometryHandler:
         #
         # Determine the dependence of this operation. This is necessary to ensure that
         # we grab the correct number of coordinates.
-        dependent_axes = self.get_divergence_dependence(axes=axes,basis=basis)
-        independent_axes = [ax for ax in self.coordinate_system.AXES if ax not in dependent_axes]
+        dependent_axes = self.get_divergence_dependence(axes=axes, basis=basis)
+        independent_axes = [
+            ax for ax in self.coordinate_system.AXES if ax not in dependent_axes
+        ]
 
         # MANAGE the number of axes
         if axes is None:
@@ -833,16 +926,25 @@ class GeometryHandler:
         # This moves (..., NDIM_SIM) -> (..., NDIM)
         # If we have derivatives unspecified and the field is not callable, then we require a grid.
         if (not callable(field)) and (derivatives is None):
-            coordinates = self.coerce_coordinate_grid(coordinates, self.coordinate_system, dependent_axes, list(self.get_fill_values(independent_axes)))
+            coordinates = self.coerce_coordinate_grid(
+                coordinates,
+                self.coordinate_system,
+                dependent_axes,
+                list(self.get_fill_values(independent_axes)),
+            )
         else:
-            coordinates = self.coerce_coordinates(coordinates,self.coordinate_system, dependent_axes, list(self.get_fill_values(independent_axes)))
-
+            coordinates = self.coerce_coordinates(
+                coordinates,
+                self.coordinate_system,
+                dependent_axes,
+                list(self.get_fill_values(independent_axes)),
+            )
 
         # COERCING the field. If the field is callable, it needs to go to a full coordinate function.
         if isinstance(field, Callable):
-            field = self.coerce_function(field,self.coordinate_system,self.free_axes)
+            field = self.coerce_function(field, self.coordinate_system, self.free_axes)
         if isinstance(field, np.ndarray):
-            field = field.reshape((*coordinates.shape[:-1],len(axes)))
+            field = field.reshape((*coordinates.shape[:-1], len(axes)))
 
         # COERCING the derivatives. If the derivatives are provided as ndarray, then they should match the shape of
         # the coordinates up to the final axis and then have axes values. If its a list of functions, we need to coerce
@@ -850,24 +952,39 @@ class GeometryHandler:
         if derivatives is not None:
             if isinstance(derivatives, list):
                 # These are all functions.
-                derivatives = [self.coerce_function(derivative,self.coordinate_system,self.free_axes) for derivative in derivatives]
+                derivatives = [
+                    self.coerce_function(
+                        derivative, self.coordinate_system, self.free_axes
+                    )
+                    for derivative in derivatives
+                ]
             elif isinstance(derivatives, np.ndarray):
-                derivatives = np.reshape(derivatives, (*coordinates.shape[:-1],len(axes)))
+                derivatives = np.reshape(
+                    derivatives, (*coordinates.shape[:-1], len(axes))
+                )
 
         # pass to coordinate system
-        return self.coordinate_system.compute_divergence(field,coordinates,axes=axes,derivatives=derivatives,basis=basis,**kwargs)
+        return self.coordinate_system.compute_divergence(
+            field,
+            coordinates,
+            axes=axes,
+            derivatives=derivatives,
+            basis=basis,
+            **kwargs,
+        )
 
-
-    def compute_laplacian(self,
-                          field: Union[np.ndarray, Callable],
-                          coordinates: np.ndarray,
-                          axes: Union['AxisAlias', List['AxisAlias']],
-                          *,
-                          basis: str = 'unit',
-                          first_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                          second_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                          **kwargs) -> np.ndarray:
-        """
+    def compute_laplacian(
+        self,
+        field: Union[np.ndarray, Callable],
+        coordinates: np.ndarray,
+        axes: Union["AxisAlias", List["AxisAlias"]],
+        *,
+        basis: str = "unit",
+        first_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        second_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        **kwargs,
+    ) -> np.ndarray:
+        r"""
         Compute the Laplacian of a scalar field in the coordinate system.
 
         Parameters
@@ -933,8 +1050,10 @@ class GeometryHandler:
         #
         # Determine the dependence of this operation. This is necessary to ensure that
         # we grab the correct number of coordinates.
-        dependent_axes = self.get_gradient_dependence(axes=axes,basis=basis)
-        independent_axes = [ax for ax in self.coordinate_system.AXES if ax not in dependent_axes]
+        dependent_axes = self.get_gradient_dependence(axes=axes, basis=basis)
+        independent_axes = [
+            ax for ax in self.coordinate_system.AXES if ax not in dependent_axes
+        ]
         original_coordinate_shape = coordinates.shape
         # MANAGE the number of axes
         if axes is None:
@@ -944,13 +1063,23 @@ class GeometryHandler:
         # This moves (..., NDIM_SIM) -> (..., NDIM)
         # If we have derivatives unspecified and the field is not callable, then we require a grid.
         if (first_derivatives is None) or (second_derivatives is None):
-            coordinates = self.coerce_coordinate_grid(coordinates, self.coordinate_system, dependent_axes, list(self.get_fill_values(independent_axes)))
+            coordinates = self.coerce_coordinate_grid(
+                coordinates,
+                self.coordinate_system,
+                dependent_axes,
+                list(self.get_fill_values(independent_axes)),
+            )
         else:
-            coordinates = self.coerce_coordinates(coordinates,self.coordinate_system, dependent_axes, list(self.get_fill_values(independent_axes)))
+            coordinates = self.coerce_coordinates(
+                coordinates,
+                self.coordinate_system,
+                dependent_axes,
+                list(self.get_fill_values(independent_axes)),
+            )
 
         # COERCING the field. If the field is callable, it needs to go to a full coordinate function.
         if isinstance(field, Callable):
-            field = self.coerce_function(field,self.coordinate_system,self.free_axes)
+            field = self.coerce_function(field, self.coordinate_system, self.free_axes)
         if isinstance(field, np.ndarray):
             field = field.reshape((*coordinates.shape[:-1],))
 
@@ -960,21 +1089,43 @@ class GeometryHandler:
         if first_derivatives is not None:
             if isinstance(first_derivatives, list):
                 # These are all functions.
-                first_derivatives = [self.coerce_function(derivative,self.coordinate_system,self.free_axes) for derivative in first_derivatives]
+                first_derivatives = [
+                    self.coerce_function(
+                        derivative, self.coordinate_system, self.free_axes
+                    )
+                    for derivative in first_derivatives
+                ]
             elif isinstance(first_derivatives, np.ndarray):
-                first_derivatives = np.reshape(first_derivatives, (*coordinates.shape[:-1],len(axes)))
-        
+                first_derivatives = np.reshape(
+                    first_derivatives, (*coordinates.shape[:-1], len(axes))
+                )
+
         # COERCING the 2nd derivatives. If the derivatives are provided as ndarray, then they should match the shape of
         # the coordinates up to the final axis and then have axes values. If its a list of functions, we need to coerce
         # each function.
         if second_derivatives is not None:
             if isinstance(second_derivatives, list):
                 # These are all functions.
-                second_derivatives = [self.coerce_function(derivative,self.coordinate_system,self.free_axes) for derivative in second_derivatives]
+                second_derivatives = [
+                    self.coerce_function(
+                        derivative, self.coordinate_system, self.free_axes
+                    )
+                    for derivative in second_derivatives
+                ]
             elif isinstance(second_derivatives, np.ndarray):
-                second_derivatives = np.reshape(second_derivatives, (*coordinates.shape[:-1],len(axes)))
+                second_derivatives = np.reshape(
+                    second_derivatives, (*coordinates.shape[:-1], len(axes))
+                )
 
-        laplacian = self.coordinate_system.compute_laplacian(field,coordinates,axes=axes,basis=basis,first_derivatives=first_derivatives,second_derivatives=second_derivatives,**kwargs)
+        laplacian = self.coordinate_system.compute_laplacian(
+            field,
+            coordinates,
+            axes=axes,
+            basis=basis,
+            first_derivatives=first_derivatives,
+            second_derivatives=second_derivatives,
+            **kwargs,
+        )
         return laplacian.reshape(original_coordinate_shape[:-1])
 
     @property
@@ -1085,7 +1236,9 @@ class GeometryHandler:
         - The mask aligns with the order of axes in the coordinate system.
         """
         if self._symmetric_mask is None:
-            self._symmetric_mask = np.array([ax in self._sym_axes for ax in self.coordinate_system.AXES], dtype=bool)
+            self._symmetric_mask = np.array(
+                [ax in self._sym_axes for ax in self.coordinate_system.AXES], dtype=bool
+            )
 
         return self._symmetric_mask
 
@@ -1108,6 +1261,9 @@ class GeometryHandler:
         - The mask aligns with the order of axes in the coordinate system.
         """
         if self._free_mask is None:
-            self._free_mask = np.array([ax not in self._sym_axes for ax in self.coordinate_system.AXES], dtype=bool)
+            self._free_mask = np.array(
+                [ax not in self._sym_axes for ax in self.coordinate_system.AXES],
+                dtype=bool,
+            )
 
         return self._free_mask

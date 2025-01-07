@@ -3,6 +3,7 @@ various contexts.
 """
 from typing import Callable
 
+
 def build_asymptotic_extension(function: Callable, r0: float, n: float) -> Callable:
     r"""
     Create an asymptotic extension of a given function.
@@ -41,4 +42,4 @@ def build_asymptotic_extension(function: Callable, r0: float, n: float) -> Calla
     _boundary_value = function(r0)
 
     # Return the asymptotic extension as a lambda function
-    return lambda _r: _boundary_value * (_r / r0)**n
+    return lambda _r: _boundary_value * (_r / r0) ** n

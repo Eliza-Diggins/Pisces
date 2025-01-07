@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
@@ -21,9 +21,7 @@ class ParticleDataset:
     # These methods form the core of the loading procedures for
     # particle datasets. Subclasses may overwrite these where necessary; however,
     # it is generally possible to leave the core of __init__ alone.
-    def __init__(self,
-                 path: Union[str, Path],
-                 buffer_size: int = None):
+    def __init__(self, path: Union[str, Path], buffer_size: int = None):
         """
         Initialize the particle dataset from disk.
 
@@ -46,8 +44,8 @@ class ParticleDataset:
         # Pull the user's provided path and ensure that it exists.
         # We do not permit non-existent paths to proceed.
         self._path = Path(path)
-        self._handle = self.build_skeleton(path,buffer_size=buffer_size)
-        self._buffer_size = self._handle.attrs['buffer_size']
+        self._handle = self.build_skeleton(path, buffer_size=buffer_size)
+        self._buffer_size = self._handle.attrs["buffer_size"]
         # Load the species handles and references.
         # This is external to allow calls in other parts of the code.
         self._species = {}
@@ -56,15 +54,14 @@ class ParticleDataset:
     def _load_particle_species(self):
         # Search through all of the groups in the HDF5 file
         # and pull them out as species.
-        for k,v in self._handle.items():
+        for k, _ in self._handle.items():
             if k not in self._species:
-                self._species[k] = ParticleSpecies(self,k)
+                self._species[k] = ParticleSpecies(self, k)
 
     @classmethod
-    def build_skeleton(cls,
-                       path: Union[str, Path],
-                       buffer_size: int = None,
-                       overwrite: bool = False) -> HDF5_File_Handle:
+    def build_skeleton(
+        cls, path: Union[str, Path], buffer_size: int = None, overwrite: bool = False
+    ) -> HDF5_File_Handle:
         """
         Create or initialize an HDF5-backed particle dataset skeleton.
 
@@ -92,13 +89,13 @@ class ParticleDataset:
         # if we can return or need to generate a new skeleton.
         path = Path(path)
         if path.exists() and not overwrite:
-            return HDF5_File_Handle(path,mode='r')
+            return HDF5_File_Handle(path, mode="r")
 
         # Ensure the file is created or overwritten
         handle = HDF5_File_Handle(path, mode="w")
-        handle.attrs['buffer_size'] = buffer_size or cls.DEFAULT_BUFFER_SIZE
+        handle.attrs["buffer_size"] = buffer_size or cls.DEFAULT_BUFFER_SIZE
 
-        return handle.switch_mode('r')
+        return handle.switch_mode("r")
 
     # @@ DUNDER METHODS @@ #
     # These are standard dunder methods for particle classes.
@@ -113,7 +110,7 @@ class ParticleDataset:
     def __len__(self) -> int:
         return len(self.species)
 
-    def __getitem__(self, key: str) -> 'ParticleSpecies':
+    def __getitem__(self, key: str) -> "ParticleSpecies":
         try:
             return self._species[key]
         except KeyError:
@@ -129,7 +126,9 @@ class ParticleDataset:
         return self.species.__iter__()
 
     # @@ Core Methods @@ #
-    def add_species(self, name: str, num_particles: int, overwrite: bool = False) -> 'ParticleSpecies':
+    def add_species(
+        self, name: str, num_particles: int, overwrite: bool = False
+    ) -> "ParticleSpecies":
         """
         Add a new particle species to the dataset. Each species represents a unique particle type / type of massive
         particle. Each species in a particle dataset has its own set of fields carry particle data.
@@ -172,9 +171,11 @@ class ParticleDataset:
         The name of the species to remove.
         """
         if name not in self._handle:
-            raise ValueError(f"No particle species named '{name}' exists in the dataset.")
+            raise ValueError(
+                f"No particle species named '{name}' exists in the dataset."
+            )
         del self._handle[name]
-        self._handle.flush() # <- ensure that we actually enforce the change.
+        self._handle.flush()  # <- ensure that we actually enforce the change.
 
     def add_index_field(self, species_order: List[str] = None):
         """
@@ -245,7 +246,7 @@ class ParticleDataset:
         return self._handle
 
     @property
-    def species(self) -> Dict[str, 'ParticleSpecies']:
+    def species(self) -> Dict[str, "ParticleSpecies"]:
         """
         The particle species present in this dataset. Each particle species represents a unique
         particle type which, in turn, has its own associated set of fields carrying particle data.
@@ -272,8 +273,8 @@ class ParticleDataset:
         """
         return self._buffer_size
 
-class ParticleSpecies:
 
+class ParticleSpecies:
     # @@ LOADING METHODS @@ #
     # These methods form the core of the loading procedures for
     # particle species dataset. Subclasses may overwrite these where necessary; however,
@@ -296,12 +297,14 @@ class ParticleSpecies:
     def _load_particle_fields(self):
         # Search through all of the groups in the HDF5 file
         # and pull them out as species.
-        for k,v in self._handle.items():
+        for k, v in self._handle.items():
             if k not in self._fields:
                 self._fields[k] = v
 
     @classmethod
-    def build_skeleton(cls, handle: h5py.Group, name: str, num_particles: int, overwrite=None):
+    def build_skeleton(
+        cls, handle: h5py.Group, name: str, num_particles: int, overwrite=None
+    ):
         # Check for an existing dataset and manage it if necessary. Use
         # overwrite to determine behavior.
         if name in handle:
@@ -313,7 +316,7 @@ class ParticleSpecies:
         # We no longer have the species present in the handle. Generate a new one.
         # The group can be empty except for specifying the num_particles attribute.
         species_group = handle.require_group(name)
-        species_group.attrs['num_particles'] = num_particles
+        species_group.attrs["num_particles"] = num_particles
 
         return species_group
 
@@ -330,7 +333,7 @@ class ParticleSpecies:
     def __len__(self) -> int:
         return self.num_particles
 
-    def __getitem__(self, key: str) -> 'ParticleField':
+    def __getitem__(self, key: str) -> "ParticleField":
         try:
             return self.FIELDS[key]
         except KeyError:
@@ -369,47 +372,58 @@ class ParticleSpecies:
 
         # Generate slices for each full chunk
         chunk_slices = [
-            slice(chunk_id * self.dataset.buffer_size, (chunk_id + 1) * self.dataset.buffer_size)
+            slice(
+                chunk_id * self.dataset.buffer_size,
+                (chunk_id + 1) * self.dataset.buffer_size,
+            )
             for chunk_id in range(n_chunks - 1)
         ]
 
         # Add the final slice for the remaining particles
-        chunk_slices.append(slice((n_chunks - 1) * self.dataset.buffer_size, self.num_particles))
+        chunk_slices.append(
+            slice((n_chunks - 1) * self.dataset.buffer_size, self.num_particles)
+        )
 
         return chunk_slices
 
     # @@ Core Methods @@ #
-    def add_field(self,
-                  name: str,
-                  /,
-                  element_shape: Optional[Tuple[int, ...]] = None,
-                  data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
-                  *,
-                  overwrite: bool = False,
-                  dtype: str = "f8",
-                  units: str = ""):
-        field = ParticleField(self,
-                              name,
-                              element_shape=element_shape,
-                              data=data,
-                              dtype=dtype,
-                              units=units,
-                              overwrite=overwrite)
+    def add_field(
+        self,
+        name: str,
+        /,
+        element_shape: Optional[Tuple[int, ...]] = None,
+        data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+        *,
+        overwrite: bool = False,
+        dtype: str = "f8",
+        units: str = "",
+    ):
+        field = ParticleField(
+            self,
+            name,
+            element_shape=element_shape,
+            data=data,
+            dtype=dtype,
+            units=units,
+            overwrite=overwrite,
+        )
 
         return field
 
     def remove_field(self, name: str):
         if name not in self.FIELDS:
-            raise ValueError(f"No particle species named '{name}' exists in the dataset.")
+            raise ValueError(
+                f"No particle species named '{name}' exists in the dataset."
+            )
         del self._handle[name]
 
-    def add_index_field(self, offset: int = 0,overwrite:bool = False):
+    def add_index_field(self, offset: int = 0, overwrite: bool = False):
         self.add_field(
-            'particle_index',
-            data=np.arange(self.num_particles)+offset,
-            dtype='int',
-            units='',
-            overwrite=overwrite
+            "particle_index",
+            data=np.arange(self.num_particles) + offset,
+            dtype="int",
+            units="",
+            overwrite=overwrite,
         )
 
     def add_offsets(
@@ -456,7 +470,9 @@ class ParticleSpecies:
                 raise ValueError(
                     f"No position field (`particle_position`) in {self}. Cannot add offsets."
                 )
-            position_offset = ensure_ytarray(position_offset, self.FIELDS["particle_position"].units)
+            position_offset = ensure_ytarray(
+                position_offset, self.FIELDS["particle_position"].units
+            )
 
             for chunk in chunks:
                 self.FIELDS["particle_position"][chunk] += position_offset
@@ -467,13 +483,15 @@ class ParticleSpecies:
                 raise ValueError(
                     f"No velocity field (`particle_velocity`) in {self}. Cannot add offsets."
                 )
-            velocity_offset = ensure_ytarray(velocity_offset, self.FIELDS["particle_velocity"].units)
+            velocity_offset = ensure_ytarray(
+                velocity_offset, self.FIELDS["particle_velocity"].units
+            )
 
             for chunk in chunks:
                 self.FIELDS["particle_velocity"][chunk] += velocity_offset
 
     @property
-    def FIELDS(self) -> Dict[str, 'ParticleField']:
+    def FIELDS(self) -> Dict[str, "ParticleField"]:
         self._load_particle_fields()
         return self._fields
 
@@ -483,11 +501,12 @@ class ParticleSpecies:
 
     @property
     def num_particles(self) -> int:
-        return self._handle.attrs['num_particles']
+        return self._handle.attrs["num_particles"]
 
     @property
     def dataset(self) -> ParticleDataset:
         return self._dataset
+
 
 class ParticleField(unyt.unyt_array):
     """
@@ -505,20 +524,26 @@ class ParticleField(unyt.unyt_array):
     """
 
     def __new__(
-            cls,
-            species_dataset: ParticleSpecies,
-            name: str,
-            /,
-            data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
-            element_shape: Optional[Tuple[int, ...]] = None,
-            *,
-            overwrite: bool = False,
-            dtype: str = "f8",
-            units: str = "",
+        cls,
+        species_dataset: ParticleSpecies,
+        name: str,
+        /,
+        data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+        element_shape: Optional[Tuple[int, ...]] = None,
+        *,
+        overwrite: bool = False,
+        dtype: str = "f8",
+        units: str = "",
     ):
         # Build or retrieve the underlying HDF5 dataset
         dataset = cls.build_skeleton(
-            species_dataset, name, element_shape=element_shape, data=data, overwrite=overwrite, dtype=dtype, units=units
+            species_dataset,
+            name,
+            element_shape=element_shape,
+            data=data,
+            overwrite=overwrite,
+            dtype=dtype,
+            units=units,
         )
 
         # Extract final units from the dataset attributes
@@ -537,16 +562,16 @@ class ParticleField(unyt.unyt_array):
 
     # noinspection PyUnusedLocal
     def __init__(
-            self,
-            species_dataset: ParticleSpecies,
-            name: str,
-            /,
-            element_shape: Optional[Tuple[int, ...]] = None,
-            data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
-            *,
-            overwrite: bool = False,
-            dtype: str = "f8",
-            units: str = "",
+        self,
+        species_dataset: ParticleSpecies,
+        name: str,
+        /,
+        element_shape: Optional[Tuple[int, ...]] = None,
+        data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+        *,
+        overwrite: bool = False,
+        dtype: str = "f8",
+        units: str = "",
     ):
         """
         Initialize the ParticleField.
@@ -570,16 +595,16 @@ class ParticleField(unyt.unyt_array):
 
     @classmethod
     def build_skeleton(
-            cls,
-            species_dataset: ParticleSpecies,
-            name: str,
-            /,
-            element_shape: Optional[Tuple[int, ...]] = None,
-            data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
-            *,
-            overwrite: bool = False,
-            dtype: str = "f8",
-            units: str = None,
+        cls,
+        species_dataset: ParticleSpecies,
+        name: str,
+        /,
+        element_shape: Optional[Tuple[int, ...]] = None,
+        data: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+        *,
+        overwrite: bool = False,
+        dtype: str = "f8",
+        units: str = None,
     ) -> h5py.Dataset:
         """
         Create or retrieve the HDF5 dataset for the field.
@@ -662,14 +687,17 @@ class ParticleField(unyt.unyt_array):
             Result of the operation with units.
         """
         cast_inputs = tuple(
-            (x.view(unyt.unyt_array) if isinstance(x, ParticleField) else x) for x in inputs
+            (x.view(unyt.unyt_array) if isinstance(x, ParticleField) else x)
+            for x in inputs
         )
         result = getattr(ufunc, method)(*cast_inputs, **kwargs)
         if isinstance(result, unyt.unyt_array):
             result.units = self.units
         return result
 
-    def __setitem__(self, key: Union[slice, int], value: Union[unyt.unyt_array, np.ndarray]):
+    def __setitem__(
+        self, key: Union[slice, int], value: Union[unyt.unyt_array, np.ndarray]
+    ):
         """
         Set a slice of the field's data.
 
@@ -709,4 +737,3 @@ class ParticleField(unyt.unyt_array):
         """
         arr = self.buffer[key]
         return unyt.unyt_array(arr, units=self.units)
-

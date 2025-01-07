@@ -646,7 +646,7 @@ Listing and Inspecting Fields
 
 :py:class:`~pisces.models.grids.base.ModelField` instances have a variety of attributes which are useful when working with them.
 Most importantly, the units can be accessed using the :py:attr:`~pisces.models.grids.base.ModelField.units` attribute and
-the shape can be accessed using the typical ``.shape`` attribute. 
+the shape can be accessed using the typical ``.shape`` attribute.
 
 **Example: Inspecting Field Properties**
 
@@ -821,8 +821,3 @@ For most models, the user never needs to actually invoke the solver directly, in
 The **generator methods** are ``classmethods`` which take a specific set of arguments necessary to use a particular pathway and
 then (in one pass) create the skeleton for the model and run the solver. This mean that, for most cases, the action of creating
 the model skeleton and then solving it are done at the same time.
-
-
-
-
-

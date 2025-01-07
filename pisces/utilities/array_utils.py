@@ -12,10 +12,13 @@ Array Requirements
 
 """
 import warnings
-from typing import Optional, Union, Dict
-from pisces.utilities.logging import devlog
+from typing import Dict, Optional, Union
+
 import numpy as np
 from numpy.typing import NDArray
+
+from pisces.utilities.logging import devlog
+
 
 # @@ COORDINATE MANAGEMENT @@ #
 # These classes and utility functions are all focused on ensuring proper formatting
@@ -61,14 +64,20 @@ class CoordinateArray(np.ndarray):
         # Validate the shape of the array
         if (obj.ndim == 1) and (ndim == 1):
             # We've been given an array of points in a 1D coord space, -> (N,1)
-            devlog.debug("Reshaping coordinate array: %s -> %s.", obj.shape, (obj.size,1))
-            obj = obj.reshape((obj.size,1))
+            devlog.debug(
+                "Reshaping coordinate array: %s -> %s.", obj.shape, (obj.size, 1)
+            )
+            obj = obj.reshape((obj.size, 1))
         elif (obj.ndim == 1) and (ndim > 1):
             # We've been given a single point in an ND space. -> (1,N)
             if obj.size != ndim:
-                raise ValueError(f"COORDINATE COERCION FAILED: got 1D array of length {obj.size}, but ndim={ndim} which is neither 1 or {obj.size}.")
-            devlog.debug("Reshaping coordinate array: %s -> %s.", obj.shape, (1, obj.size))
-            obj = obj.reshape((1,obj.size))
+                raise ValueError(
+                    f"COORDINATE COERCION FAILED: got 1D array of length {obj.size}, but ndim={ndim} which is neither 1 or {obj.size}."
+                )
+            devlog.debug(
+                "Reshaping coordinate array: %s -> %s.", obj.shape, (1, obj.size)
+            )
+            obj = obj.reshape((1, obj.size))
         elif obj.ndim > 1:
             # We have a multidimensional object. We check the final dimension and the first dimension before
             # moving forward.
@@ -77,14 +86,20 @@ class CoordinateArray(np.ndarray):
 
             # check if the first dimension matches
             if obj.shape[0] == ndim:
-                warnings.warn(f"COORDINATE COERCION WARNING: got a {obj.shape} array, which seems to have the NDIM axis in position 0 instead"
-                                     " of at the end. This is corrected here, but is unsafe and should be fixed.")
+                warnings.warn(
+                    f"COORDINATE COERCION WARNING: got a {obj.shape} array, which seems to have the NDIM axis in position 0 instead"
+                    " of at the end. This is corrected here, but is unsafe and should be fixed."
+                )
                 devlog.debug("Reshaping coordinate array: moving axis 0 -> -1")
-                return np.moveaxis(obj,0,-1)
+                return np.moveaxis(obj, 0, -1)
 
-            raise ValueError(f"COORDINATE COERCION FAILED: Input array's first or last dimension must match ndim={ndim}. Got {obj.shape[-1]} instead.")
+            raise ValueError(
+                f"COORDINATE COERCION FAILED: Input array's first or last dimension must match ndim={ndim}. Got {obj.shape[-1]} instead."
+            )
         else:
-            raise ValueError("COORDINATE COERCION FAILED: Input array must be at least 1D.")
+            raise ValueError(
+                "COORDINATE COERCION FAILED: Input array must be at least 1D."
+            )
 
         # Return the validated and reshaped object
         return obj
@@ -137,25 +152,42 @@ class CoordinateGrid(CoordinateArray):
         obj = super().__new__(cls, input_array, ndim=ndim)
 
         # Construct a set of axes and complete axes regardless.
-        ndim = obj.shape[-1] # Needed because super().__new__ fills this in, but we don't have access.
+        ndim = obj.shape[
+            -1
+        ]  # Needed because super().__new__ fills this in, but we don't have access.
         if axes_mask is None:
-            devlog.warning("CoordinateGrid instance missing axes specification -> grid check may be insufficient.")
-            axes_mask = np.array([True if i < len(obj.shape)-1 else False for i in np.arange(ndim)], dtype=bool)
+            devlog.warning(
+                "CoordinateGrid instance missing axes specification -> grid check may be insufficient."
+            )
+            axes_mask = np.array(
+                [True if i < len(obj.shape) - 1 else False for i in np.arange(ndim)],
+                dtype=bool,
+            )
 
         devlog.warning(axes_mask)
         # Validate that present axes has the right length.
         if np.sum(axes_mask) != (obj.ndim - 1):
-            raise ValueError(f"CoordinateGrid got `axes_mask`:{axes_mask} input array had {obj.ndim-1} free axes.")
+            raise ValueError(
+                f"CoordinateGrid got `axes_mask`:{axes_mask} input array had {obj.ndim - 1} free axes."
+            )
 
         if len(axes_mask) != ndim:
-            raise ValueError(f'CoordinateGrid got `axes_mask`:{axes_mask} but `ndim`={ndim} is expected.')
+            raise ValueError(
+                f"CoordinateGrid got `axes_mask`:{axes_mask} but `ndim`={ndim} is expected."
+            )
 
         # Now cycle through and fill out the shape.
         if not all(ax for ax in axes_mask):
-            _new_shape = np.ones_like(axes_mask,dtype=np.uint32) # (ndim,) array of ones.
+            _new_shape = np.ones_like(
+                axes_mask, dtype=np.uint32
+            )  # (ndim,) array of ones.
             _new_shape[axes_mask] = obj.shape[:-1]
 
-            devlog.debug("CoordinateGrid reshaping %s to %s.", obj.shape, tuple([*_new_shape,ndim]))
+            devlog.debug(
+                "CoordinateGrid reshaping %s to %s.",
+                obj.shape,
+                tuple([*_new_shape, ndim]),
+            )
             obj = obj.reshape((*_new_shape, ndim))
 
         return obj
@@ -166,9 +198,11 @@ class CoordinateGrid(CoordinateArray):
             return
 
 
-def fill_missing_coord_axes(coordinates: NDArray[np.floating],
-                            axis_mask: NDArray[np.bool_],
-                            fill_values: NDArray[np.floating]) -> NDArray[np.floating]:
+def fill_missing_coord_axes(
+    coordinates: NDArray[np.floating],
+    axis_mask: NDArray[np.bool_],
+    fill_values: NDArray[np.floating],
+) -> NDArray[np.floating]:
     """
     Fills missing coordinates along specified axes based on a provided mask.
 
@@ -211,16 +245,22 @@ def fill_missing_coord_axes(coordinates: NDArray[np.floating],
     array([[1., 0., 2.],
            [3., 0., 4.]])
     """
-    coordinates, axis_mask, fill_values = np.array(coordinates), np.array(axis_mask), np.array(fill_values)
+    coordinates, axis_mask, fill_values = (
+        np.array(coordinates),
+        np.array(axis_mask),
+        np.array(fill_values),
+    )
     ndim = axis_mask.size
     ndim_present = np.sum(axis_mask)
 
     if coordinates.shape[-1] != ndim_present:
         raise ValueError(
-            f"Expected {ndim_present} axes in `coordinates` based on `axis_mask`, but found {coordinates.shape[-1]}.")
+            f"Expected {ndim_present} axes in `coordinates` based on `axis_mask`, but found {coordinates.shape[-1]}."
+        )
     if fill_values.size != (ndim - ndim_present):
         raise ValueError(
-            f"`fill_values` had size {fill_values.size}, expected {ndim - ndim_present} based on `axis_mask`.")
+            f"`fill_values` had size {fill_values.size}, expected {ndim - ndim_present} based on `axis_mask`."
+        )
 
     full_coordinates = np.empty((*coordinates.shape[:-1], ndim))
     full_coordinates[..., axis_mask] = coordinates
@@ -228,11 +268,14 @@ def fill_missing_coord_axes(coordinates: NDArray[np.floating],
 
     return full_coordinates
 
-def complete_and_reshape_as_grid(coordinates: NDArray[np.floating],
-                                 axes_mask: NDArray[np.bool_],
-                                 *,
-                                 grid_axes_mask: Optional[NDArray[np.bool_]] = None,
-                                 fill_values: Union[int, NDArray[np.floating]] = 0) -> NDArray[np.floating]:
+
+def complete_and_reshape_as_grid(
+    coordinates: NDArray[np.floating],
+    axes_mask: NDArray[np.bool_],
+    *,
+    grid_axes_mask: Optional[NDArray[np.bool_]] = None,
+    fill_values: Union[int, NDArray[np.floating]] = 0,
+) -> NDArray[np.floating]:
     """
     Completes missing coordinate axes and reshapes the array into a grid format, with singleton dimensions for absent axes.
 
@@ -281,11 +324,16 @@ def complete_and_reshape_as_grid(coordinates: NDArray[np.floating],
         fill_values = np.array(fill_values, dtype=np.float64)
 
     completed_coords = fill_missing_coord_axes(coordinates, axes_mask, fill_values)
-    return CoordinateGrid(completed_coords, ndim=len(axes_mask), axes_mask=grid_axes_mask)
+    return CoordinateGrid(
+        completed_coords, ndim=len(axes_mask), axes_mask=grid_axes_mask
+    )
 
-def get_grid_coordinates(bbox: NDArray[np.floating],
-                         block_size: NDArray[np.int_],
-                         cell_size: Optional[NDArray[np.floating]] = None) -> NDArray[np.floating]:
+
+def get_grid_coordinates(
+    bbox: NDArray[np.floating],
+    block_size: NDArray[np.int_],
+    cell_size: Optional[NDArray[np.floating]] = None,
+) -> NDArray[np.floating]:
     """
     Generate a grid of coordinates within a specified bounding box.
 
@@ -365,7 +413,11 @@ def get_grid_coordinates(bbox: NDArray[np.floating],
 
     # Generate slices for mgrid
     slices = tuple(
-        slice(bbox[0, i] + (cell_size[i] / 2), bbox[1, i] - (cell_size[i] / 2), complex(0, block_size[i]))
+        slice(
+            bbox[0, i] + (cell_size[i] / 2),
+            bbox[1, i] - (cell_size[i] / 2),
+            complex(0, block_size[i]),
+        )
         for i in range(len(block_size))
     )
 
@@ -374,6 +426,7 @@ def get_grid_coordinates(bbox: NDArray[np.floating],
     grid = np.stack(grid, axis=-1)
 
     return grid
+
 
 def make_grid_fields_broadcastable(arrays, axes, coordinate_system, field_rank=0):
     """
@@ -432,17 +485,19 @@ def make_grid_fields_broadcastable(arrays, axes, coordinate_system, field_rank=0
     present_axes = [ax for ax in canonical_axes if ax in set().union(*axes)]
 
     if any(ax not in canonical_axes for ax in present_axes):
-        raise ValueError(f"All axes must be in canonical axes: {canonical_axes}. Got {present_axes}.")
+        raise ValueError(
+            f"All axes must be in canonical axes: {canonical_axes}. Got {present_axes}."
+        )
 
     # Now iterate through each of the arrays and axes to
     # reshape into the correct shapes.
-    _full_shape = np.ones(len(present_axes),dtype=int)
+    _full_shape = np.ones(len(present_axes), dtype=int)
 
-    for array_index, axes in enumerate(axes):
+    for array_index, _axes in enumerate(axes):
         # Create a mask to grab out the elements of the new shape that
         # should have non-unit elements.
-        _new_shape = np.ones(len(present_axes),dtype=int)
-        _shape_mask = np.array([ax in axes for ax in present_axes],dtype=bool)
+        _new_shape = np.ones(len(present_axes), dtype=int)
+        _shape_mask = np.array([ax in _axes for ax in present_axes], dtype=bool)
         _new_shape[_shape_mask] = arrays[array_index].shape
 
         # Reshape the array using this new shape.
@@ -450,15 +505,27 @@ def make_grid_fields_broadcastable(arrays, axes, coordinate_system, field_rank=0
 
         # Check that everything is valid with the _full_shape. We either want _full_shape to be
         # 1 or we need the shapes to match. Otherwise broadcastability breaks down.
-        if any((ax_fshape != 1) and (ax_shape != 1) and (ax_fshape != ax_shape) for ax_shape,ax_fshape in zip(_new_shape,_full_shape)):
-            raise ValueError(f"Arrays are not mutually broadcastable. {_new_shape} is not broadcastable with {_full_shape}.")
+        if any(
+            (ax_fshape != 1) and (ax_shape != 1) and (ax_fshape != ax_shape)
+            for ax_shape, ax_fshape in zip(_new_shape, _full_shape)
+        ):
+            raise ValueError(
+                f"Arrays are not mutually broadcastable. {_new_shape} is not broadcastable with {_full_shape}."
+            )
 
-        _full_shape = np.array([_new_shape[k] if _new_shape[k] != 1 else _full_shape[k] for k in range(len(present_axes))])
+        _full_shape = np.array(
+            [
+                _new_shape[k] if _new_shape[k] != 1 else _full_shape[k]
+                for k in range(len(present_axes))
+            ]
+        )
 
     return arrays
 
 
-def build_image_coordinate_array(extent: np.ndarray, resolution: np.ndarray, axis: str, position: float):
+def build_image_coordinate_array(
+    extent: np.ndarray, resolution: np.ndarray, axis: str, position: float
+):
     """
     Generates a 3D array of Cartesian coordinates to act as the backing for image generation scripts.
 
@@ -483,32 +550,34 @@ def build_image_coordinate_array(extent: np.ndarray, resolution: np.ndarray, axi
     # Validate inputs: ensure that the resolution, extent, and position are each
     # reasonable values for the arguments.
     extent = np.array(extent, dtype=float)
-    resolution = np.array(resolution,dtype=np.uint32)
+    resolution = np.array(resolution, dtype=np.uint32)
 
     if len(extent) != 4:
-        raise ValueError(f"Argument `extent` should have 4 elements, not {len(extent)}.")
+        raise ValueError(
+            f"Argument `extent` should have 4 elements, not {len(extent)}."
+        )
     if len(resolution) != 2:
-        raise ValueError(f"Argument `resolution` should have 2 elements, not {len(resolution)}.")
+        raise ValueError(
+            f"Argument `resolution` should have 2 elements, not {len(resolution)}."
+        )
 
-    extent = np.reshape(extent, (2,2))
+    extent = np.reshape(extent, (2, 2))
     # Determine the fixed axis index from the provided `axis` argument. Raise
     # an error if the axis doesn't exist. For the remaining axes, we need to
     # know the correct indices for them.
-    axis_map: Dict[str, int] =  dict(x=0,y=1,z=2)
+    axis_map: Dict[str, int] = dict(x=0, y=1, z=2)
     if axis not in axis_map:
         raise ValueError("Axis must be one of 'x', 'y', or 'z'.")
     fixed_axis = axis_map[axis]
 
     # Create the ranges for the two variable axes
-    axes_indices = np.array([v for k,v in axis_map.items() if k != axis], dtype=int)
+    axes_indices = np.array([v for k, v in axis_map.items() if k != axis], dtype=int)
 
     # Construct the grid ranges and the resulting meshgrid from the
     # specified extent and resolution.
     # NOTE: The resulting meshgrid is (2, *RESOLUTION)
-    grid_linspaces = [
-        np.linspace(*extent[i],resolution[i]) for i in range(2)
-    ]
-    meshgrid = np.stack(np.meshgrid(*grid_linspaces, indexing='ij'), axis = 0)
+    grid_linspaces = [np.linspace(*extent[i], resolution[i]) for i in range(2)]
+    meshgrid = np.stack(np.meshgrid(*grid_linspaces, indexing="ij"), axis=0)
 
     # reshape the meshgrid to (*RESOLUTION,2 )
     meshgrid = np.moveaxis(meshgrid, 0, -1)
@@ -517,7 +586,7 @@ def build_image_coordinate_array(extent: np.ndarray, resolution: np.ndarray, axi
     # to fill in the relevant axes and then the position to fill the final axis.
     # Create an empty array for the coordinates
     coordinate_array = np.empty((*resolution, 3), dtype=float)
-    coordinate_array[...,axes_indices] = meshgrid
-    coordinate_array[...,fixed_axis] = position
+    coordinate_array[..., axes_indices] = meshgrid
+    coordinate_array[..., fixed_axis] = position
 
     return coordinate_array

@@ -1,4 +1,5 @@
 from typing import Callable
-from numpy.typing import NDArray, ArrayLike
 
-ProfileType = Callable[[ArrayLike,...],ArrayLike]
+from numpy.typing import ArrayLike
+
+ProfileType = Callable[[ArrayLike, ...], ArrayLike]

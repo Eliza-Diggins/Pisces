@@ -9,12 +9,12 @@ of symmetries through those operations.
 For users unfamiliar with this module, we suggest reading both :ref:`geometry_overview` and :ref:`geometry_theory`.
 """
 
-from typing import Callable, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Union
 
 import numpy as np
 import sympy as sp
 from numpy.typing import NDArray
-from scipy.integrate import quad, dblquad
+from scipy.integrate import dblquad, quad
 from scipy.interpolate import InterpolatedUnivariateSpline
 
 from pisces.geometry.base import CoordinateSystem, RadialCoordinateSystem
@@ -104,7 +104,7 @@ class CartesianCoordinateSystem(CoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['x', 'y', 'z']
+    AXES = ["x", "y", "z"]
     PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
@@ -149,7 +149,7 @@ class CartesianCoordinateSystem1D(CoordinateSystem):
     +----------+-------------------------+
     """
     NDIM = 1
-    AXES = ['x']
+    AXES = ["x"]
     PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
@@ -223,7 +223,7 @@ class CartesianCoordinateSystem2D(CoordinateSystem):
         >>> plt.show()
     """
     NDIM = 2
-    AXES = ['x', 'y']
+    AXES = ["x", "y"]
     PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
@@ -320,7 +320,7 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
         >>> plt.show()
     """
     NDIM = 3
-    AXES = ['r', 'theta', 'phi']
+    AXES = ["r", "theta", "phi"]
     PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
@@ -332,7 +332,7 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+        r = np.sqrt(x**2 + y**2 + z**2)
         theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return np.stack((r, theta, phi), axis=-1)
@@ -346,9 +346,9 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
     def lame_2(r, theta, phi):
         return r * sp.sin(theta)
 
-    def integrate_in_shells(self,
-                            field: Union[np.ndarray, Callable],
-                            radii: np.ndarray):
+    def integrate_in_shells(
+        self, field: Union[np.ndarray, Callable], radii: np.ndarray
+    ):
         r"""
 
         Parameters
@@ -393,16 +393,18 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
         """
         # Construct the integrand and the spline
         if callable(field):
-            f = lambda r: field(r) * r ** 2
+            f = lambda r: field(r) * r**2
         else:
-            f = InterpolatedUnivariateSpline(radii, field * radii ** 2)
+            f = InterpolatedUnivariateSpline(radii, field * radii**2)
         return 4 * np.pi * integrate(f, radii, radii[0], minima=True)
 
-    def solve_radial_poisson_problem(self,
-                                     density_profile: Union[np.ndarray, Callable],
-                                     radii: NDArray,
-                                     boundary_mode: str = 'integrate',
-                                     powerlaw_index: int = None):
+    def solve_radial_poisson_problem(
+        self,
+        density_profile: Union[np.ndarray, Callable],
+        radii: NDArray,
+        boundary_mode: str = "integrate",
+        powerlaw_index: int = None,
+    ):
         r"""
         Solve Poisson's equation (in Planck units) for spherical coordinates, given a density profile.
 
@@ -548,6 +550,7 @@ class SphericalCoordinateSystem(RadialCoordinateSystem):
 
         """
         from pisces.utilities.math_utils.poisson import solve_poisson_spherical
+
         return solve_poisson_spherical(
             density_profile,
             radii,
@@ -630,7 +633,7 @@ class PolarCoordinateSystem(CoordinateSystem):
         >>> plt.show()
         """
     NDIM = 2
-    AXES = ['r', 'theta']
+    AXES = ["r", "theta"]
     PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
@@ -641,7 +644,7 @@ class PolarCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y = coordinates[..., 0], coordinates[..., 1]
-        r = np.sqrt(x ** 2 + y ** 2)
+        r = np.sqrt(x**2 + y**2)
         theta = np.arctan2(y, x)
         return np.stack((r, theta), axis=-1)
 
@@ -733,7 +736,7 @@ class CylindricalCoordinateSystem(CoordinateSystem):
         >>> plt.show()
         """
     NDIM = 3
-    AXES = ['rho', 'phi', 'z']
+    AXES = ["rho", "phi", "z"]
     PARAMETERS = {}
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
@@ -744,7 +747,7 @@ class CylindricalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        rho = np.sqrt(x ** 2 + y ** 2)
+        rho = np.sqrt(x**2 + y**2)
         phi = np.arctan2(y, x)
         return np.stack((rho, phi, z), axis=-1)
 
@@ -909,9 +912,9 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
     the scaling factors :math:`\eta_x`, :math:`\eta_y`, and :math:`\eta_z`.
     """
     NDIM = 3
-    AXES = ['r', 'theta', 'phi']
-    PARAMETERS = {'scale_x': 1, 'scale_y': 1, 'scale_z': 1}
-    _SKIP_LAMBDIFICATION = ['jacobian']
+    AXES = ["r", "theta", "phi"]
+    PARAMETERS = {"scale_x": 1, "scale_y": 1, "scale_z": 1}
+    _SKIP_LAMBDIFICATION = ["jacobian"]
 
     def __init__(self, scale_x: float = 1, scale_y: float = 1, scale_z: float = 1):
         # BASIC SETUP
@@ -930,48 +933,66 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
         self.flux_parameter = self._compute_flux_coefficient()
 
     def _compute_shell_coefficient(self):
-        func = self.get_derived_attribute_function('r_shell_element')
+        func = self.get_derived_attribute_function("r_shell_element")
         integrand = lambda theta, phi: func(1, theta, phi)
 
-        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0 * x, lambda x: 0 * x + 2 * np.pi)[0]
+        return (
+            2
+            * np.pi
+            * dblquad(
+                integrand, 0, np.pi, lambda x: 0 * x, lambda x: 0 * x + 2 * np.pi
+            )[0]
+        )
 
     def _compute_flux_coefficient(self):
-        func = self.get_derived_attribute_function('r_surface_element')
+        func = self.get_derived_attribute_function("r_surface_element")
         integrand = lambda theta, phi: func(1, theta, phi)
 
-        return 2 * np.pi * dblquad(integrand, 0, np.pi, lambda x: 0 * x, lambda x: 0 * x + 2 * np.pi)[0]
+        return (
+            2
+            * np.pi
+            * dblquad(
+                integrand, 0, np.pi, lambda x: 0 * x, lambda x: 0 * x + 2 * np.pi
+            )[0]
+        )
 
     def _derive_symbolic_attributes(self):
         # PERFORM the standard ones.
         super()._derive_symbolic_attributes()
-        self._symbolic_attributes['omega'] = sp.simplify(
-            self._omega(*self.SYMBAXES, **self.SYMBPARAMS).subs(self.parameters))
-        mylog.debug(f"\t [COMPLETE] Derived  omega...")
+        self._symbolic_attributes["omega"] = sp.simplify(
+            self._omega(*self.SYMBAXES, **self.SYMBPARAMS).subs(self.parameters)
+        )
+        mylog.debug("\t [COMPLETE] Derived  omega...")
 
         # COMPUTING the r surface element.
-        r_surf_element_symbol = (self.get_lame_symbolic('theta') * self.get_lame_symbolic('phi')) / (
-                    self.get_lame_symbolic('r') * self.SYMBAXES[0] ** 2)
+        r_surf_element_symbol = (
+            self.get_lame_symbolic("theta") * self.get_lame_symbolic("phi")
+        ) / (self.get_lame_symbolic("r") * self.SYMBAXES[0] ** 2)
         r_surf_element_symbol = sp.simplify(r_surf_element_symbol.subs(self.parameters))
-        self._symbolic_attributes['r_surface_element'] = sp.simplify(r_surf_element_symbol)
-        mylog.debug(f"\t [COMPLETE] Derived  r_surface_element...")
+        self._symbolic_attributes["r_surface_element"] = sp.simplify(
+            r_surf_element_symbol
+        )
+        mylog.debug("\t [COMPLETE] Derived  r_surface_element...")
 
         # COMPUTING the shell element.
-        shell_element = (self.get_derived_attribute_symbolic('jacobian') / self.SYMBAXES[0] ** 2)
+        shell_element = (
+            self.get_derived_attribute_symbolic("jacobian") / self.SYMBAXES[0] ** 2
+        )
         shell_element = sp.simplify(shell_element.subs(self.parameters))
-        self._symbolic_attributes['r_shell_element'] = sp.simplify(shell_element)
-        mylog.debug(f"\t [COMPLETE] Derived  r_shell_element...")
+        self._symbolic_attributes["r_shell_element"] = sp.simplify(shell_element)
+        mylog.debug("\t [COMPLETE] Derived  r_shell_element...")
 
     @staticmethod
     def _omega(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         return sp.sqrt(
-            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
-            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
-            (scale_z * sp.cos(theta)) ** 2
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2
+            + (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2
+            + (scale_z * sp.cos(theta)) ** 2
         )
 
     def _convert_native_to_cartesian(self, coordinates: NDArray) -> NDArray:
         # PULL the coordinates out of the coordinate arrays.
-        omega = self._eval_der_attr_func('omega', coordinates)
+        omega = self._eval_der_attr_func("omega", coordinates)
         r, theta, phi = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
         st, ct, cp, sp = np.sin(theta), np.cos(theta), np.cos(phi), np.sin(phi)
 
@@ -983,34 +1004,36 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        xi = np.sqrt((self.scale_x * x) ** 2 + (self.scale_y * y) ** 2 + (self.scale_z * z) ** 2)
-        r = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+        xi = np.sqrt(
+            (self.scale_x * x) ** 2 + (self.scale_y * y) ** 2 + (self.scale_z * z) ** 2
+        )
+        r = np.sqrt(x**2 + y**2 + z**2)
         theta = np.arccos(z / r)
         phi = np.arctan2(y, x)
         return np.stack((xi, theta, phi), axis=-1)
 
     def lame_0(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         _o = sp.sqrt(
-            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
-            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
-            (scale_z * sp.cos(theta)) ** 2
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2
+            + (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2
+            + (scale_z * sp.cos(theta)) ** 2
         )
         return 1 / _o
 
     def lame_1(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         _o = sp.sqrt(
-            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
-            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
-            (scale_z * sp.cos(theta)) ** 2
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2
+            + (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2
+            + (scale_z * sp.cos(theta)) ** 2
         )
 
         return r * sp.sqrt((sp.diff(1 / _o, theta) ** 2 + (1 / _o) ** 2))
 
     def lame_2(r, theta, phi, scale_x=1, scale_y=1, scale_z=1):
         _o = sp.sqrt(
-            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2 +
-            (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2 +
-            (scale_z * sp.cos(theta)) ** 2
+            (scale_x * sp.sin(theta) * sp.cos(phi)) ** 2
+            + (scale_y * sp.sin(theta) * sp.sin(phi)) ** 2
+            + (scale_z * sp.cos(theta)) ** 2
         )
 
         return r * sp.sqrt((sp.diff(1 / _o, phi) ** 2 + (sp.sin(theta) / _o) ** 2))
@@ -1018,27 +1041,28 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
     def jacobian(self, coordinates: NDArray) -> NDArray:
         return np.prod(self.eval_lame(coordinates), axis=-1)
 
-    def integrate_in_shells(self,
-                            field: Union[np.ndarray, Callable],
-                            radii: np.ndarray):
+    def integrate_in_shells(
+        self, field: Union[np.ndarray, Callable], radii: np.ndarray
+    ):
         # Interpolate the integrand
         if callable(field):
-            f = lambda r: field(r) * r ** 2
+            f = lambda r: field(r) * r**2
         else:
-            f = InterpolatedUnivariateSpline(radii, field * radii ** 2)
+            f = InterpolatedUnivariateSpline(radii, field * radii**2)
 
         return self.shell_parameter * integrate(f, radii, x_0=radii[0], minima=True)
 
-    def solve_radial_poisson_problem(self,
-                                     density_profile: Union[Callable, np.ndarray],
-                                     coordinates: np.ndarray,
-                                     /,
-                                     *,
-                                     num_points: int = 1000,
-                                     scale: str = 'log',
-                                     psi: Callable = None,
-                                     powerlaw_index: int = None,
-                                     ) -> np.ndarray:
+    def solve_radial_poisson_problem(
+        self,
+        density_profile: Union[Callable, np.ndarray],
+        coordinates: np.ndarray,
+        /,
+        *,
+        num_points: int = 1000,
+        scale: str = "log",
+        psi: Callable = None,
+        powerlaw_index: int = None,
+    ) -> np.ndarray:
         r"""
         Solve Poisson's equation for ellipsoidal coordinates, given a density profile.
 
@@ -1218,16 +1242,17 @@ class PseudoSphericalCoordinateSystem(RadialCoordinateSystem):
         --------
         - :py:func:`compute_ellipsoidal_psi` : Computes the :math:`\psi(r)` function for ellipsoidal potentials.
         - :py:func:`solve_poisson_spherical` : Computes the potential for spherical coordinates.
-    """
+        """
         from pisces.utilities.math_utils.poisson import solve_poisson_ellipsoidal
+
         return solve_poisson_ellipsoidal(
             density_profile,
             coordinates,
             self,
             num_points=num_points,
-            scale = scale,
+            scale=scale,
             psi=psi,
-            powerlaw_index=powerlaw_index
+            powerlaw_index=powerlaw_index,
         )
 
 
@@ -1423,12 +1448,12 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['r', 'theta', 'phi']
-    PARAMETERS = {'ecc': 0.0}
+    AXES = ["r", "theta", "phi"]
+    PARAMETERS = {"ecc": 0.0}
 
     def __init__(self, ecc: float = 0.0):
         self.ecc = ecc
-        self.scale_x = self.scale_y = np.sqrt(1 - ecc ** 2)
+        self.scale_x = self.scale_y = np.sqrt(1 - ecc**2)
         self.scale_z = 1
         super(PseudoSphericalCoordinateSystem, self).__init__(ecc=self.ecc)
 
@@ -1440,13 +1465,13 @@ class OblateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
         self.flux_parameter = self._compute_flux_coefficient()
 
     def _compute_shell_coefficient(self):
-        func = self.get_derived_attribute_function('r_shell_element')
+        func = self.get_derived_attribute_function("r_shell_element")
         integrand = lambda theta: func(1, theta, 0)
 
         return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
     def _compute_flux_coefficient(self):
-        func = self.get_derived_attribute_function('r_surface_element')
+        func = self.get_derived_attribute_function("r_surface_element")
         integrand = lambda theta: func(1, theta, 0)
 
         return 2 * np.pi * quad(integrand, 0, np.pi)[0]
@@ -1652,13 +1677,13 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['r', 'theta', 'phi']
-    PARAMETERS = {'ecc': 0.0}
+    AXES = ["r", "theta", "phi"]
+    PARAMETERS = {"ecc": 0.0}
 
     def __init__(self, ecc: float = 0.0):
         self.ecc = ecc
         self.scale_x = self.scale_y = 1
-        self.scale_z = np.sqrt(1 - ecc ** 2)
+        self.scale_z = np.sqrt(1 - ecc**2)
         super(PseudoSphericalCoordinateSystem, self).__init__(ecc=self.ecc)
 
         # COMPUTING special attributes
@@ -1673,13 +1698,13 @@ class ProlateHomoeoidalCoordinateSystem(PseudoSphericalCoordinateSystem):
         self.flux_parameter = self._compute_flux_coefficient()
 
     def _compute_shell_coefficient(self):
-        func = self.get_derived_attribute_function('r_shell_element')
+        func = self.get_derived_attribute_function("r_shell_element")
         integrand = lambda theta: func(1, theta, 0)
 
         return 2 * np.pi * quad(integrand, 0, np.pi)[0]
 
     def _compute_flux_coefficient(self):
-        func = self.get_derived_attribute_function('r_surface_element')
+        func = self.get_derived_attribute_function("r_surface_element")
         integrand = lambda theta: func(1, theta, 0)
 
         return 2 * np.pi * quad(integrand, 0, np.pi)[0]
@@ -1802,8 +1827,8 @@ class OblateSpheroidalCoordinateSystem(CoordinateSystem):
 
     """
     NDIM = 3
-    AXES = ['mu', 'nu', 'phi']
-    PARAMETERS = {'a': 1.0}
+    AXES = ["mu", "nu", "phi"]
+    PARAMETERS = {"a": 1.0}
 
     def __init__(self, a: float = 1.0):
         self.a = a
@@ -1818,8 +1843,8 @@ class OblateSpheroidalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        rho = np.sqrt(x ** 2 + y ** 2)
-        d1_2, d2_2 = (rho + self.a) ** 2 + z ** 2, (rho - self.a) ** 2 + z ** 2
+        rho = np.sqrt(x**2 + y**2)
+        d1_2, d2_2 = (rho + self.a) ** 2 + z**2, (rho - self.a) ** 2 + z**2
         mu = np.arccosh((np.sqrt(d1_2) + np.sqrt(d2_2)) / (2 * self.a))
         nu = np.arccos((np.sqrt(d1_2) - np.sqrt(d2_2)) / (2 * self.a))
         phi = np.arctan2(y, x)
@@ -1926,8 +1951,8 @@ class ProlateSpheroidalCoordinateSystem(CoordinateSystem):
         >>> plt.show()
     """
     NDIM = 3
-    AXES = ['mu', 'nu', 'phi']
-    PARAMETERS = {'a': 1.0}
+    AXES = ["mu", "nu", "phi"]
+    PARAMETERS = {"a": 1.0}
 
     def __init__(self, a: float = 1.0):
         self.a = a
@@ -1942,7 +1967,7 @@ class ProlateSpheroidalCoordinateSystem(CoordinateSystem):
 
     def _convert_cartesian_to_native(self, coordinates: NDArray) -> NDArray:
         x, y, z = coordinates[..., 0], coordinates[..., 1], coordinates[..., 2]
-        rho = np.sqrt(x ** 2 + y ** 2)
+        rho = np.sqrt(x**2 + y**2)
         d1_2, d2_2 = (rho) ** 2 + (z + self.a) ** 2, (rho) ** 2 + (z - self.a) ** 2
         mu = np.arccosh((np.sqrt(d1_2) + np.sqrt(d2_2)) / (2 * self.a))
         nu = np.arccos((np.sqrt(d1_2) - np.sqrt(d2_2)) / (2 * self.a))

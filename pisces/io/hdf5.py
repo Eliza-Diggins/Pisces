@@ -1,11 +1,13 @@
-import h5py
+import os
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Union, TypeVar, Generic, Iterable
-import os
+from typing import Generic, Iterable, TypeVar, Union
+
+import h5py
+
 
 class HDF5_File_Handle(h5py.File):
-    """
+    r"""
     A handler for managing datasets and groups within an HDF5 file or group.
     Supports dynamic creation, resizing, and handling of temporary data storage.
 
@@ -67,7 +69,7 @@ class HDF5_File_Handle(h5py.File):
         except OSError as e:
             raise OSError(f"Error deleting the file '{self.filename}': {e}")
 
-    def switch_mode(self, mode: str) -> 'HDF5_File_Handle':
+    def switch_mode(self, mode: str) -> "HDF5_File_Handle":
         """
         Switch the mode of the HDF5 file. This method closes the current file
         handle and reopens the file in the specified mode.
@@ -100,6 +102,7 @@ class HDF5_File_Handle(h5py.File):
         self.close()
         return HDF5_File_Handle(_filename, mode=mode)
 
+
 IndexType = TypeVar("IndexType")
 """
 Generic type variable representing the index type of elements in a container.
@@ -112,7 +115,10 @@ Generic type variable representing the type of elements stored in a container.
 Used for type hinting in element containers to specify the type of elements being managed.
 """
 
-class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, ItemType], ABC):
+
+class HDF5ElementCache(
+    OrderedDict[IndexType, ItemType], Generic[IndexType, ItemType], ABC
+):
     """
     Abstract Base Class for an LRU Cache for HDF5 elements.
 
@@ -236,7 +242,7 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
             print(list(cache.keys()))  # Lists all dataset names in the HDF5 file
         """
         for index in self._identify_elements_from_handle():
-            OrderedDict.__setitem__(self,index, None)
+            OrderedDict.__setitem__(self, index, None)
 
     def _key_to_index(self, key: str) -> IndexType:
         """
@@ -322,7 +328,7 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
 
         """
         if index in self:
-            super().__setitem__(index,None)
+            super().__setitem__(index, None)
         else:
             raise KeyError(f"Element with index '{index}' does not exist in the cache.")
 
@@ -448,7 +454,9 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
         try:
             self._remove_element_from_handle(index)
         except KeyError:
-            raise KeyError(f"Element with index '{index}' does not exist in the HDF5 handle.")
+            raise KeyError(
+                f"Element with index '{index}' does not exist in the HDF5 handle."
+            )
 
     def _update_cache(self, index: IndexType):
         """
@@ -575,7 +583,7 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
             if dynamic_loading and not was_loaded:
                 self.unload_element(key)
 
-    def get(self, key: IndexType, default: ItemType=None):
+    def get(self, key: IndexType, default: ItemType = None):
         """
         Return the value for ``key`` if ``key`` is in the dictionary, else ``default``.
 
@@ -593,9 +601,3 @@ class HDF5ElementCache(OrderedDict[IndexType, ItemType], Generic[IndexType, Item
             return self[key]
         except KeyError:
             return default
-
-
-
-
-
-

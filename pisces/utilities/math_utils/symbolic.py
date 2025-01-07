@@ -7,7 +7,8 @@ module provides important backends for both the differential geometry of the :py
 """
 import sympy as sp
 
-def get_powerlaw_limit(expression, variable, limit: str = 'outer'):
+
+def get_powerlaw_limit(expression, variable, limit: str = "outer"):
     """
     Extract the coefficient and power of the dominant power-law term
     in a given expression at small (inner) or large (outer) limits.
@@ -32,9 +33,9 @@ def get_powerlaw_limit(expression, variable, limit: str = 'outer'):
         variable = sp.Symbol(variable)
 
     # Validate the limit
-    if limit == 'outer':
+    if limit == "outer":
         series_point = sp.oo
-    elif limit == 'inner':
+    elif limit == "inner":
         series_point = 0
     else:
         raise ValueError("Invalid limit. Must be 'outer' or 'inner'.")
@@ -49,11 +50,19 @@ def get_powerlaw_limit(expression, variable, limit: str = 'outer'):
     # Construct the ordered terms and fix any issues with the symbols.
     # In many cases, the base ends up being (1/x), which we don't want.
     terms = [_term.as_coeff_mul(variable) for _term in expansion.as_ordered_terms()]
-    terms = [(_term[0],_term[1][0].as_base_exp()) if len(_term[1]) else (_term[0],(variable,0)) for _term in terms]
-    terms = [(_term[0],_term[1][1]) if _term[1][0] == variable else (_term[0],-_term[1][1]) for _term in terms]
+    terms = [
+        (_term[0], _term[1][0].as_base_exp())
+        if len(_term[1])
+        else (_term[0], (variable, 0))
+        for _term in terms
+    ]
+    terms = [
+        (_term[0], _term[1][1]) if _term[1][0] == variable else (_term[0], -_term[1][1])
+        for _term in terms
+    ]
     terms = sorted(terms, key=lambda x: x[1])
 
-    if limit == 'outer':
+    if limit == "outer":
         critical_term = terms[-1]
     else:
         critical_term = terms[0]

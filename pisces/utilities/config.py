@@ -349,5 +349,5 @@ class YAMLConfig:
         _ = self.config  # Re-load configuration
 
 
-pisces_params: YAMLConfig = YAMLConfig(os.path.join(config_directory,'config.yaml'))
+pisces_params: YAMLConfig = YAMLConfig(os.path.join(config_directory, "config.yaml"))
 """ YAMLConfig: The ``Pisces`` configuration object."""

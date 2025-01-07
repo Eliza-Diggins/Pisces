@@ -2,7 +2,7 @@
 Pisces model classes for describing galaxy clusters.
 """
 from pathlib import Path
-from typing import Union, List, Optional, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 import numpy as np
 import unyt
@@ -14,21 +14,22 @@ from pisces.geometry import CoordinateSystem, SphericalCoordinateSystem
 from pisces.io import HDF5_File_Handle
 from pisces.models.base import _RadialModel
 from pisces.models.galaxy_clusters.grids import ClusterGridManager
-from pisces.models.solver import solver_process, serial_solver_checkers, serial_solver_processes
+from pisces.models.solver import (
+    serial_solver_checkers,
+    serial_solver_processes,
+    solver_process,
+)
 from pisces.models.utilities import ModelConfigurationDescriptor
-from pisces.utilities.math_utils.numeric import integrate
-from pisces.utilities.math_utils.numeric import integrate_vectorized
-from pisces.utilities.physics import m_p, mu, G
+from pisces.utilities.math_utils.numeric import integrate, integrate_vectorized
+from pisces.utilities.physics import G, m_p, mu
 
 if TYPE_CHECKING:
-    from pisces.profiles.base import Profile
     from pisces.geometry.base import RadialCoordinateSystem
+    from pisces.profiles.base import Profile
 
 
 class ClusterModel(_RadialModel):
-    r"""
-
-    """
+    r""" """
     # @@ VALIDATION MARKERS @@ #
     # These validation markers are used by the Model to constrain the valid
     # parameters for the model. Subclasses can modify the validation markers
@@ -43,28 +44,30 @@ class ClusterModel(_RadialModel):
     # The class parameters define several "standard" behaviors for the class.
     # These can be altered in subclasses to produce specific behaviors.
     GRID_MANAGER_TYPE = ClusterGridManager
-    config = ModelConfigurationDescriptor(filename='galaxy_clusters.yaml')
+    config = ModelConfigurationDescriptor(filename="galaxy_clusters.yaml")
 
     # @@ CONSTRUCTION METHODS @@ #
     # `build_skeleton` gets overwritten here because we want to implement the gcluster
     # specific norms for the bbox and grid spacing.
     # noinspection PyMethodOverriding
     @classmethod
-    def build_skeleton(cls,
-                       path: Union[str, Path],
-                       r_min: float,
-                       r_max: float,
-                       /,
-                       num_points: Optional[int] = 1000,
-                       n_phi: Optional[int] = None,
-                       n_theta: Optional[int] = None,
-                       chunk_shape: Union[int, ArrayLike] = None,
-                       *,
-                       overwrite: bool = False,
-                       length_unit: str = None,
-                       scale: Union[List[str], str] = None,
-                       profiles: Optional[Dict[str, 'Profile']] = None,
-                       coordinate_system: Optional[SphericalCoordinateSystem] = None) -> 'HDF5_File_Handle':
+    def build_skeleton(
+        cls,
+        path: Union[str, Path],
+        r_min: float,
+        r_max: float,
+        /,
+        num_points: Optional[int] = 1000,
+        n_phi: Optional[int] = None,
+        n_theta: Optional[int] = None,
+        chunk_shape: Union[int, ArrayLike] = None,
+        *,
+        overwrite: bool = False,
+        length_unit: str = None,
+        scale: Union[List[str], str] = None,
+        profiles: Optional[Dict[str, "Profile"]] = None,
+        coordinate_system: Optional[SphericalCoordinateSystem] = None,
+    ) -> "HDF5_File_Handle":
         r"""
         Construct a "skeleton" for the :py:class:`ClusterModel` class.
 
@@ -163,25 +166,35 @@ class ClusterModel(_RadialModel):
         # coordinate system isn't actually provided. NOTE: we don't defer to super() here because
         # we need to validate the coordinate system anyway.
         if coordinate_system is None:
-            coordinate_system = cls.DEFAULT_COORDINATE_SYSTEM(**cls.DEFAULT_COORDINATE_SYSTEM_PARAMS)
+            coordinate_system = cls.DEFAULT_COORDINATE_SYSTEM(
+                **cls.DEFAULT_COORDINATE_SYSTEM_PARAMS
+            )
         cls._cls_validate_coordinate_system(coordinate_system)
 
         # Determine requirements based on coordinate system
-        requires_theta = coordinate_system.__class__.__name__ not in ['SphericalCoordinateSystem']
-        requires_phi = coordinate_system.__class__.__name__ not in ['OblateHomoeoidalCoordinateSystem',
-                                                                    'ProlateHomoeoidalCoordinateSystem',
-                                                                    'SphericalCoordinateSystem']
+        requires_theta = coordinate_system.__class__.__name__ not in [
+            "SphericalCoordinateSystem"
+        ]
+        requires_phi = coordinate_system.__class__.__name__ not in [
+            "OblateHomoeoidalCoordinateSystem",
+            "ProlateHomoeoidalCoordinateSystem",
+            "SphericalCoordinateSystem",
+        ]
 
         # Ensure that the user has provided n_phi and n_theta if they are required.
         # Otherwise, we return an error.
         n_phi = n_phi or (1 if not requires_phi else None)
         if n_phi is None:
-            raise ValueError(f"Parameter `n_phi` is required for coordinate systems "
-                             f"of type {coordinate_system.__class__.__name__}.")
+            raise ValueError(
+                f"Parameter `n_phi` is required for coordinate systems "
+                f"of type {coordinate_system.__class__.__name__}."
+            )
         n_theta = n_theta or (1 if not requires_theta else None)
         if n_theta is None:
-            raise ValueError(f"Parameter `n_theta` is required for coordinate systems "
-                             f"of type {coordinate_system.__class__.__name__}.")
+            raise ValueError(
+                f"Parameter `n_theta` is required for coordinate systems "
+                f"of type {coordinate_system.__class__.__name__}."
+            )
 
         # Utilize the custom validation mode in ClusterGridManager to validate / refactor
         # the bbox, scale, and grid_shape. Then pass to the parent method.
@@ -208,19 +221,21 @@ class ClusterModel(_RadialModel):
 
     # @@ BUILDERS @@ #
     @classmethod
-    def from_dens_and_tden(cls,
-                           path: str,
-                           r_min: float,
-                           r_max: float,
-                           gas_density: 'Profile',
-                           total_density: 'Profile',
-                           num_points: Optional[int] = 1000,
-                           n_phi: Optional[float] = None,
-                           n_theta: Optional[float] = None,
-                           chunk_shape: Union[int, ArrayLike] = None,
-                           extra_profiles: Optional[Dict[str, 'Profile']] = None,
-                           coordinate_system: Optional[CoordinateSystem] = None,
-                           **kwargs) -> 'ClusterModel':
+    def from_dens_and_tden(
+        cls,
+        path: str,
+        r_min: float,
+        r_max: float,
+        gas_density: "Profile",
+        total_density: "Profile",
+        num_points: Optional[int] = 1000,
+        n_phi: Optional[float] = None,
+        n_theta: Optional[float] = None,
+        chunk_shape: Union[int, ArrayLike] = None,
+        extra_profiles: Optional[Dict[str, "Profile"]] = None,
+        coordinate_system: Optional[CoordinateSystem] = None,
+        **kwargs,
+    ) -> "ClusterModel":
         r"""
         Construct a `ClusterModel` from density and total density profiles.
 
@@ -282,8 +297,7 @@ class ClusterModel(_RadialModel):
         """
         # Set up the profiles. These get fed into build_skeleton and then
         # dumped to fields as the first step in the pipeline.
-        profiles = {'gas_density': gas_density,
-                    'total_density': total_density}
+        profiles = {"gas_density": gas_density, "total_density": total_density}
         if extra_profiles:
             profiles.update(extra_profiles)
 
@@ -305,32 +319,36 @@ class ClusterModel(_RadialModel):
 
         # Run the solver on the generated object to solve for the relevant fields.
         coordinate_system_name = obj.coordinate_system.__class__.__name__
-        if coordinate_system_name == 'SphericalCoordinateSystem':
-            obj(pathway='spherical_dens_tden')
-        elif 'Homoeoidal' in coordinate_system_name:
-            obj(pathway='homoeoidal_dens_tden')
+        if coordinate_system_name == "SphericalCoordinateSystem":
+            obj(pathway="spherical_dens_tden")
+        elif "Homoeoidal" in coordinate_system_name:
+            obj(pathway="homoeoidal_dens_tden")
         else:
-            raise NotImplementedError(f"The coordinate system {coordinate_system_name} is an accepted coordinate"
-                                      f" system for {cls.__name__}, but there is no density / total density pipeline implemented.")
+            raise NotImplementedError(
+                f"The coordinate system {coordinate_system_name} is an accepted coordinate"
+                f" system for {cls.__name__}, but there is no density / total density pipeline implemented."
+            )
 
         return obj
 
     @classmethod
-    def from_dens_and_temp(cls,
-                           path: str,
-                           r_min: float,
-                           r_max: float,
-                           /,
-                           gas_density: 'Profile',
-                           temperature: 'Profile',
-                           *,
-                           num_points: Optional[int] = 1000,
-                           n_phi: Optional[float] = None,
-                           n_theta: Optional[float] = None,
-                           chunk_shape: Union[int, ArrayLike] = None,
-                           extra_profiles: Optional[Dict[str, 'Profile']] = None,
-                           coordinate_system: Optional[CoordinateSystem] = None,
-                           **kwargs) -> 'ClusterModel':
+    def from_dens_and_temp(
+        cls,
+        path: str,
+        r_min: float,
+        r_max: float,
+        /,
+        gas_density: "Profile",
+        temperature: "Profile",
+        *,
+        num_points: Optional[int] = 1000,
+        n_phi: Optional[float] = None,
+        n_theta: Optional[float] = None,
+        chunk_shape: Union[int, ArrayLike] = None,
+        extra_profiles: Optional[Dict[str, "Profile"]] = None,
+        coordinate_system: Optional[CoordinateSystem] = None,
+        **kwargs,
+    ) -> "ClusterModel":
         r"""
         Construct a `ClusterModel` from gas density and temperature profiles.
 
@@ -404,7 +422,7 @@ class ClusterModel(_RadialModel):
         # This generates the necessary file structure and background
         # data for the model. All of the structure generation should
         # be the same between coordinate systems.
-        profiles = {'gas_density': gas_density, 'temperature': temperature}
+        profiles = {"gas_density": gas_density, "temperature": temperature}
         if extra_profiles:
             profiles.update(extra_profiles)
 
@@ -427,19 +445,20 @@ class ClusterModel(_RadialModel):
         # @@ RUN MODEL PATHWAY @@ #
         # This now triggers the physics computations to generate
         # the full model.
-        if obj.coordinate_system.__class__.__name__ == 'SphericalCoordinateSystem':
-            obj(pathway='spherical_dens_temp')
-        elif 'Homoeoidal' in obj.coordinate_system.__class__.__name__:
-            obj(pathway='homoeoidal_dens_temp')
+        if obj.coordinate_system.__class__.__name__ == "SphericalCoordinateSystem":
+            obj(pathway="spherical_dens_temp")
+        elif "Homoeoidal" in obj.coordinate_system.__class__.__name__:
+            obj(pathway="homoeoidal_dens_temp")
         else:
             raise NotImplementedError(
                 f"The coordinate system {obj.coordinate_system.__class__.__name__} is an accepted coordinate"
-                f" system for {cls.__name__}, but there is no density / temperature pipeline implemented.")
+                f" system for {cls.__name__}, but there is no density / temperature pipeline implemented."
+            )
 
         return obj
 
     @property
-    def coordinate_system(self) -> 'RadialCoordinateSystem':
+    def coordinate_system(self) -> "RadialCoordinateSystem":
         # noinspection PyTypeChecker
         # skip the type checking because we have enforcements on the
         # coordinate system which are dynamic.
@@ -448,12 +467,14 @@ class ClusterModel(_RadialModel):
     # @@ UTILITY FUNCTIONS @@ #
     # These utility functions are used throughout the model generation process for various things
     # and are not sufficiently general to be worth implementing elsewhere.
-    def _integrate_hse_radial(self,
-                              target_field: str,
-                              other_field_spline: InterpolatedUnivariateSpline,
-                              density_function: callable,
-                              radii: unyt.unyt_array) -> unyt.unyt_array:
-        """
+    def _integrate_hse_radial(
+        self,
+        target_field: str,
+        other_field_spline: InterpolatedUnivariateSpline,
+        density_function: callable,
+        radii: unyt.unyt_array,
+    ) -> unyt.unyt_array:
+        r"""
         Integrate the hydrostatic equilibrium equation to compute the ``target field``.
 
         Parameters
@@ -475,14 +496,19 @@ class ClusterModel(_RadialModel):
         # Define the integrand and output units. This requires knowledge of the target field;
         # we can then look everything up to use the formula correctly.
         # The integrand is then the element that will be integrated to obtain the target field.
-        if target_field == 'gravitational_potential':
+        if target_field == "gravitational_potential":
             # The other field is the pressure, dphi = dP/rho
             integrand = lambda _r: other_field_spline(_r, 1) / density_function(_r)
-            result_units = self.FIELDS['pressure'].units / self.FIELDS['gas_density'].units
-        elif target_field == 'pressure':
+            result_units = (
+                self.FIELDS["pressure"].units / self.FIELDS["gas_density"].units
+            )
+        elif target_field == "pressure":
             # The other field is potential, dP = dphi*rho
             integrand = lambda _r: other_field_spline(_r, 1) * density_function(_r)
-            result_units = self.FIELDS['gravitational_potential'].units * self.FIELDS['gas_density'].units
+            result_units = (
+                self.FIELDS["gravitational_potential"].units
+                * self.FIELDS["gas_density"].units
+            )
         else:
             raise ValueError(f"Target field '{target_field}' not recognized.")
 
@@ -495,13 +521,12 @@ class ClusterModel(_RadialModel):
         #   of continuity, this leads to the closed form applied.
         # For the pressure, we assume dphi ~ r^-2, which leads to a well constrained quadrature rule at large
         #   radii. This takes advantage of the fact that we know the density function with arb. precision.
-        if target_field == 'gravitational_potential':
+        if target_field == "gravitational_potential":
             integrated_field -= integrand(radii.d[-1]) * radii.d[-1]
-        elif target_field == 'pressure':
-            boundary_integral = (other_field_spline(radii.d[-1],1)*radii.d[-1]**2)*quad(
-                lambda _r: density_function(_r)/_r**2,
-                radii.d[-1], np.inf
-            )[0]
+        elif target_field == "pressure":
+            boundary_integral = (
+                other_field_spline(radii.d[-1], 1) * radii.d[-1] ** 2
+            ) * quad(lambda _r: density_function(_r) / _r**2, radii.d[-1], np.inf)[0]
             integrated_field += boundary_integral
         else:
             raise ValueError(f"Target field '{target_field}' not recognized.")
@@ -509,11 +534,14 @@ class ClusterModel(_RadialModel):
         # Return the output as an array with the result units.
         return unyt.unyt_array(integrated_field, result_units)
 
-    def _compute_gradient_hse(self, target_field: str,
-                              other_field_spline: InterpolatedUnivariateSpline,
-                              gradient_field_name: str,
-                              create_field: bool) -> unyt.unyt_array:
-        """
+    def _compute_gradient_hse(
+        self,
+        target_field: str,
+        other_field_spline: InterpolatedUnivariateSpline,
+        gradient_field_name: str,
+        create_field: bool,
+    ) -> unyt.unyt_array:
+        r"""
         Compute the gradient field (e.g., gravitational field or pressure gradient).
         This mirrors the _integrate_hse_radial in many respects; however, it is compatible
         with higher dimensional gradient computations (non-radial geometries).
@@ -536,7 +564,7 @@ class ClusterModel(_RadialModel):
         """
         # Utilize the geometry handler (with the default fixed axes = 'r') to determine how the
         # gradient will manifest. Then fetch the necessary coordinate grid for the operation.
-        gradient_axes = self.geometry_handler.get_gradient_dependence(axes=['r'])
+        gradient_axes = self.geometry_handler.get_gradient_dependence(axes=["r"])
         coordinates = self.grid_manager.get_coordinates(axes=gradient_axes)
 
         # Compute the gradient of the spline that was provided as the other field spline. This
@@ -546,49 +574,54 @@ class ClusterModel(_RadialModel):
         gradient = self.geometry_handler.compute_gradient(
             other_field_spline,
             coordinates,
-            axes=['r'],
+            axes=["r"],
             derivatives=[lambda _r: other_field_spline(_r, 1)],
-            basis='unit',
+            basis="unit",
         )[..., 0]
 
         # Ensure that the fields are broadcastable to one another. This is
         # required if the the gradient breaks symmetry and has a larger dimension that
         # the density field does.
         gradient, density = self.grid_manager.make_fields_consistent(
-            [gradient, self.FIELDS['gas_density'][...]],
-            [gradient_axes, ['r']]
+            [gradient, self.FIELDS["gas_density"][...]], [gradient_axes, ["r"]]
         )
 
         # Determine units -> This is a simple application of the
         # HSE equation to determine dimensionality. Use the length unit to manage
         # the unit manipulations from differential operations.
-        if target_field == 'pressure':
+        if target_field == "pressure":
             gradient_field = gradient * density
-            gradient_units = (self.FIELDS['gravitational_potential'].units *
-                              self.FIELDS['gas_density'].units) / unyt.Unit(self.grid_manager.length_unit)
-        elif target_field == 'gravitational_potential':
+            gradient_units = (
+                self.FIELDS["gravitational_potential"].units
+                * self.FIELDS["gas_density"].units
+            ) / unyt.Unit(self.grid_manager.length_unit)
+        elif target_field == "gravitational_potential":
             gradient_field = gradient / density
-            gradient_units = self.FIELDS['pressure'].units / (self.FIELDS[
-                                                                  'gas_density'].units * unyt.Unit(
-                self.grid_manager.length_unit))
+            gradient_units = self.FIELDS["pressure"].units / (
+                self.FIELDS["gas_density"].units
+                * unyt.Unit(self.grid_manager.length_unit)
+            )
         else:
             raise ValueError("Unknown target field.")
 
         # Enforce units and register the new field.
         gradient_field = unyt.unyt_array(gradient_field, gradient_units)
-        return self._assign_default_units_and_add_field(gradient_field_name, gradient_field, create_field,
-                                                        axes=gradient_axes)
+        return self._assign_default_units_and_add_field(
+            gradient_field_name, gradient_field, create_field, axes=gradient_axes
+        )
 
     # @@ CHECKERS @@ #
     # There is only one checker for the galaxy cluster pathways.
-    @serial_solver_checkers([
-        'spherical_dens_temp',
-        'spherical_dens_tden',
-        'homoeoidal_dens_tden',
-        'homoeoidal_dens_temp'
-    ])
+    @serial_solver_checkers(
+        [
+            "spherical_dens_temp",
+            "spherical_dens_tden",
+            "homoeoidal_dens_tden",
+            "homoeoidal_dens_temp",
+        ]
+    )
     def check_pathways(self, pathway: str) -> bool:
-        """
+        r"""
         Determine if a pathway is valid for a particular set of existing
         profiles and geometry.
 
@@ -608,32 +641,34 @@ class ClusterModel(_RadialModel):
         # Check that the coordinate systems are valid.
         # This just relies on checking the coordinate system names.
         cs_name = self.coordinate_system.__class__.__name__
-        if pathway.startswith('spherical'):
-            state = state and (cs_name == 'SphericalCoordinateSystem')
-        if pathway.startswith('homoeidal'):
-            state = state and ('Homoeoidal' in cs_name)
+        if pathway.startswith("spherical"):
+            state = state and (cs_name == "SphericalCoordinateSystem")
+        if pathway.startswith("homoeidal"):
+            state = state and ("Homoeoidal" in cs_name)
 
         # CHECKING profiles
         # We must have the correct input fields to proceed.
         if pathway.endswith("dens_temp"):
-            state = state and ('temperature' in self.profiles)
-            state = state and ('gas_density' in self.profiles)
+            state = state and ("temperature" in self.profiles)
+            state = state and ("gas_density" in self.profiles)
         elif pathway.endswith("dens_tden"):
-            state = state and ('total_density' in self.profiles)
-            state = state and ('gas_density' in self.profiles)
+            state = state and ("total_density" in self.profiles)
+            state = state and ("gas_density" in self.profiles)
 
         return state
 
     # @@ SOLVER PROCESSES @@ #
     # All of the pipelines are implemented below.
-    @serial_solver_processes([
-        ('spherical_dens_temp', 0, [], {}),
-        ('spherical_dens_tden', 0, [], {}),
-        ('homoeoidal_dens_temp', 0, [], {}),
-        ('homoeoidal_dens_tden', 0, [], {}),
-    ])
+    @serial_solver_processes(
+        [
+            ("spherical_dens_temp", 0, [], {}),
+            ("spherical_dens_tden", 0, [], {}),
+            ("homoeoidal_dens_temp", 0, [], {}),
+            ("homoeoidal_dens_tden", 0, [], {}),
+        ]
+    )
     def convert_profiles_to_fields(self):
-        """
+        r"""
         Convert the registered model profiles into fields with the relevant axes.
 
         This solver process ensures that every registered profile in :py:attr:`profiles` gets converted
@@ -667,22 +702,58 @@ class ClusterModel(_RadialModel):
 
         # Continue by adding the stellar density if it's not already present.
         # This ensures that it can be used in computations elsewhere.
-        if 'stellar_density' not in self.FIELDS:
-            _units = self.get_default_units('stellar_density')
-            self.logger.debug("[EXEC] \t\tAdded field `stellar_density` (units=%s) as null.", str(_units))
+        if "stellar_density" not in self.FIELDS:
+            _units = self.get_default_units("stellar_density")
+            self.logger.debug(
+                "[EXEC] \t\tAdded field `stellar_density` (units=%s) as null.",
+                str(_units),
+            )
             self.FIELDS.add_field(
-                'stellar_density',
-                axes=['r'],
+                "stellar_density",
+                axes=["r"],
                 units=str(_units),
             )
 
-    @serial_solver_processes([
-        ('homoeoidal_dens_temp', 6, [['gas_density', 'stellar_density']], {}),
-        ('spherical_dens_temp', 6, [['gas_density', 'stellar_density', 'dark_matter_density']], {}),
-        ('homoeoidal_dens_tden', 2, [['gas_density', 'stellar_density', 'dark_matter_density', 'total_density']], {}),
-        ('spherical_dens_tden', 2, [['gas_density', 'stellar_density', 'dark_matter_density', 'total_density']], {}),
-    ])
-    def integrate_density_fields(self, density_field_names: List[str], create_fields: bool = True, overwrite=True):
+    @serial_solver_processes(
+        [
+            ("homoeoidal_dens_temp", 6, [["gas_density", "stellar_density"]], {}),
+            (
+                "spherical_dens_temp",
+                6,
+                [["gas_density", "stellar_density", "dark_matter_density"]],
+                {},
+            ),
+            (
+                "homoeoidal_dens_tden",
+                2,
+                [
+                    [
+                        "gas_density",
+                        "stellar_density",
+                        "dark_matter_density",
+                        "total_density",
+                    ]
+                ],
+                {},
+            ),
+            (
+                "spherical_dens_tden",
+                2,
+                [
+                    [
+                        "gas_density",
+                        "stellar_density",
+                        "dark_matter_density",
+                        "total_density",
+                    ]
+                ],
+                {},
+            ),
+        ]
+    )
+    def integrate_density_fields(
+        self, density_field_names: List[str], create_fields: bool = True, overwrite=True
+    ):
         r"""
         Integrate radial density profiles to compute corresponding mass profiles.
 
@@ -740,32 +811,71 @@ class ClusterModel(_RadialModel):
 
         """
         # Define valid density fields for validation. Fields not in the valid set are checked for errors.
-        valid_density_fields = ['total_density', 'gas_density', 'stellar_density', 'dark_matter_density']
+        valid_density_fields = [
+            "total_density",
+            "gas_density",
+            "stellar_density",
+            "dark_matter_density",
+        ]
 
         returned_fields = []
         for density_field in density_field_names:
             if density_field not in valid_density_fields:
-                raise ValueError(f"The density field `{density_field}` is not among the valid density fields"
-                                 " for this model.")
+                raise ValueError(
+                    f"The density field `{density_field}` is not among the valid density fields"
+                    " for this model."
+                )
 
-            returned_fields.append(self.integrate_radial_density_field(density_field,
-                                                                       create_field=create_fields,
-                                                                       overwrite=overwrite,
-                                                                       ))
+            returned_fields.append(
+                self.integrate_radial_density_field(
+                    density_field,
+                    create_field=create_fields,
+                    overwrite=overwrite,
+                )
+            )
 
-    @serial_solver_processes([
-        ('homoeoidal_dens_temp', 5, ['dark_matter_density'], dict(create_field=True)),
-        ('homoeoidal_dens_temp', 7, ['dark_matter_mass'], dict(create_field=True, field_type='mass')),
-        ('spherical_dens_temp', 5, ['dark_matter_density'], dict(create_field=True)),
-        ('homoeoidal_dens_tden', 1, ['dark_matter_density'], dict(create_field=True)),
-        ('spherical_dens_tden', 1, ['dark_matter_density'], dict(create_field=True)),
-    ])
-    def perform_mass_accounting(self,
-                                target_field: str,
-                                create_field: bool = False,
-                                units: Union[str, unyt.Unit] = None,
-                                mode: str = 'density'):
-        """
+    @serial_solver_processes(
+        [
+            (
+                "homoeoidal_dens_temp",
+                5,
+                ["dark_matter_density"],
+                dict(create_field=True),
+            ),
+            (
+                "homoeoidal_dens_temp",
+                7,
+                ["dark_matter_mass"],
+                dict(create_field=True, field_type="mass"),
+            ),
+            (
+                "spherical_dens_temp",
+                5,
+                ["dark_matter_density"],
+                dict(create_field=True),
+            ),
+            (
+                "homoeoidal_dens_tden",
+                1,
+                ["dark_matter_density"],
+                dict(create_field=True),
+            ),
+            (
+                "spherical_dens_tden",
+                1,
+                ["dark_matter_density"],
+                dict(create_field=True),
+            ),
+        ]
+    )
+    def perform_mass_accounting(
+        self,
+        target_field: str,
+        create_field: bool = False,
+        units: Union[str, unyt.Unit] = None,
+        mode: str = "density",
+    ):
+        r"""
         Perform mass accounting by computing a target mass or density field.
 
         This solver process calculates a specified mass or density field by summing or subtracting
@@ -831,24 +941,40 @@ class ClusterModel(_RadialModel):
         # Validate the target field and field_type. The desired field must be a specified valid field
         # and we need to have access to all the additional components that are necessary to perform
         # the computation further along in the method.
-        if mode == 'density':
-            valid_fields = ['total_density', 'gas_density', 'stellar_density', 'dark_matter_density']
-        elif mode == 'mass':
-            valid_fields = ['total_mass', 'gas_mass', 'stellar_mass', 'dark_matter_mass']
+        if mode == "density":
+            valid_fields = [
+                "total_density",
+                "gas_density",
+                "stellar_density",
+                "dark_matter_density",
+            ]
+        elif mode == "mass":
+            valid_fields = [
+                "total_mass",
+                "gas_mass",
+                "stellar_mass",
+                "dark_matter_mass",
+            ]
         else:
             raise ValueError("Invalid `field_type`. Must be 'density' or 'mass'.")
 
         # Check that the target field is among the valid fields
         if target_field not in valid_fields:
-            raise ValueError(f"'{target_field}' is not a valid {mode} field. "
-                             f"Valid fields are: {valid_fields}.")
+            raise ValueError(
+                f"'{target_field}' is not a valid {mode} field. "
+                f"Valid fields are: {valid_fields}."
+            )
 
         # Check that we have all of the necessary alternative fields
         _required_fields = [_fld for _fld in valid_fields if (_fld != target_field)]
-        _missing_required_fields = [_fld for _fld in _required_fields if _fld not in self.FIELDS]
+        _missing_required_fields = [
+            _fld for _fld in _required_fields if _fld not in self.FIELDS
+        ]
         if len(_missing_required_fields) > 0:
-            raise ValueError(f"Failed to perform mass accounting (mode={mode}) to compute {target_field}:\n"
-                             f"Some required fields are not available: {_missing_required_fields}.")
+            raise ValueError(
+                f"Failed to perform mass accounting (mode={mode}) to compute {target_field}:\n"
+                f"Some required fields are not available: {_missing_required_fields}."
+            )
 
         # Coerce units and ensure that we can retrieve units for the fields.
         # If we didn't get given units for the field, we'll look up the target field to get the units.
@@ -863,8 +989,11 @@ class ClusterModel(_RadialModel):
             field_name: self.FIELDS[field_name] for field_name in _required_fields
         }
         _comp_field_arrays, _comp_field_axes = zip(
-            *((_f[...].to_value(units), _f.AXES) for _f in computation_fields.values()))
-        axes_set = self.coordinate_system.ensure_axis_order(set().union(*list(_comp_field_axes)))
+            *((_f[...].to_value(units), _f.AXES) for _f in computation_fields.values())
+        )
+        axes_set = self.coordinate_system.ensure_axis_order(
+            set().union(*list(_comp_field_axes))
+        )
         computation_fields = self.grid_manager.make_fields_consistent(
             list(_comp_field_arrays),
             list(_comp_field_axes),
@@ -874,37 +1003,39 @@ class ClusterModel(_RadialModel):
         # broadcast them to stackable shapes and figure out what the output shape / axes will be.
         axes_mask = self.coordinate_system.build_axes_mask(axes_set)
         target_grid_shape = self.grid_manager.GRID_SHAPE[axes_mask]
-        computation_fields = [np.broadcast_to(_fld, target_grid_shape) for _fld in computation_fields]
+        computation_fields = [
+            np.broadcast_to(_fld, target_grid_shape) for _fld in computation_fields
+        ]
 
         # Perform the accounting operation. If we are computing a total field, we simply need
         # to add. Otherwise we need to pull out the total field and subtract the get the final
         # value.
         if target_field == valid_fields[0]:
             # We are computing a total field, not a component field.
-            output_field = unyt.unyt_array(np.sum(np.stack(computation_fields, axis=0), axis=0), units)
+            output_field = unyt.unyt_array(
+                np.sum(np.stack(computation_fields, axis=0), axis=0), units
+            )
         else:
-            output_field = computation_fields[0] - np.sum(np.stack(computation_fields[1:], axis=0), axis=0)
+            output_field = computation_fields[0] - np.sum(
+                np.stack(computation_fields[1:], axis=0), axis=0
+            )
             output_field = unyt.unyt_array(output_field, units)
 
         # Add the resulting field as a new field in the model if we are told to do so.
         output_field = self._assign_default_units_and_add_field(
-            target_field,
-            output_field,
-            create_field,
-            axes=axes_set
+            target_field, output_field, create_field, axes=axes_set
         )
         return output_field
 
-
-    @serial_solver_processes([
-        ('spherical_dens_temp' , 1, ['pressure'   ], dict(create_field=True)),
-        ('homoeoidal_dens_temp', 1, ['pressure'   ], dict(create_field=True)),
-        ('homoeoidal_dens_tden', 5, ['temperature'], dict(create_field=True)),
-        ('spherical_dens_tden' , 5, ['temperature'], dict(create_field=True))
-    ])
-    def solve_eos(self,
-                  target_field: str,
-                  create_field: bool = False):
+    @serial_solver_processes(
+        [
+            ("spherical_dens_temp", 1, ["pressure"], dict(create_field=True)),
+            ("homoeoidal_dens_temp", 1, ["pressure"], dict(create_field=True)),
+            ("homoeoidal_dens_tden", 5, ["temperature"], dict(create_field=True)),
+            ("spherical_dens_tden", 5, ["temperature"], dict(create_field=True)),
+        ]
+    )
+    def solve_eos(self, target_field: str, create_field: bool = False):
         r"""
         Solve the Equation of State (EoS) for thermodynamic fields.
 
@@ -981,57 +1112,86 @@ class ClusterModel(_RadialModel):
         scale_factor = m_p * mu  # Universal scale factor for the equation of state.
         # Validate the target field and obtain the necessary data. Each field has two dependencies which need to be
         # checked. All fields must be present to proceed. Additionally obtain the base units and target units etc.
-        required_fields = {'temperature': ['pressure', 'gas_density'],
-                           'pressure': ['temperature', 'gas_density'],
-                           'gas_density': ['pressure', 'temperature']}
+        required_fields = {
+            "temperature": ["pressure", "gas_density"],
+            "pressure": ["temperature", "gas_density"],
+            "gas_density": ["pressure", "temperature"],
+        }
         self._validate_field_dependencies(target_field, required_fields)
 
         # Pull the fields we want out of the FIELDS attribute.
         # we use the required fields dictionary to figure out which ones to pull.
         # !NOTE these are just field references.
-        input_field_A, input_field_B = tuple([self.FIELDS[_in_field] for _in_field in required_fields[target_field]])
+        input_field_A, input_field_B = tuple(
+            [self.FIELDS[_in_field] for _in_field in required_fields[target_field]]
+        )
         units_A, units_B = input_field_A.units, input_field_B.units
         output_field_axes = self.coordinate_system.ensure_axis_order(
-            set().union(input_field_A.AXES, input_field_B.AXES))
+            set().union(input_field_A.AXES, input_field_B.AXES)
+        )
 
         # Ensure that the input fields are broadcastable to one another.
-        input_field_A, input_field_B = tuple(self.grid_manager.make_fields_consistent(
-            [input_field_A[...].d,input_field_B[...].d],
-            [input_field_A.AXES, input_field_B.AXES],
-        ))
+        input_field_A, input_field_B = tuple(
+            self.grid_manager.make_fields_consistent(
+                [input_field_A[...].d, input_field_B[...].d],
+                [input_field_A.AXES, input_field_B.AXES],
+            )
+        )
 
         # Perform the base-level computation and enforce the base units.
         # The units are later coerced based on our knowledge of the base units.
-        if target_field == 'temperature':
+        if target_field == "temperature":
             # A: pressure, B: gas_density, operation: (m_p mu)*(P/rho)
             output_field = scale_factor.d * (input_field_A / input_field_B)
             output_units = scale_factor.units * (units_A / units_B)
-        elif target_field == 'pressure':
+        elif target_field == "pressure":
             # A: T, B: rho, operation: (T*rho)/(m_p mu)
             output_field = (input_field_A * input_field_B) / scale_factor.d
             output_units = (units_A * units_B) / scale_factor
-        elif target_field == 'gas_density':
+        elif target_field == "gas_density":
             # A: pressure, B: temperature, operation: (m_p mu)*(P/T)
             output_field = scale_factor.d * (input_field_A / input_field_B)
             output_units = scale_factor.units * (units_A / units_B)
         else:
             raise ValueError(
-                "Invalid `target_field`. This should never happen due to validation earlier in the method!")
+                "Invalid `target_field`. This should never happen due to validation earlier in the method!"
+            )
 
         output_field = unyt.unyt_array(output_field, output_units)
         # Set units and create the field if required
-        field = self._assign_default_units_and_add_field(target_field, output_field, create_field, output_field_axes)
+        field = self._assign_default_units_and_add_field(
+            target_field, output_field, create_field, output_field_axes
+        )
         return field
 
-    @serial_solver_processes([
-        ('spherical_dens_temp', 2, ['gravitational_potential'],dict(create_field=True,add_gradient_field=True)),
-        ('homoeoidal_dens_temp',2, ['gravitational_potential'],dict(create_field=True)),
-        ('spherical_dens_tden', 4, ['pressure'],dict(create_field=True,add_gradient_field=False))
-    ])
-    def solve_hse(self,
-                  target_field: str,
-                  create_field: bool = False,
-                  add_gradient_field: bool = False):
+    @serial_solver_processes(
+        [
+            (
+                "spherical_dens_temp",
+                2,
+                ["gravitational_potential"],
+                dict(create_field=True, add_gradient_field=True),
+            ),
+            (
+                "homoeoidal_dens_temp",
+                2,
+                ["gravitational_potential"],
+                dict(create_field=True),
+            ),
+            (
+                "spherical_dens_tden",
+                4,
+                ["pressure"],
+                dict(create_field=True, add_gradient_field=False),
+            ),
+        ]
+    )
+    def solve_hse(
+        self,
+        target_field: str,
+        create_field: bool = False,
+        add_gradient_field: bool = False,
+    ):
         r"""
         Solve the Hydrostatic Equilibrium (HSE) equation to compute a thermodynamic or potential field.
 
@@ -1084,25 +1244,33 @@ class ClusterModel(_RadialModel):
         +----------------------------+--------+-----------------------------------------------+
 
         """
-        valid_fields = {'gravitational_potential':('pressure','pressure_gradient'),
-                        'pressure': ('gravitational_potential','gravitational_field'),}
+        valid_fields = {
+            "gravitational_potential": ("pressure", "pressure_gradient"),
+            "pressure": ("gravitational_potential", "gravitational_field"),
+        }
 
         # Validate target fields and determine the output field name, gradient field name, and other core
         # parameters of the method.
         if target_field not in valid_fields:
-            raise ValueError(f"Invalid target_field '{target_field}'. Must be one of {valid_fields}.")
+            raise ValueError(
+                f"Invalid target_field '{target_field}'. Must be one of {valid_fields}."
+            )
         input_field_name, input_grad_field_name = valid_fields[target_field]
 
         # Setup the necessary structure for the computation. Obtain the splines and radii along with
         # the density profile function.
         radii = self.get_radii()
         input_field_spline = self.construct_radial_spline(input_field_name)
-        gas_density_function = self.profiles['gas_density']
+        gas_density_function = self.profiles["gas_density"]
 
         # Perform the HSE integral radially. This will automatically determine which way the equation
         # manifests and then perform the integration in correct units.
-        hse_field = self._integrate_hse_radial(target_field, input_field_spline, gas_density_function, radii)
-        hse_field = self._assign_default_units_and_add_field(target_field, hse_field, create_field, axes=['r'])
+        hse_field = self._integrate_hse_radial(
+            target_field, input_field_spline, gas_density_function, radii
+        )
+        hse_field = self._assign_default_units_and_add_field(
+            target_field, hse_field, create_field, axes=["r"]
+        )
 
         # If we've been asked to include the gradient (as its own field), we need to
         # do that secondary computation. Passes off to self._compute_gradient_hse to perform the
@@ -1115,42 +1283,48 @@ class ClusterModel(_RadialModel):
 
         return hse_field
 
-    @serial_solver_processes([
-        ('homoeoidal_dens_tden',3,[],{}),
-        ('spherical_dens_tden',3,[],{})
-                             ])
+    @serial_solver_processes(
+        [("homoeoidal_dens_tden", 3, [], {}), ("spherical_dens_tden", 3, [], {})]
+    )
     def solve_poisson_problem(self):
         # Validation step. Ensure that we have a valid coordinate and manually determine the
         # necessary axes for the computation (both as input and output fields).
         _coordinate_system_name = self.coordinate_system.__class__.__name__
-        if _coordinate_system_name == 'SphericalCoordinateSystem':
+        if _coordinate_system_name == "SphericalCoordinateSystem":
             # We're going to solve the poisson problem in 1D spherical coordinates. We only need
             # the radii and the density profile.
-            coordinates = self.get_radii().d #-> ensure we convert to a plain array.
-            output_axes = ['r']
-        elif _coordinate_system_name in ['OblateHomoeoidalCoordinateSystem',
-                                         'ProlateHomoeoidalCoordinateSystem',
-                                         'PseudoSphericalCoordinateSystem']:
+            coordinates = self.get_radii().d  # -> ensure we convert to a plain array.
+            output_axes = ["r"]
+        elif _coordinate_system_name in [
+            "OblateHomoeoidalCoordinateSystem",
+            "ProlateHomoeoidalCoordinateSystem",
+            "PseudoSphericalCoordinateSystem",
+        ]:
             # We're going to solve in ellipsoidal coordinates. We need all coordinates (even if redundant) because
             # the solver comes from the base class PseudoSphericalCoordinateSystem.
             # TODO: maybe this behavior can be refined later?
-            coordinates = self.grid_manager.get_coordinates(axes=['r','theta','phi']) # See above comment.
-            output_axes = ['r','theta']
+            coordinates = self.grid_manager.get_coordinates(
+                axes=["r", "theta", "phi"]
+            )  # See above comment.
+            output_axes = ["r", "theta"]
 
-            if _coordinate_system_name == 'PseudoSphericalCoordinateSystem':
+            if _coordinate_system_name == "PseudoSphericalCoordinateSystem":
                 output_axes.append("phi")
 
         else:
-            raise ValueError(f"The coordinate system `{_coordinate_system_name}` is not supported for Poisson solving.")
+            raise ValueError(
+                f"The coordinate system `{_coordinate_system_name}` is not supported for Poisson solving."
+            )
 
         # Pull out the density profile and determine the units that are managed in the
         # computation procedure. Because the solve_poisson_problem methods return in Plank units,
         # we need to find the _plank_units_output first and then multiply by G before coercing to
         # final units.
-        dynamic_density_profile = self.profiles['total_density']
-        density_base_units, length_base_units = unyt.Unit(dynamic_density_profile.units), unyt.Unit(self.grid_manager.length_unit)
+        dynamic_density_profile = self.profiles["total_density"]
+        density_base_units, length_base_units = unyt.Unit(
+            dynamic_density_profile.units
+        ), unyt.Unit(self.grid_manager.length_unit)
         _plank_output_units = density_base_units * (length_base_units**2)
-
 
         # Compute the gravitational potential. This passes down to the poisson solver at the
         # lower level of the coordinate system object.
@@ -1162,24 +1336,33 @@ class ClusterModel(_RadialModel):
 
         # Post-processing the gravitational potential: If we have axes to cut down, we need to do so because
         # of the axes constraints. Additionally, units need to be managed correctly.
-        if _coordinate_system_name == 'SphericalCoordinateSystem':
-            gravitational_potential = G*unyt.unyt_array(gravitational_potential, _plank_output_units)
-        elif _coordinate_system_name in ['OblateHomoeoidalCoordinateSystem','ProlateHomoeoidalCoordinateSystem']:
+        if _coordinate_system_name == "SphericalCoordinateSystem":
+            gravitational_potential = G * unyt.unyt_array(
+                gravitational_potential, _plank_output_units
+            )
+        elif _coordinate_system_name in [
+            "OblateHomoeoidalCoordinateSystem",
+            "ProlateHomoeoidalCoordinateSystem",
+        ]:
             # We need to cut out the final coordinate dimension of the field.
-            gravitational_potential = G*unyt.unyt_array(gravitational_potential[...,0], _plank_output_units)
+            gravitational_potential = G * unyt.unyt_array(
+                gravitational_potential[..., 0], _plank_output_units
+            )
         else:
             # all axes are relevant
-            gravitational_potential = G*unyt.unyt_array(gravitational_potential, _plank_output_units)
+            gravitational_potential = G * unyt.unyt_array(
+                gravitational_potential, _plank_output_units
+            )
 
         # Assign the data to a the gravitational potential field and proceed.
-        self._assign_default_units_and_add_field('gravitational_potential', gravitational_potential, True,
-                                                 output_axes)
-
+        self._assign_default_units_and_add_field(
+            "gravitational_potential", gravitational_potential, True, output_axes
+        )
 
     # @@ SPECIALITY SOLVERS @@ #
     # These solvers are one-off methods which do very specialized
     # processes that occur in only 1-2 cases across all pathways.
-    @solver_process('homoeoidal_dens_temp', step=4)
+    @solver_process("homoeoidal_dens_temp", step=4)
     def compute_total_mass_gauss_nonspherical(self):
         r"""
         Compute the total mass in a non-spherical coordinate system using Gauss's theorem.
@@ -1209,7 +1392,7 @@ class ClusterModel(_RadialModel):
         # !NOTE: We use the gravitational potential because the field will be 2 or 3D for these
         #   systems since they use non-spherical coordinate systems.
         radius = self.get_radii()
-        potential_spline = self.construct_radial_spline('gravitational_potential')
+        potential_spline = self.construct_radial_spline("gravitational_potential")
 
         # Construct the potential derivative and pull the flux factor for the
         # computation.
@@ -1220,15 +1403,17 @@ class ClusterModel(_RadialModel):
         d_potential_dr = potential_spline(radius.d, 1)  # First derivative wrt radius
 
         # Compute the numerator for the total mass equation
-        numerator = flux_factor * d_potential_dr * radius.d ** 2
-        numerator_units = radius.units * self.FIELDS['gravitational_potential'].units
+        numerator = flux_factor * d_potential_dr * radius.d**2
+        numerator_units = radius.units * self.FIELDS["gravitational_potential"].units
         numerator = unyt.unyt_array(numerator, numerator_units)
 
         # Compute total mass using Gauss's theorem
         total_mass = numerator / (4 * np.pi * G)
-        self._assign_default_units_and_add_field('total_mass', total_mass, create_field=True, axes=['r'])
+        self._assign_default_units_and_add_field(
+            "total_mass", total_mass, create_field=True, axes=["r"]
+        )
 
-    @solver_process('spherical_dens_temp', step=3)
+    @solver_process("spherical_dens_temp", step=3)
     def compute_total_mass_gauss_spherical(self):
         r"""
         Compute the total mass in a spherical coordinate system using Gauss's theorem.
@@ -1253,12 +1438,21 @@ class ClusterModel(_RadialModel):
         directly relates to the mass enclosed within a radius `r`.
         """
         radius = self.get_radii()
-        gravitational_field = self.FIELDS['gravitational_field'][...]
-        total_mass = (-radius ** 2 * gravitational_field) / G
-        self._assign_default_units_and_add_field('total_mass', total_mass, create_field=True, axes=['r'])
+        gravitational_field = self.FIELDS["gravitational_field"][...]
+        total_mass = (-(radius**2) * gravitational_field) / G
+        self._assign_default_units_and_add_field(
+            "total_mass", total_mass, create_field=True, axes=["r"]
+        )
 
-    @solver_process('spherical_dens_temp', step=4, args=[['total_density']], kwargs=dict(create_fields=True))
-    def compute_densities_from_mass_spherical(self, target_fields: List[str], create_fields: bool = False):
+    @solver_process(
+        "spherical_dens_temp",
+        step=4,
+        args=[["total_density"]],
+        kwargs=dict(create_fields=True),
+    )
+    def compute_densities_from_mass_spherical(
+        self, target_fields: List[str], create_fields: bool = False
+    ):
         r"""
         Compute the density profile from the corresponding mass profile for specified fields.
 
@@ -1295,21 +1489,26 @@ class ClusterModel(_RadialModel):
         where :math:`M` is the cumulative mass profile.
         """
         output_fields = []
-        valid_fields = {'total_density':'total_mass',
-                        'gas_density':"gas_mass",
-                        'stellar_density':'stellar_mass',
-                        'dark_matter_density':'dark_matter_mass'
-                        }
+        valid_fields = {
+            "total_density": "total_mass",
+            "gas_density": "gas_mass",
+            "stellar_density": "stellar_mass",
+            "dark_matter_density": "dark_matter_mass",
+        }
 
         for field in target_fields:
             if field not in valid_fields:
                 raise ValueError(f"Field `{field}` is not valid.")
 
-            output_fields.append(self.compute_spherical_density_from_mass(valid_fields[field],field,create_field=create_fields))
+            output_fields.append(
+                self.compute_spherical_density_from_mass(
+                    valid_fields[field], field, create_field=create_fields
+                )
+            )
 
         return output_fields
 
-    @solver_process('homoeoidal_dens_temp', step=3)
+    @solver_process("homoeoidal_dens_temp", step=3)
     def compute_tdens_from_potential(self):
         r"""
         Compute the total density field from the gravitational potential using the Laplacian.
@@ -1338,38 +1537,44 @@ class ClusterModel(_RadialModel):
         # Retrieve the radius and the potential spline. Compute the necessary derivatives
         # so that they can be fed to the Laplacian.
         radius = self.get_radii()
-        potential_spline = self.construct_radial_spline('gravitational_potential')
+        potential_spline = self.construct_radial_spline("gravitational_potential")
 
-        first_derivative_spline = InterpolatedUnivariateSpline(radius.d, potential_spline(radius.d, 1))
+        first_derivative_spline = InterpolatedUnivariateSpline(
+            radius.d, potential_spline(radius.d, 1)
+        )
         second_derivative = lambda r: first_derivative_spline(r, 1)
 
         # Compute the laplacian
-        laplacian_axes = self.geometry_handler.get_laplacian_dependence(axes=['r'])
+        laplacian_axes = self.geometry_handler.get_laplacian_dependence(axes=["r"])
         coordinates = self.grid_manager.get_coordinates(axes=laplacian_axes)
         laplacian = self.geometry_handler.compute_laplacian(
             potential_spline,
             coordinates,
-            axes=['r'],
+            axes=["r"],
             first_derivatives=[first_derivative_spline],
             second_derivatives=[second_derivative],
-            edge_order=2
+            edge_order=2,
         )
 
         # Convert Laplacian to unyt array with proper units
-        laplacian_units = self.FIELDS['gravitational_potential'].units / radius.units ** 2
+        laplacian_units = (
+            self.FIELDS["gravitational_potential"].units / radius.units**2
+        )
         laplacian = unyt.unyt_array(laplacian, laplacian_units)
 
         # SCompute total density using the Poisson equation: rho = laplacian / (4 * pi * G)
         total_density = laplacian / (4 * np.pi * G)
-        self._assign_default_units_and_add_field('total_density', total_density, create_field=True, axes=laplacian_axes)
+        self._assign_default_units_and_add_field(
+            "total_density", total_density, create_field=True, axes=laplacian_axes
+        )
 
-    @solver_process('homoeoidal_dens_tden', step=4)
+    @solver_process("homoeoidal_dens_tden", step=4)
     def solve_hse_asymmetric(self):
         # Obtain the necessary coordinates, fields, and profiles. We are integrating radially
         # (but vectorially), so we only need the radii, the gas, and the potential.
         radius = self.get_radii()
-        gas_density_profile = self.profiles['gas_density']
-        gravitational_potential = self.FIELDS['gravitational_potential'][...]
+        gas_density_profile = self.profiles["gas_density"]
+        gravitational_potential = self.FIELDS["gravitational_potential"][...]
 
         # Build the necessary splines. We only need to create splines of the
         # potential on the grid for each value of theta.
@@ -1378,27 +1583,40 @@ class ClusterModel(_RadialModel):
         # Construct the integrands. There are only 2 in this scheme:
         # 1. int_r^r_0 rho*dphi/dr dr
         # 2. int_r_0^infty rho * r^-2 dr.
-        inner_integrand = lambda _r: potential_spline(_r,1)*gas_density_profile(_r)
-        outer_integrand = lambda _r: gas_density_profile(_r)/_r**2
+        inner_integrand = lambda _r: potential_spline(_r, 1) * gas_density_profile(_r)
+        outer_integrand = lambda _r: gas_density_profile(_r) / _r**2
 
         # compute the relevant integrals
-        inner_integral = integrate_vectorized(inner_integrand, radius.d, x_0=radius.d[-1])
-        outer_integral = (potential_spline(radius.d[-1],1)*radius.d[-1]**2)*quad_vec(outer_integrand, radius.d[-1], np.inf)[0]
+        inner_integral = integrate_vectorized(
+            inner_integrand, radius.d, x_0=radius.d[-1]
+        )
+        outer_integral = (
+            potential_spline(radius.d[-1], 1) * radius.d[-1] ** 2
+        ) * quad_vec(outer_integrand, radius.d[-1], np.inf)[0]
 
         # Set the pressure and coerce the units
         pressure = inner_integral + outer_integral
-        base_units = self.FIELDS['gravitational_potential'].units * self.FIELDS['gas_density'].units
+        base_units = (
+            self.FIELDS["gravitational_potential"].units
+            * self.FIELDS["gas_density"].units
+        )
         pressure = unyt.unyt_array(pressure, base_units)
 
         # Pass to the unit setter and field adder.
-        self._assign_default_units_and_add_field('pressure', pressure, True, ['r', 'theta'])
+        self._assign_default_units_and_add_field(
+            "pressure", pressure, True, ["r", "theta"]
+        )
 
 
-if __name__ == '__main__':
-    from pisces.profiles import NFWDensityProfile, IsothermalTemperatureProfile
-    from pisces.geometry import SphericalCoordinateSystem, OblateHomoeoidalCoordinateSystem
+if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    from matplotlib.colors import LogNorm
+
+    from pisces.geometry import (
+        OblateHomoeoidalCoordinateSystem,
+        SphericalCoordinateSystem,
+    )
+    from pisces.profiles import IsothermalTemperatureProfile, NFWDensityProfile
+
     print(ClusterModel.list_pathways())
     d = NFWDensityProfile(rho_0=1e5, r_s=10)
     td = NFWDensityProfile(rho_0=5e6, r_s=200)
@@ -1407,18 +1625,18 @@ if __name__ == '__main__':
     cs_sphere = SphericalCoordinateSystem()
     cs_ho = OblateHomoeoidalCoordinateSystem(ecc=0.7)
 
-    #model_hom = ClusterModel.from_dens_and_tden('test_hom.hdf5', 1e-1, 1e4, d, td, coordinate_system=cs_ho, n_theta=50,
+    # model_hom = ClusterModel.from_dens_and_tden('test_hom.hdf5', 1e-1, 1e4, d, td, coordinate_system=cs_ho, n_theta=50,
     #                                            overwrite=True)
 
-    model_hom = ClusterModel('test_hom.hdf5')
-    model_s = ClusterModel('test_s.hdf5')
-    plt.semilogx(model_hom.get_radii(),model_hom.FIELDS['temperature'][...])
-    plt.semilogx(model_hom.get_radii(), model_s.FIELDS['temperature'][...])
+    model_hom = ClusterModel("test_hom.hdf5")
+    model_s = ClusterModel("test_s.hdf5")
+    plt.semilogx(model_hom.get_radii(), model_hom.FIELDS["temperature"][...])
+    plt.semilogx(model_hom.get_radii(), model_s.FIELDS["temperature"][...])
     plt.show()
-    #model_hom.plot_slice('pressure',view_axis='x',norm=LogNorm(vmin=1e-22,vmax=1e-17),
+    # model_hom.plot_slice('pressure',view_axis='x',norm=LogNorm(vmin=1e-22,vmax=1e-17),
     #                   extent=[-1000,1000,-1000,1000],cmap='inferno')
-    model_hom.plot_slice('temperature',[-10000,10000,-10000,10000],'z',cmap='inferno')
+    model_hom.plot_slice(
+        "temperature", [-10000, 10000, -10000, 10000], "z", cmap="inferno"
+    )
 
     plt.show()
-
-

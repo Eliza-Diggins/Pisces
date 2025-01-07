@@ -6,6 +6,7 @@ other utilities for computing basic physical quantities like mean molecular weig
 """
 from unyt import physical_constants as pc
 from unyt import unyt_quantity
+
 from pisces.utilities.config import pisces_params
 
 # Physical constants
@@ -15,6 +16,7 @@ G = pc.G
 """unyt_quantity: Gravitational constant."""
 kboltz = pc.kboltz
 """unyt_quantity: Boltzmann constant."""
+
 
 def compute_mean_molecular_weight(hydrogen_fraction: float):
     r"""
@@ -55,8 +57,9 @@ def compute_mean_molecular_weight(hydrogen_fraction: float):
     """
     return 1.0 / (2.0 * X_H + 0.75 * (1.0 - X_H))
 
+
 def compute_mean_molecular_weight_per_electron(hydrogen_fraction: float):
-    """
+    r"""
     Compute the mean molecular weight (:math:`\mu`) per free electron for a given primordial Hydrogen fraction.
 
     Parameters
@@ -91,10 +94,13 @@ def compute_mean_molecular_weight_per_electron(hydrogen_fraction: float):
         \mu = \frac{1}{1\chi_H + (1/2)(1-\chi_H)}.
 
     """
-    return 1/(hydrogen_fraction + 0.5*(1-hydrogen_fraction))
+    return 1 / (hydrogen_fraction + 0.5 * (1 - hydrogen_fraction))
+
 
 # Gas properties
-X_H = pisces_params['physics.hydrogen_abundance']  # Hydrogen mass fraction (primordial gas)
+X_H = pisces_params[
+    "physics.hydrogen_abundance"
+]  # Hydrogen mass fraction (primordial gas)
 r"""
 The default hydrogen mass fraction, :math:`\chi_H`, which is typical for primordial gas based on cosmological observations.
 
@@ -102,9 +108,9 @@ The :math:`\chi_H` value can be set in the Pisces configuration.
 """
 
 mu = 1.0 / (2.0 * X_H + 0.75 * (1.0 - X_H))  # Mean molecular weight
-""" The mean molecular weight (:math:`\mu`) using the default hydrogen abundance.
+r""" The mean molecular weight (:math:`\mu`) using the default hydrogen abundance.
 """
 
 mue = 1.0 / (X_H + 0.5 * (1.0 - X_H))  # Mean molecular weight per free electron
-""" The mean molecular weight per electron (:math:`\mu_e`) using the default hydrogen abundance.
+r""" The mean molecular weight per electron (:math:`\mu_e`) using the default hydrogen abundance.
 """

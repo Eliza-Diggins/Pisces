@@ -95,4 +95,3 @@ If you use Pisces for academic work, please include a statement in your publicat
 
 .. |docformatter| image:: https://img.shields.io/badge/%20formatter-docformatter-fedcba
     :target: https://github.com/PyCQA/docformatter
-

@@ -3,18 +3,18 @@ Basic plotting utilities for Pisces
 """
 from typing import Optional, Tuple
 
+import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 
 
-def construct_subplot(figure: Optional[Figure] = None,
-                      axes: Optional[Axes] = None,
-                      **kwargs) -> Tuple[Figure, Axes]:
+def construct_subplot(
+    figure: Optional[Figure] = None, axes: Optional[Axes] = None, **kwargs
+) -> Tuple[Figure, Axes]:
     """
     Construct or retrieve a Matplotlib subplot.
 
-    This function ensures a ``Figure`` and ``Axes`` object are available for plotting. If no ``Figure`` or ``Axes`` 
+    This function ensures a ``Figure`` and ``Axes`` object are available for plotting. If no ``Figure`` or ``Axes``
     is provided, a new one is created using the provided keyword arguments.
 
     Parameters
@@ -57,4 +57,3 @@ def construct_subplot(figure: Optional[Figure] = None,
         axes = figure.add_subplot()
 
     return figure, axes
-

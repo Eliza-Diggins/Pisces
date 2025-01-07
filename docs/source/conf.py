@@ -12,7 +12,8 @@
 #
 import os
 import sys
-import matplotlib
+
+import matplotlib  # noqa: F401
 
 sys.path.insert(0, os.path.abspath("../.."))
 
@@ -37,14 +38,14 @@ extensions = [
     "sphinx.ext.mathjax",
     "nbsphinx",
     "sphinx_design",
-    'sphinx.ext.doctest',
-    'matplotlib.sphinxext.plot_directive',
-    'sphinxcontrib.bibtex'
+    "sphinx.ext.doctest",
+    "matplotlib.sphinxext.plot_directive",
+    "sphinxcontrib.bibtex",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["../_templates"]
-bibtex_bibfiles = ['docs_bib.bib']
+bibtex_bibfiles = ["docs_bib.bib"]
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.

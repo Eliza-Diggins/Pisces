@@ -9,8 +9,8 @@ For readers who are not familiar with the usage of profiles, we suggest reading 
 the :ref:`profiles_developers` is worth a read before diving into the API.
 
 """
-from abc import ABCMeta, ABC
-from typing import TYPE_CHECKING, Callable, Union, List, Optional
+from abc import ABC, ABCMeta
+from typing import TYPE_CHECKING, Callable, List, Optional, Union
 
 import h5py
 import numpy as np
@@ -21,10 +21,13 @@ from pisces.utilities.general import find_in_subclasses
 if TYPE_CHECKING:
     pass
 
-import sympy as sp
-from typing import Type, Dict, Any, Tuple
 from functools import wraps
+from typing import Any, Dict, Tuple, Type
+
+import sympy as sp
+
 from pisces.utilities.logging import devlog
+
 
 def class_expression(name: str = None, on_demand: bool = True):
     """
@@ -85,6 +88,7 @@ def class_expression(name: str = None, on_demand: bool = True):
       or scaling factors.
 
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(cls, *args, **kwargs):
@@ -112,9 +116,12 @@ class ProfileMeta(ABCMeta):
     Abstract classes are ignored for both registration and symbolic generation.
     """
 
-    def __new__(mcs: Type['ProfileMeta'],
-                name: str, bases: Tuple[Type, ...],
-                clsdict: Dict[str, Any]) -> Type:
+    def __new__(
+        mcs: Type["ProfileMeta"],
+        name: str,
+        bases: Tuple[Type, ...],
+        clsdict: Dict[str, Any],
+    ) -> Type:
         """
         Create a new class, handle registration, and generate symbolic attributes.
 
@@ -153,7 +160,7 @@ class ProfileMeta(ABCMeta):
         return cls
 
     @staticmethod
-    def _generate_symbolics(cls: Type['Profile']):
+    def _generate_symbolics(cls: Type["Profile"]):
         """
         Generate symbolic representations for axes, parameters, and the function expression of a Profile class.
 
@@ -186,16 +193,20 @@ class ProfileMeta(ABCMeta):
         - `_function` must be a callable that accepts the symbolic axes and parameters as arguments.
         """
         # Validate that we have the necessary basic attributes.
-        AXES = getattr(cls, 'AXES', None)
-        DEFAULT_PARAMETERS = getattr(cls, 'DEFAULT_PARAMETERS', None)
-        _func = getattr(cls, '_function', None)
+        AXES = getattr(cls, "AXES", None)
+        DEFAULT_PARAMETERS = getattr(cls, "DEFAULT_PARAMETERS", None)
+        _func = getattr(cls, "_function", None)
 
         if not AXES:
             raise ValueError(f"Class attribute `AXES` is missing in '{cls.__name__}'.")
         if not DEFAULT_PARAMETERS:
-            raise ValueError(f"Class attribute `DEFAULT_PARAMETERS` is missing in '{cls.__name__}'.")
+            raise ValueError(
+                f"Class attribute `DEFAULT_PARAMETERS` is missing in '{cls.__name__}'."
+            )
         if not callable(_func):
-            raise ValueError(f"Class attribute `_function` is missing or not callable in '{cls.__name__}'.")
+            raise ValueError(
+                f"Class attribute `_function` is missing or not callable in '{cls.__name__}'."
+            )
 
         # Convert AXES to symbolic representation
         cls.SYMBAXES = [sp.Symbol(ax) for ax in AXES]
@@ -207,10 +218,12 @@ class ProfileMeta(ABCMeta):
         try:
             cls._func_expr = _func(*cls.SYMBAXES, **cls.SYMBPARAMS)
         except Exception as e:
-            raise ValueError(f"Failed to generate symbolic function for '{cls.__name__}' due to: {e}")
+            raise ValueError(
+                f"Failed to generate symbolic function for '{cls.__name__}' due to: {e}"
+            )
 
     @staticmethod
-    def _register_class_expressions(cls: Type['Profile'], clsdict: Dict[str, Any]):
+    def _register_class_expressions(cls: Type["Profile"], clsdict: Dict[str, Any]):
         """
         Register class-level symbolic expressions from decorated methods.
 
@@ -251,22 +264,34 @@ class ProfileMeta(ABCMeta):
                     continue
                 seen.add((base, attr_name))
 
-                if callable(method) and getattr(method, 'class_expression', False):
-                    expression_name = getattr(method,'expression_name')  # Retrieve the name for the expression
-                    on_demand = getattr(method, 'on_demand', True)
-                    devlog.debug("Registering class expression %s to class %s. (ON_DEMAND=%s)",
-                                 expression_name, cls.__name__, on_demand)
+                if callable(method) and getattr(method, "class_expression", False):
+                    expression_name = getattr(
+                        method, "expression_name"
+                    )  # Retrieve the name for the expression
+                    on_demand = getattr(method, "on_demand", True)
+                    devlog.debug(
+                        "Registering class expression %s to class %s. (ON_DEMAND=%s)",
+                        expression_name,
+                        cls.__name__,
+                        on_demand,
+                    )
 
                     if not on_demand:
-                        devlog.debug("Evaluating class expression %s...",expression_name)
+                        devlog.debug(
+                            "Evaluating class expression %s...", expression_name
+                        )
                         try:
                             # Generate the symbolic expression using the method
-                            expression = method(cls.SYMBAXES, cls.SYMBPARAMS, cls._func_expr)
+                            expression = method(
+                                cls.SYMBAXES, cls.SYMBPARAMS, cls._func_expr
+                            )
                             # Register the expression at the class level
                             cls._EXPR_DICT[expression_name] = expression
                         except Exception as e:
-                            raise ValueError(f"Failed to register class-level expression '{expression_name}' for "
-                                             f"class '{cls.__name__}' due to: {e}")
+                            raise ValueError(
+                                f"Failed to register class-level expression '{expression_name}' for "
+                                f"class '{cls.__name__}' due to: {e}"
+                            )
                     else:
                         cls._EXPR_DICT[expression_name] = attr_name
 
@@ -369,10 +394,11 @@ class Profile(ABC, metaclass=ProfileMeta):
     By combining these features, the :py:class:`Profile` class provides a powerful and flexible framework for
     modeling mathematical profiles with extensible symbolic and numeric capabilities.
     """
+
     # @@ CLASS FLAGS @@ #
     # These flags are used by the metaclass to determine whether or not to
     # treat the class specially.
-    _IS_ABC: bool = True # Mark the class as an abstract class -- the metaclass skips this class if True.
+    _IS_ABC: bool = True  # Mark the class as an abstract class -- the metaclass skips this class if True.
 
     # @@ CLASS ATTRIBUTES @@ #
     # Core attributes of the profile class.
@@ -392,12 +418,12 @@ class Profile(ABC, metaclass=ProfileMeta):
     DEFAULT_UNITS: str = ""
     """ str: The default units of the profile.
         These can later be overridden by specifying the ``units`` kwarg at instantiation.
-        
-        .. hint:: 
-        
+
+        .. hint::
+
             These units specify the dimensions of the profile output. If you later specify an instance of
             the profile with units that are inconsistent with :py:attr:`Profile.DEFAULT_UNITS`, and error is raised.
-            
+
     """
 
     # @@ CLASS SYMBOL REGISTRIES @@ #
@@ -412,7 +438,7 @@ class Profile(ABC, metaclass=ProfileMeta):
     SYMBPARAMS: Dict[str, sp.Symbol] = None
     """ dict of sp.Symbol, float: The symbolic parameters of the profile."""
 
-    def __init__(self, units: Union[str, 'Unit'] = None, **kwargs):
+    def __init__(self, units: Union[str, "Unit"] = None, **kwargs):
         """
         Initialize a Profile instance with specified parameter values and units.
 
@@ -452,9 +478,10 @@ class Profile(ABC, metaclass=ProfileMeta):
         """ unyt.Unit: The units for the output of this profile."""
         try:
             _ = self.units.get_conversion_factor(Unit(self.__class__.DEFAULT_UNITS))
-        except Exception as _:
+        except Exception:
             raise ValueError(
-                f"Units {self.units} are not consistent with base units for {self.__class__.__name__} ({self.__class__.DEFAULT_UNITS}).")
+                f"Units {self.units} are not consistent with base units for {self.__class__.__name__} ({self.__class__.DEFAULT_UNITS})."
+            )
 
         # Setup the call function.
         self._setup_call_function()
@@ -489,12 +516,16 @@ class Profile(ABC, metaclass=ProfileMeta):
             if key in parameters:
                 parameters[key] = value
             else:
-                raise ValueError(f"Unexpected parameter: '{key}' not recognized in class '{self.__class__.__name__}'.")
+                raise ValueError(
+                    f"Unexpected parameter: '{key}' not recognized in class '{self.__class__.__name__}'."
+                )
 
         # Check for missing required parameters
         missing = [key for key, value in parameters.items() if value is None]
         if missing:
-            raise ValueError(f"Missing required parameters for class '{self.__class__.__name__}': {missing}")
+            raise ValueError(
+                f"Missing required parameters for class '{self.__class__.__name__}': {missing}"
+            )
 
         return parameters
 
@@ -538,7 +569,7 @@ class Profile(ABC, metaclass=ProfileMeta):
             A callable numerical function.
         """
         expression = sp.sympify(expression)
-        return sp.lambdify(self.__class__.SYMBAXES, expression, 'numpy')
+        return sp.lambdify(self.__class__.SYMBAXES, expression, "numpy")
 
     def __call__(self, *args) -> Any:
         """
@@ -581,7 +612,12 @@ class Profile(ABC, metaclass=ProfileMeta):
     def __str__(self) -> str:
         return self.__repr__()
 
-    def to_hdf5(self, h5_obj: Union[h5py.File, h5py.Group], group_name: str, overwrite: bool = False):
+    def to_hdf5(
+        self,
+        h5_obj: Union[h5py.File, h5py.Group],
+        group_name: str,
+        overwrite: bool = False,
+    ):
         """
         Save the Profile instance to an HDF5 group.
 
@@ -603,18 +639,22 @@ class Profile(ABC, metaclass=ProfileMeta):
             if overwrite:
                 del h5_obj[group_name]
             else:
-                raise ValueError(f"Group '{group_name}' already exists. Use `overwrite=True` to replace it.")
+                raise ValueError(
+                    f"Group '{group_name}' already exists. Use `overwrite=True` to replace it."
+                )
 
         group = h5_obj.create_group(group_name)
         group.attrs["class_name"] = self.__class__.__name__
-        group.attrs["axes"] = np.array(self.__class__.AXES, dtype='S')
+        group.attrs["axes"] = np.array(self.__class__.AXES, dtype="S")
         group.attrs["units"] = str(self.units)
 
         for key, value in self.parameters.items():
             group.attrs[key] = value
 
     @classmethod
-    def from_hdf5(cls, h5_obj: Union[h5py.File, h5py.Group], group_name: str) -> "Profile":
+    def from_hdf5(
+        cls, h5_obj: Union[h5py.File, h5py.Group], group_name: str
+    ) -> "Profile":
         """
         Load a Profile instance from an HDF5 group.
 
@@ -645,7 +685,11 @@ class Profile(ABC, metaclass=ProfileMeta):
         _subcls = find_in_subclasses(cls, class_name)
 
         # Load parameters and validate
-        parameters = {key: group.attrs[key] for key in group.attrs if key not in ["class_name", "axes", "units"]}
+        parameters = {
+            key: group.attrs[key]
+            for key in group.attrs
+            if key not in ["class_name", "axes", "units"]
+        }
         return _subcls(units=group.attrs["units"], **parameters)
 
     @property
@@ -663,7 +707,9 @@ class Profile(ABC, metaclass=ProfileMeta):
         return self.__class__._func_expr
 
     @classmethod
-    def set_class_expression(cls, expression_name: str, expression: sp.Basic, overwrite: bool = False):
+    def set_class_expression(
+        cls, expression_name: str, expression: sp.Basic, overwrite: bool = False
+    ):
         """
         Set a symbolic expression at the class level.
 
@@ -682,7 +728,9 @@ class Profile(ABC, metaclass=ProfileMeta):
             If the expression name already exists and `overwrite` is False.
         """
         if expression_name in cls._EXPR_DICT and not overwrite:
-            raise ValueError(f"Expression '{expression_name}' already exists. Use `overwrite=True` to replace it.")
+            raise ValueError(
+                f"Expression '{expression_name}' already exists. Use `overwrite=True` to replace it."
+            )
         cls._EXPR_DICT[expression_name] = expression
 
     @classmethod
@@ -712,10 +760,14 @@ class Profile(ABC, metaclass=ProfileMeta):
                 # This is an on-demand class expression that needs to now be loaded.
                 devlog.debug("Evaluating class expression %s...", expression_name)
                 try:
-                    _class_expr = getattr(cls, _class_expr)(cls.SYMBAXES,cls.SYMBPARAMS,cls._func_expr)
+                    _class_expr = getattr(cls, _class_expr)(
+                        cls.SYMBAXES, cls.SYMBPARAMS, cls._func_expr
+                    )
                     cls._EXPR_DICT[expression_name] = _class_expr
                 except Exception as e:
-                    raise RuntimeError(f"Failed to register expression '{expression_name}' at class level. ERROR: {e}") from e
+                    raise RuntimeError(
+                        f"Failed to register expression '{expression_name}' at class level. ERROR: {e}"
+                    ) from e
 
             return _class_expr
 
@@ -751,7 +803,9 @@ class Profile(ABC, metaclass=ProfileMeta):
         """
         return expression_name in cls._EXPR_DICT
 
-    def get_expression(self, expression_name: str, search_class: bool = False) -> sp.Basic:
+    def get_expression(
+        self, expression_name: str, search_class: bool = False
+    ) -> sp.Basic:
         """
         Retrieve an instance-level or class-level symbolic expression.
 
@@ -777,13 +831,17 @@ class Profile(ABC, metaclass=ProfileMeta):
 
         if search_class:
             try:
-                return self.substitute_expression(self.get_class_expression(expression_name))
+                return self.substitute_expression(
+                    self.get_class_expression(expression_name)
+                )
             except KeyError:
                 pass
 
         raise KeyError(f"Expression '{expression_name}' not found.")
 
-    def set_expression(self, expression_name: str, expression: sp.Basic, overwrite: bool = False):
+    def set_expression(
+        self, expression_name: str, expression: sp.Basic, overwrite: bool = False
+    ):
         """
         Set a symbolic expression at the instance level.
 
@@ -801,8 +859,13 @@ class Profile(ABC, metaclass=ProfileMeta):
         ValueError
             If the expression name already exists and `overwrite` is False.
         """
-        if ((expression_name in self._derived_symbolics) or (expression_name in self._EXPR_DICT)) and not overwrite:
-            raise ValueError(f"Expression '{expression_name}' already exists. Use `overwrite=True` to replace it.")
+        if (
+            (expression_name in self._derived_symbolics)
+            or (expression_name in self._EXPR_DICT)
+        ) and not overwrite:
+            raise ValueError(
+                f"Expression '{expression_name}' already exists. Use `overwrite=True` to replace it."
+            )
         self._derived_symbolics[expression_name] = expression
 
     def list_expressions(self, include_class_level: bool = True) -> List[str]:
@@ -821,7 +884,9 @@ class Profile(ABC, metaclass=ProfileMeta):
         """
         return list(set(self._EXPR_DICT.keys()) | set(self._derived_symbolics.keys()))
 
-    def has_expression(self, expression_name: str, include_class_level: bool = True) -> bool:
+    def has_expression(
+        self, expression_name: str, include_class_level: bool = True
+    ) -> bool:
         """
         Check if a symbolic expression is registered at the instance level.
 
@@ -845,7 +910,9 @@ class Profile(ABC, metaclass=ProfileMeta):
 
         return False
 
-    def get_numeric_expression(self, expression_name: str, search_class: bool = False) -> Callable:
+    def get_numeric_expression(
+        self, expression_name: str, search_class: bool = False
+    ) -> Callable:
         """
         Retrieve or create a numeric (callable) version of a symbolic expression.
 
@@ -867,9 +934,14 @@ class Profile(ABC, metaclass=ProfileMeta):
             If the symbolic expression is not found.
         """
         if expression_name not in self._derived_numerics:
-            symbolic_expression = self.get_expression(expression_name, search_class=search_class)
-            self._derived_numerics[expression_name] = self.lambdify_expression(symbolic_expression)
+            symbolic_expression = self.get_expression(
+                expression_name, search_class=search_class
+            )
+            self._derived_numerics[expression_name] = self.lambdify_expression(
+                symbolic_expression
+            )
         return self._derived_numerics[expression_name]
+
 
 class RadialProfile(Profile, ABC):
     r"""
@@ -882,21 +954,23 @@ class RadialProfile(Profile, ABC):
     _IS_ABC = True
 
     # Class attribute for the radial axis
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     """
     list of str: The axes (free parameters) of the profile.
         These should be strings and specified in order. The metaclass processes
         them into symbolic axes via :py:attr:`Profile.SYMBAXES`.
     """
 
-    @class_expression('derivative',on_demand=True)
+    @class_expression("derivative", on_demand=True)
     @staticmethod
-    def _r_derivative(axes,params,expression):
+    def _r_derivative(axes, params, expression):
         # Determines the derivative of the profile with respect to radius.
         # This is ON_DEMAND, so we only grab this when it's requested.
-        return sp.simplify(sp.diff(expression,axes[0]))
+        return sp.simplify(sp.diff(expression, axes[0]))
 
-    def get_limiting_behavior(self, limit: str = 'inner', strict: bool = True) -> Optional[Tuple[float, float]]:
+    def get_limiting_behavior(
+        self, limit: str = "inner", strict: bool = True
+    ) -> Optional[Tuple[float, float]]:
         r"""
         Extract the coefficient and power of the dominant power-law term
         for the radial profile in the specified limit.
@@ -972,10 +1046,12 @@ class RadialProfile(Profile, ABC):
         from pisces.utilities.math_utils.symbolic import get_powerlaw_limit
 
         # Validate the symbolic expression and axis
-        if not hasattr(self, 'symbolic_expression'):
+        if not hasattr(self, "symbolic_expression"):
             raise ValueError("The profile lacks a valid symbolic expression.")
         if not self.SYMBAXES or len(self.SYMBAXES) < 1:
-            raise ValueError("The profile must define at least one symbolic axis ('r').")
+            raise ValueError(
+                "The profile must define at least one symbolic axis ('r')."
+            )
 
         try:
             # Extract the symbolic radial axis

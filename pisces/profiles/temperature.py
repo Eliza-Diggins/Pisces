@@ -1,9 +1,10 @@
 """
 Temperature profiles for astrophysical modeling.
 """
+from typing import Any, Dict, List
+
 from pisces.profiles.base import RadialProfile
-from typing import Dict, Any, List
-import sympy as sp
+
 
 class RadialTemperatureProfile(RadialProfile):
     r"""
@@ -12,9 +13,10 @@ class RadialTemperatureProfile(RadialProfile):
     _IS_ABC = True
 
     # @@ CLASS ATTRIBUTES @@ #
-    AXES =  ['r']
+    AXES = ["r"]
     DEFAULT_PARAMETERS = None
     DEFAULT_UNITS: str = "keV"
+
 
 class VikhlininTemperatureProfile(RadialTemperatureProfile):
     r"""
@@ -73,7 +75,7 @@ class VikhlininTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "a": 0.1,
@@ -145,7 +147,7 @@ class AM06TemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 4.0,
         "a": 300.0,
@@ -204,7 +206,7 @@ class UniversalPressureTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_s": 300.0,
@@ -260,7 +262,7 @@ class IsothermalTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
     }
@@ -320,7 +322,7 @@ class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_c": 100.0,
@@ -387,7 +389,7 @@ class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_c": 100.0,
@@ -398,7 +400,10 @@ class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
 
     @staticmethod
     def _function(r, T_0, r_c, beta_1, T_1, beta_2):
-        return T_0 * (1 + (r / r_c) ** 2) ** -beta_1 + T_1 * (1 + (r / r_c) ** 2) ** -beta_2
+        return (
+            T_0 * (1 + (r / r_c) ** 2) ** -beta_1
+            + T_1 * (1 + (r / r_c) ** 2) ** -beta_2
+        )
 
 
 class BetaModelTemperatureProfile(RadialTemperatureProfile):
@@ -451,7 +456,7 @@ class BetaModelTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ['r']
+    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
         "T_0": 5.0,
         "r_c": 100.0,
@@ -461,5 +466,3 @@ class BetaModelTemperatureProfile(RadialTemperatureProfile):
     @staticmethod
     def _function(r, T_0, r_c, beta):
         return T_0 * (1 + (r / r_c) ** 2) ** -beta
-
-

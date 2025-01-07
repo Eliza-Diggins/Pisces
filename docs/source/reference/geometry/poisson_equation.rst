@@ -134,4 +134,3 @@ References
 .. [BiTr08] Binney, J., & Tremaine, S. (2008). "Galactic Dynamics" (2nd ed.). Princeton University Press.
 
 .. [Bovy23] Bovy, J. "Galactic Dynamics" (online resource). Retrieved from `http://galacticdynamics.org <http://galacticdynamics.org>`_.
-

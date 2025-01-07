@@ -15,33 +15,31 @@ import logging
 import sys
 from typing import Type
 
-from pisces.utilities.config import pisces_params
 from pisces.utilities._typing import Instance
+from pisces.utilities.config import pisces_params
 
 # @@ SETTING UP LOGGERS @@ #
 # We load streams, formatters, and handlers from the configuration
 # and load them dynamically.
 streams = dict(
-    mylog=getattr(sys, pisces_params['logging.mylog.stream']),
-    devlog=getattr(sys, pisces_params['logging.devlog.stream']),
+    mylog=getattr(sys, pisces_params["logging.mylog.stream"]),
+    devlog=getattr(sys, pisces_params["logging.devlog.stream"]),
 )
-_loggers = dict(
-    mylog=logging.Logger("Pisces"), devlog=logging.Logger("PISCES-DEV")
-)
+_loggers = dict(mylog=logging.Logger("Pisces"), devlog=logging.Logger("PISCES-DEV"))
 
 _handlers = {}
 
 for k, v in _loggers.items():
     # Construct the formatter string.
     _handlers[k] = logging.StreamHandler(streams[k])
-    _handlers[k].setFormatter(logging.Formatter(pisces_params[f'logging.{k}.format']))
+    _handlers[k].setFormatter(logging.Formatter(pisces_params[f"logging.{k}.format"]))
 
     v.addHandler(_handlers[k])
-    v.setLevel(pisces_params[f'logging.{k}.level'])
+    v.setLevel(pisces_params[f"logging.{k}.level"])
     v.propagate = False
 
     if k != "mylog":
-        v.disabled = not pisces_params[f'logging.{k}.enabled']
+        v.disabled = not pisces_params[f"logging.{k}.enabled"]
 
 # Core logger instances.
 mylog: logging.Logger = _loggers["mylog"]
@@ -75,6 +73,7 @@ followed here is that the levels correspond to the following:
 The default level of this logger can be configured in the configuration file.
 """
 
+
 class LogDescriptor:
     """
     A descriptor for dynamically creating and managing loggers for a class.
@@ -82,6 +81,7 @@ class LogDescriptor:
     At its core, the :py:class:`LogDescriptor` is used for classes like :py:class:`~pisces.models.base.Model` to
     create a class-specific logger.
     """
+
     def __get__(self, instance: Instance, owner: Type[Instance]) -> logging.Logger:
         # Retrieve or create a logger for the class
         logger = logging.getLogger(owner.__name__)
@@ -89,13 +89,15 @@ class LogDescriptor:
         if not logger.handlers:
             # Create and configure the logger if not already set up
             handler = logging.StreamHandler(
-                getattr(sys, pisces_params['logging.mylog.stream'])
+                getattr(sys, pisces_params["logging.mylog.stream"])
             )
-            handler.setFormatter(logging.Formatter(pisces_params['logging.code.format']))
+            handler.setFormatter(
+                logging.Formatter(pisces_params["logging.code.format"])
+            )
             logger.addHandler(handler)
-            logger.setLevel(pisces_params['logging.code.level'])
+            logger.setLevel(pisces_params["logging.code.level"])
             logger.propagate = False
-            logger.disabled = not pisces_params['logging.code.enabled']
+            logger.disabled = not pisces_params["logging.code.enabled"]
 
         return logger
 

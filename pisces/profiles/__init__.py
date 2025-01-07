@@ -17,35 +17,39 @@ Profiles in Pisces are highly flexible, supporting:
 Profiles can represent various physical and mathematical entities, such as density, mass, or temperature distributions.
 
 """
-from .density import (RadialDensityProfile,
-                      NFWDensityProfile,
-                      HernquistDensityProfile,
-                      EinastoDensityProfile,
-                      SingularIsothermalDensityProfile,
-                      CoredIsothermalDensityProfile,
-                      PlummerDensityProfile,
-                      DehnenDensityProfile,
-                      JaffeDensityProfile,
-                      KingDensityProfile,
-                      BurkertDensityProfile,
-                      MooreDensityProfile,
-                      CoredNFWDensityProfile,
-                      VikhlininDensityProfile,
-                      AM06DensityProfile,
-                      SNFWDensityProfile,
-                      TNFWDensityProfile)
-
-from .entropy import (WalkerEntropyProfile,
-                                     BaselineEntropyProfile,
-                                     BrokenEntropyProfile,
-                                     RadialEntropyProfile)
-
-from .temperature import (RadialTemperatureProfile,
-                                         IsothermalTemperatureProfile,
-                                         UniversalPressureTemperatureProfile,
-                                         VikhlininTemperatureProfile,
-                                         DoubleBetaTemperatureProfile,
-                                         CoolingFlowTemperatureProfile,
-                                         BetaModelTemperatureProfile,
-                                         AM06TemperatureProfile)
 from .base import Profile
+from .density import (
+    AM06DensityProfile,
+    BurkertDensityProfile,
+    CoredIsothermalDensityProfile,
+    CoredNFWDensityProfile,
+    DehnenDensityProfile,
+    EinastoDensityProfile,
+    HernquistDensityProfile,
+    JaffeDensityProfile,
+    KingDensityProfile,
+    MooreDensityProfile,
+    NFWDensityProfile,
+    PlummerDensityProfile,
+    RadialDensityProfile,
+    SingularIsothermalDensityProfile,
+    SNFWDensityProfile,
+    TNFWDensityProfile,
+    VikhlininDensityProfile,
+)
+from .entropy import (
+    BaselineEntropyProfile,
+    BrokenEntropyProfile,
+    RadialEntropyProfile,
+    WalkerEntropyProfile,
+)
+from .temperature import (
+    AM06TemperatureProfile,
+    BetaModelTemperatureProfile,
+    CoolingFlowTemperatureProfile,
+    DoubleBetaTemperatureProfile,
+    IsothermalTemperatureProfile,
+    RadialTemperatureProfile,
+    UniversalPressureTemperatureProfile,
+    VikhlininTemperatureProfile,
+)

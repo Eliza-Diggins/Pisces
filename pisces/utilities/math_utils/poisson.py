@@ -19,20 +19,22 @@ Notes
 - Users must ensure that density profiles are smooth and continuous for accurate results.
 
 """
-from typing import Callable, Union, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Tuple, Union
 
 import numpy as np
-from scipy.integrate import quad
+from scipy.integrate import quad, quad_vec
 from scipy.interpolate import InterpolatedUnivariateSpline
-from scipy.integrate import quad_vec
-from pisces.utilities.math_utils.numeric import integrate_from_zero, integrate
+
 from pisces.utilities.array_utils import CoordinateArray
+from pisces.utilities.math_utils.numeric import integrate, integrate_from_zero
 
 if TYPE_CHECKING:
     from pisces.geometry.coordinate_systems import PseudoSphericalCoordinateSystem
 
 
-def _compute_spherical_poisson_boundary_integrated(density_profile: Callable, r0: float) -> float:
+def _compute_spherical_poisson_boundary_integrated(
+    density_profile: Callable, r0: float
+) -> float:
     r"""
     Compute the outer boundary integral for the spherical Poisson problem using numerical integration.
 
@@ -68,14 +70,18 @@ def _compute_spherical_poisson_boundary_integrated(density_profile: Callable, r0
     Accurate results depend on the density profile decaying sufficiently fast at large radii.
     """
     if not callable(density_profile):
-        raise ValueError(f"`density_profile` must be callable, not {type(density_profile)}.")
+        raise ValueError(
+            f"`density_profile` must be callable, not {type(density_profile)}."
+        )
 
     # Define the integrand and compute the integral
     integrand = lambda r: density_profile(r) * r
     return quad(integrand, r0, np.inf)[0]
 
 
-def _compute_spherical_poisson_boundary_asymptotic(density_profile: Callable, r0: float, n: int = -3) -> float:
+def _compute_spherical_poisson_boundary_asymptotic(
+    density_profile: Callable, r0: float, n: int = -3
+) -> float:
     r"""
     Compute the outer boundary integral for the spherical Poisson problem using an asymptotic power-law approximation.
 
@@ -113,19 +119,22 @@ def _compute_spherical_poisson_boundary_asymptotic(density_profile: Callable, r0
     provided :math:`n < -2` for convergence.
     """
     if n >= -2:
-        raise ValueError("Boundary behavior (`n`, power index) must be less than -2 for convergence.")
+        raise ValueError(
+            "Boundary behavior (`n`, power index) must be less than -2 for convergence."
+        )
 
     rho_at_radius = density_profile(r0)
-    return -rho_at_radius * r0 ** 2 / (n + 2)
+    return -rho_at_radius * r0**2 / (n + 2)
 
 
 def solve_poisson_spherical(
-        density_profile: Union[np.ndarray, Callable],
-        coordinates: np.ndarray,
-        /,
-        powerlaw_index: int = None,
-        *,
-        boundary_mode: str = 'asymptotic') -> np.ndarray:
+    density_profile: Union[np.ndarray, Callable],
+    coordinates: np.ndarray,
+    /,
+    powerlaw_index: int = None,
+    *,
+    boundary_mode: str = "asymptotic",
+) -> np.ndarray:
     r"""
     Solve Poisson's equation for a spherically symmetric distribution of mass specified by :math:`\rho(r)`.
 
@@ -214,22 +223,31 @@ def solve_poisson_spherical(
         density_profile = InterpolatedUnivariateSpline(coordinates, density_profile)
 
     # Compute the inner integral (enclosed mass contribution)
-    integrand_inner = lambda r: density_profile(r) * r ** 2
-    inner_integral = (1 / coordinates) * integrate_from_zero(integrand_inner, coordinates)
+    integrand_inner = lambda r: density_profile(r) * r**2
+    inner_integral = (1 / coordinates) * integrate_from_zero(
+        integrand_inner, coordinates
+    )
 
     # Compute the middle integral (from each radius to the maximum)
     integrand_middle = lambda r: density_profile(r) * r
-    middle_integral = integrate(integrand_middle, coordinates, x_0=float(coordinates[-1]), minima=False)
+    middle_integral = integrate(
+        integrand_middle, coordinates, x_0=float(coordinates[-1]), minima=False
+    )
 
     # Handle outer boundary using the specified method
     if boundary_mode == "integrate":
-        outer_integral = _compute_spherical_poisson_boundary_integrated(density_profile, float(coordinates[-1]))
+        outer_integral = _compute_spherical_poisson_boundary_integrated(
+            density_profile, float(coordinates[-1])
+        )
     elif boundary_mode == "asymptotic":
         if powerlaw_index is None:
-            raise ValueError(f"`solve_poisson_spherical` cannot compute the boundary value for an array-like density"
-                             f" profile without a specified `powerlaw_index`.")
-        outer_integral = _compute_spherical_poisson_boundary_asymptotic(density_profile, float(coordinates[-1]),
-                                                                        powerlaw_index)
+            raise ValueError(
+                "`solve_poisson_spherical` cannot compute the boundary value for an array-like density"
+                " profile without a specified `powerlaw_index`."
+            )
+        outer_integral = _compute_spherical_poisson_boundary_asymptotic(
+            density_profile, float(coordinates[-1]), powerlaw_index
+        )
     else:
         raise ValueError("`boundary_mode` must be 'integrate' or 'asymptotic'.")
 
@@ -239,11 +257,10 @@ def solve_poisson_spherical(
     return potential
 
 
-def _compute_ellipsoidal_psi_boundary_from_spline(density_profile: Callable,
-                                                  r0: float,
-                                                  r_inner: float = 0.0,
-                                                  n: int = -3) -> float:
-    """
+def _compute_ellipsoidal_psi_boundary_from_spline(
+    density_profile: Callable, r0: float, r_inner: float = 0.0, n: int = -3
+) -> float:
+    r"""
     Compute the asymptotic boundary contribution for the ellipsoidal Poisson problem
     using a density profile provided as a callable (e.g., a spline).
 
@@ -269,7 +286,9 @@ def _compute_ellipsoidal_psi_boundary_from_spline(density_profile: Callable,
         If the power-law index ``n`` is greater than or equal to ``-2`` (causing divergence).
     """
     if n >= -2:
-        raise ValueError("Boundary behavior (`n`, power index) must be less than -2 for convergence.")
+        raise ValueError(
+            "Boundary behavior (`n`, power index) must be less than -2 for convergence."
+        )
 
     # Integrate the density profile up to r0
     integrand = lambda _xi: _xi * density_profile(_xi)
@@ -277,13 +296,13 @@ def _compute_ellipsoidal_psi_boundary_from_spline(density_profile: Callable,
 
     # Approximate the contribution beyond r0 using asymptotic behavior
     rho_0 = density_profile(r0)
-    psi_inf = psi_integral - (2 * rho_0 * (r0 ** 2)) / (n + 2)
+    psi_inf = psi_integral - (2 * rho_0 * (r0**2)) / (n + 2)
 
     return psi_inf
 
 
 def _compute_ellipsoidal_psi_boundary_from_function(density_profile: Callable) -> float:
-    """
+    r"""
     Compute the complete boundary contribution for the ellipsoidal Poisson problem
     by integrating the density profile over the entire domain.
 
@@ -306,8 +325,10 @@ def _compute_ellipsoidal_psi_boundary_from_function(density_profile: Callable) -
     return 2 * quad(integrand, 0, np.inf)[0]
 
 
-def _build_ellipsoidal_psi_abscissa(r_min: float, r_max: float, n_points: int, scale: str = 'log') -> np.ndarray:
-    """
+def _build_ellipsoidal_psi_abscissa(
+    r_min: float, r_max: float, n_points: int, scale: str = "log"
+) -> np.ndarray:
+    r"""
     Build the abscissa for integration, ensuring consistent scaling and behavior.
 
     Parameters
@@ -334,21 +355,23 @@ def _build_ellipsoidal_psi_abscissa(r_min: float, r_max: float, n_points: int, s
     if r_min < 0:
         raise ValueError("The minimum radius may not be negative.")
 
-    if scale == 'log':
+    if scale == "log":
         return np.geomspace(r_min, r_max, n_points)
-    elif scale == 'linear':
+    elif scale == "linear":
         return np.linspace(r_min, r_max, n_points)
     else:
         raise ValueError(f"Unknown scale '{scale}'")
 
 
-def _compute_ellipsoidal_psi_spline(density_profile: Callable,
-                                    r_min: float,
-                                    r_max: float,
-                                    num_points: int,
-                                    n: int,
-                                    scale: str = 'log', ) -> Tuple[np.ndarray, np.ndarray, float]:
-    """
+def _compute_ellipsoidal_psi_spline(
+    density_profile: Callable,
+    r_min: float,
+    r_max: float,
+    num_points: int,
+    n: int,
+    scale: str = "log",
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    r"""
     Compute the ellipsoidal :math:`\\psi(r)` using a spline-interpolated density profile.
 
     Parameters
@@ -381,17 +404,17 @@ def _compute_ellipsoidal_psi_spline(density_profile: Callable,
     psi_integral = 2 * np.array([quad(integrand, 0, r)[0] for r in radii])
 
     # Compute the asymptotic limit
-    psi_inf = _compute_ellipsoidal_psi_boundary_from_spline(density_profile, r_max, r_min, n)
+    psi_inf = _compute_ellipsoidal_psi_boundary_from_spline(
+        density_profile, r_max, r_min, n
+    )
 
     return radii, psi_integral, psi_inf
 
 
-def _compute_ellipsoidal_psi_function(density_profile: Callable,
-                                      r_min: float,
-                                      r_max: float,
-                                      num_points: int,
-                                      **kwargs) -> Tuple[np.ndarray, np.ndarray, float]:
-    """
+def _compute_ellipsoidal_psi_function(
+    density_profile: Callable, r_min: float, r_max: float, num_points: int, **kwargs
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    r"""
     Compute the ellipsoidal :math:`\\psi(r)` using a function-defined density profile.
 
     Parameters
@@ -418,7 +441,7 @@ def _compute_ellipsoidal_psi_function(density_profile: Callable,
     direct integration to compute :math:`\\psi(r)`.
     """
     # Build the abscissa
-    scale = kwargs.pop('scale', 'log')
+    scale = kwargs.pop("scale", "log")
     radii = _build_ellipsoidal_psi_abscissa(r_min, r_max, num_points, scale)
 
     # Define the integrand for :math:`\\psi(r)`
@@ -437,12 +460,14 @@ def _compute_ellipsoidal_psi_function(density_profile: Callable,
     return radii, psi_integral, psi_inf
 
 
-def compute_ellipsoidal_psi(density_profile: Callable,
-                            r_min: float,
-                            r_max: float,
-                            num_points: int = 1000,
-                            method: str = 'spline',
-                            **kwargs) -> Tuple[np.ndarray, np.ndarray, float]:
+def compute_ellipsoidal_psi(
+    density_profile: Callable,
+    r_min: float,
+    r_max: float,
+    num_points: int = 1000,
+    method: str = "spline",
+    **kwargs,
+) -> Tuple[np.ndarray, np.ndarray, float]:
     r"""
     Compute the ellipsoidal :math:`\psi(r)` function using a spline interpolation scheme.
 
@@ -535,24 +560,28 @@ def compute_ellipsoidal_psi(density_profile: Callable,
     This function combines spline and function-based methods to compute :math:`\psi(r)` depending on the domain
     and characteristics of the density profile.
     """
-    if method == 'spline':
-        return _compute_ellipsoidal_psi_spline(density_profile, r_min, r_max, num_points, **kwargs)
-    elif method == 'function':
-        return _compute_ellipsoidal_psi_function(density_profile, r_min, r_max, num_points, **kwargs)
+    if method == "spline":
+        return _compute_ellipsoidal_psi_spline(
+            density_profile, r_min, r_max, num_points, **kwargs
+        )
+    elif method == "function":
+        return _compute_ellipsoidal_psi_function(
+            density_profile, r_min, r_max, num_points, **kwargs
+        )
     else:
         raise ValueError("`method` must be 'spline' or 'function'.")
 
 
 def solve_poisson_ellipsoidal(
-        density_profile: Union[Callable, np.ndarray],
-        coordinates: np.ndarray,
-        coordinate_system: 'PseudoSphericalCoordinateSystem',
-        /,
-        num_points: int = 1000,
-        *,
-        scale: str = 'log',
-        psi: Callable = None,
-        powerlaw_index: int = None,
+    density_profile: Union[Callable, np.ndarray],
+    coordinates: np.ndarray,
+    coordinate_system: "PseudoSphericalCoordinateSystem",
+    /,
+    num_points: int = 1000,
+    *,
+    scale: str = "log",
+    psi: Callable = None,
+    powerlaw_index: int = None,
 ) -> np.ndarray:
     r"""
     Solve Poisson's equation for a system with iso-density curves in similar ellipsoids.
@@ -649,18 +678,30 @@ def solve_poisson_ellipsoidal(
     # Extract the scale parameters and generate the necessary scale arrays for the
     # procedures that need to be carried out.
     try:
-        sx, sy, sz = coordinate_system.scale_x, coordinate_system.scale_y, coordinate_system.scale_z
+        sx, sy, sz = (
+            coordinate_system.scale_x,
+            coordinate_system.scale_y,
+            coordinate_system.scale_z,
+        )
     except Exception as e:
-        raise ValueError(f'Failed to extract scale parameters from input coordinate system ({coordinate_system}): {e}.')
+        raise ValueError(
+            f"Failed to extract scale parameters from input coordinate system ({coordinate_system}): {e}."
+        )
 
-    _scale_array_shape = [1] * (coordinates.ndim - 1)  # Need N-1 slots to make broadcastable.
+    _scale_array_shape = [1] * (
+        coordinates.ndim - 1
+    )  # Need N-1 slots to make broadcastable.
     _unit_scale_array_base = np.ones(_scale_array_shape)
 
     # produce the scale product and the inverse square array (both used later).
-    scale_product = (sx * sy * sz)
-    inverse_square_array = np.stack([
-        _scale_parameter ** (-2) * _unit_scale_array_base for _scale_parameter in [sx, sy, sz]
-    ], axis=-1)
+    scale_product = sx * sy * sz
+    inverse_square_array = np.stack(
+        [
+            _scale_parameter ** (-2) * _unit_scale_array_base
+            for _scale_parameter in [sx, sy, sz]
+        ],
+        axis=-1,
+    )
 
     # @@ CONSTRUCT PSI @@ #
     # This is the most complex procedure in this function. Depending on how we are given
@@ -669,23 +710,30 @@ def solve_poisson_ellipsoidal(
     if psi is None:
         # Validation step: ensure that we have everything we need to proceed.
         if (not callable(density_profile)) and (powerlaw_index is None):
-            raise ValueError(f"`solve_poisson_ellipsoidal` cannot compute the psi function from an array-like density"
-                             f" profile without a specified `powerlaw_index`.")
+            raise ValueError(
+                "`solve_poisson_ellipsoidal` cannot compute the psi function from an array-like density"
+                " profile without a specified `powerlaw_index`."
+            )
 
         # Spline generation step. If we don't already have a spline, we need to build one.
         # this will now make things callable.
         if not callable(density_profile):
-            _psi_method = 'spline'
+            _psi_method = "spline"
             radii = _build_ellipsoidal_psi_abscissa(r_min, r_max, num_points, scale)
             density_profile = InterpolatedUnivariateSpline(radii, density_profile)
             _kwgs = dict(scale=scale, n=powerlaw_index)
         else:
-            _psi_method = 'function'
+            _psi_method = "function"
             _kwgs = dict(scale=scale)
 
         # Compute the psi function abscissa and interpolation values.
         radii, psi_values, psi_inf = compute_ellipsoidal_psi(
-            density_profile, r_min, r_max, num_points=num_points, method=_psi_method, **_kwgs
+            density_profile,
+            r_min,
+            r_max,
+            num_points=num_points,
+            method=_psi_method,
+            **_kwgs,
         )
 
         # Create the necessary spline
@@ -698,13 +746,15 @@ def solve_poisson_ellipsoidal(
     # @@ CONSTRUCT INTEGRANDS @@ #
     # At this stage, we construct the numerator and denominator functions so
     # that we can proceed.
-    xi_func = lambda _tau: np.sqrt(np.sum(cartesian_coordinates ** 2 / (_tau + inverse_square_array), axis=-1))
+    xi_func = lambda _tau: np.sqrt(
+        np.sum(cartesian_coordinates**2 / (_tau + inverse_square_array), axis=-1)
+    )
     denom_func = lambda _tau: np.sqrt(np.prod(_tau + inverse_square_array, axis=-1))
 
     # Define the integrand for the potential
     integrand = lambda _tau: (psi_inf - psi_func(xi_func(_tau))) / denom_func(_tau)
 
     # Compute the integral using vectorized quadrature
-    potential = -np.pi * (1 / scale_product ** 2) * quad_vec(integrand, 0, np.inf)[0]
+    potential = -np.pi * (1 / scale_product**2) * quad_vec(integrand, 0, np.inf)[0]
 
     return potential

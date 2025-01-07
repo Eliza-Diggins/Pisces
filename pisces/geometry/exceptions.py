@@ -1,20 +1,31 @@
 """Error classes for the :py:mod:`~pisces.geometry` module."""
+
+
 class GeometryError(Exception):
-    """Base exception class for geometry-related errors."""
+    r"""Base exception class for geometry-related errors."""
+
     pass
+
 
 class CoordinateTypeError(GeometryError):
-    """Exception raised when an invalid coordinate type is encountered."""
+    r"""Exception raised when an invalid coordinate type is encountered."""
+
     pass
+
 
 class ConversionError(GeometryError):
-    """Exception raised during failed coordinate conversion operations."""
+    r"""Exception raised during failed coordinate conversion operations."""
+
     pass
+
 
 class LameCoefficientError(GeometryError):
-    """Exception raised for errors in Lame coefficient calculations or dependencies."""
+    r"""Exception raised for errors in Lame coefficient calculations or dependencies."""
+
     pass
 
+
 class InvalidSymmetryError(GeometryError):
-    """Exception raised when an invalid symmetry configuration is detected."""
+    r"""Exception raised when an invalid symmetry configuration is detected."""
+
     pass

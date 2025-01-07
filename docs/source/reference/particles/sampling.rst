@@ -180,4 +180,3 @@ to draw samples from the complex PDF functions.
         v \le f(x) \implies u \le \frac{f(x)}{Mg(x)},
 
     then :math:`x \sim X`.
-

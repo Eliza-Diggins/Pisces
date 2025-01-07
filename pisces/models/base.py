@@ -2,7 +2,18 @@
 Pisces astrophysics modeling base classes.
 """
 from pathlib import Path
-from typing import Union, List, Dict, Optional, TYPE_CHECKING, Type, Any, Tuple, Callable, Literal
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 
 import numpy as np
 import unyt
@@ -14,20 +25,22 @@ from pisces.geometry.base import CoordinateSystem
 from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
 from pisces.io.hdf5 import HDF5_File_Handle
 from pisces.models.grids.base import ModelGridManager
-from pisces.models.grids.structs import BoundingBox
+from pisces.models.samplers import ModelSampler
 from pisces.models.solver import ModelSolver
 from pisces.models.utilities import ModelConfigurationDescriptor
 from pisces.profiles.base import Profile
 from pisces.profiles.collections import HDF5ProfileRegistry
 from pisces.utilities.logging import LogDescriptor, devlog
-from pisces.models.samplers import ModelSampler
 
 if TYPE_CHECKING:
     from logging import Logger
-    from pisces.models.grids.base import ModelFieldContainer, ModelField
-    from pisces.utilities.config import YAMLConfig
-    from matplotlib.figure import Figure
+
     from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+
+    from pisces.models.grids.base import ModelField, ModelFieldContainer
+    from pisces.utilities.config import YAMLConfig
+
 
 # noinspection PyProtectedMember
 class ModelMeta(type):
@@ -61,11 +74,12 @@ class ModelMeta(type):
     attached to the model, it can inspect ``_PATHWAYS`` to discover which processes
     and checkers to run in which order.
     """
+
     def __new__(
         mcs: Type["ModelMeta"],
         name: str,
         bases: Tuple[Type, ...],
-        clsdict: Dict[str, Any]
+        clsdict: Dict[str, Any],
     ) -> Type[Any]:
         r"""
         Create a new class object, searching for solver metadata in ``clsdict`` and
@@ -105,7 +119,7 @@ class ModelMeta(type):
         return cls
 
     @staticmethod
-    def construct_pathways(cls: 'ModelMeta', clsdict: Dict[str, Any]) -> None:
+    def construct_pathways(cls: "ModelMeta", clsdict: Dict[str, Any]) -> None:
         r"""
         Build the `_PATHWAYS` dictionary for a concrete (non-abstract) class by scanning all
         attributes (including inherited ones) for solver metadata.
@@ -151,9 +165,7 @@ class ModelMeta(type):
                 # For each solver meta record on that method, register it appropriately.
                 for meta_record in method_obj._solver_meta:
                     path_name, entry_type = ModelMeta._validate_meta_entry(
-                        attr_name,
-                        method_obj,
-                        meta_record
+                        attr_name, method_obj, meta_record
                     )
 
                     # Ensure that there's an entry for `path_name`.
@@ -165,7 +177,7 @@ class ModelMeta(type):
                             cls=cls,
                             attribute_name=attr_name,
                             method=method_obj,
-                            meta_record=meta_record
+                            meta_record=meta_record,
                         )
                     elif entry_type == "checker":
                         cls._PATHWAYS[path_name]["checkers"].append(attr_name)
@@ -175,10 +187,7 @@ class ModelMeta(type):
 
     @staticmethod
     def _add_process_to_pathways(
-        cls: 'ModelMeta',
-        attribute_name: str,
-        method: Any,
-        meta_record: Dict[str, Any]
+        cls: "ModelMeta", attribute_name: str, method: Any, meta_record: Dict[str, Any]
     ) -> None:
         r"""
         Insert a new "process" entry into the `_PATHWAYS` dictionary for a specific path.
@@ -224,9 +233,8 @@ class ModelMeta(type):
             "name": attribute_name,
             "args": process_args,
             "kwargs": process_kwargs,
-            "desc": desc
+            "desc": desc,
         }
-
 
     @staticmethod
     def _validate_meta_entry(attribute_name: str, _: Any, meta_record: dict) -> tuple:
@@ -322,6 +330,7 @@ class ModelMeta(type):
                     f"Pathway '{path_name}' has missing or non-contiguous steps: {process_steps}"
                 )
 
+
 # noinspection PyAttributeOutsideInit,PyUnresolvedReferences
 class Model(metaclass=ModelMeta):
     r"""
@@ -393,20 +402,20 @@ class Model(metaclass=ModelMeta):
     # These can be altered in subclasses to produce specific behaviors.
     DEFAULT_COORDINATE_SYSTEM: Optional[Type[CoordinateSystem]] = None
     """ :py:class:`~pisces.geometry.base.CoordinateSystem`: The default coordinate system.
-    
+
     If a :py:class:`Model` skeleton is produced (either during ``__init__`` or during :py:meth:`Model.build_skeleton`) and
-    a coordinate system is not provided, the default coordinate system will be used. The parameters (if any) used to 
+    a coordinate system is not provided, the default coordinate system will be used. The parameters (if any) used to
     generate the default coordinate system are provided by :py:attr:`Model.DEFAULT_COORDINATE_SYSTEM_PARAMS`.
-    
+
     .. note::
-    
+
         If :py:attr:`DEFAULT_COORDINATE_SYSTEM` is ``None``, then there is no default coordinate system and an
         error is raised if the user does not provide a coordinate system during the build process.
-        
+
     """
     DEFAULT_COORDINATE_SYSTEM_PARAMS: Dict[str, Any] = {}
     """ dict of str, Any: The parameters for the default coordinate system.
-    
+
     These parameters (if any) are passed to :py:attr:`Model.DEFAULT_COORDINATE_SYSTEM` during the build process if
     the default coordinate system is used.
     """
@@ -414,44 +423,44 @@ class Model(metaclass=ModelMeta):
     """ list of str: The model class's initial non-symmetric (free) axes.
     By specifying the :py:attr:`INIT_FREE_AXES` attribute, model developers may dictate the behavior of the
     :py:attr:`geometry_handler` attribute of any model instances.
-    
+
     The idea behind this class-attribute is that specific models may have some "minimal symmetry" (i.e. galaxy cluster models
     which assume radial profile inputs). In these cases, even the blank :py:class:`Model` instance starts with some native
     symmetry mediated via the :py:attr:`geometry_handler` attribute.
-    
+
     .. note::
-    
+
         If ``INIT_FREE_AXES = None``, then it is assumed that all axes are free at baseline (there is no symmetry).
-    
+
     .. tip::
-    
+
         **For Developers**: Best practice regarding the :py:class:`Model` geometry handler depends largely on the desired
         behavior. In cases where pathways make frequent use of some "baseline symmetry", it may be worthwhile to implement this.
         If not, it can generally be left as ``None``.
-        
+
     """
     GRID_MANAGER_TYPE: Type[ModelGridManager] = ModelGridManager
     """ Type[:py:class:`~pisces.models.grids.base.ModelGridManager`]: The grid manager type to use to manage this model class.
-    
+
     The selected :py:class:`~pisces.models.grids.base.ModelGridManager` is the grid manager type that is used to manage this
     model class's grid structures. Implementing a custom grid manager class specific to particular model constraints is made
     possible by altering this attribute of the model class to point to the custom manager class.
     """
-    SAMPLE_TYPE: Type['ModelSampler'] = ModelSampler
+    SAMPLE_TYPE: Type["ModelSampler"] = ModelSampler
     """ Type[:py:class:`~pisces.models.samplers.ModelSampler`]: The sampler class to initialize when the
     model is asked to produce particles from its distributions.
     """
     # TODO: better doc.
-    logger: 'Logger' = LogDescriptor()
+    logger: "Logger" = LogDescriptor()
     """ Logger: The specialized logger for this model class.
-    
+
     This specialized logger is controlled by the ``code``-type logger settings in the ``bin/config.yaml`` file. This allows
     the user to ensure that output from the model generation is turned off / on regardless of the behavior of the other
     logging systems in the Pisces ecosystem.
     """
-    config: 'YAMLConfig' = ModelConfigurationDescriptor()
+    config: "YAMLConfig" = ModelConfigurationDescriptor()
     """ :py:class:`~pisces.utilities.config.YAMLConfig`: The configuration data for this model class.
-    
+
     The configuration file provides access to things like field data, units, symbols, etc. for use throughout
     the model construction. If a configuration file is not specified, these utilities will not function when called.
     """
@@ -504,7 +513,7 @@ class Model(metaclass=ModelMeta):
         """
         # Pull the user's provided path and ensure that it exists.
         # We do not permit non-existent paths to proceed.
-        self._path: Path = Path(path) # -> private to use property instead.
+        self._path: Path = Path(path)  # -> private to use property instead.
         if not self.path.exists():
             raise ValueError(f"Failed to find path: {self.path}")
         self.logger.info("[LOAD] Loading model from file: %s...", self._path)
@@ -517,11 +526,13 @@ class Model(metaclass=ModelMeta):
         #   3. The solver.
         #
         # => Start with the grid manager / coordinate system.
-        self._geometry_handler = None # --> holds the lazy loaded geometry handler.
+        self._geometry_handler = None  # --> holds the lazy loaded geometry handler.
         self._manager = self.__class__.GRID_MANAGER_TYPE(self._path)
         self._validate_coordinate_system()
         devlog.debug("(model load) got manager: %s.", self._manager)
-        devlog.debug("(model load) got coordinate_system: %s.", self._manager.coordinate_system)
+        devlog.debug(
+            "(model load) got coordinate_system: %s.", self._manager.coordinate_system
+        )
 
         # => Load the profiles into the collection.
         self._load_profiles()
@@ -552,18 +563,20 @@ class Model(metaclass=ModelMeta):
             raise RuntimeError("Failed to load profile registry.") from e
 
     @classmethod
-    def build_skeleton(cls,
-                       path: Union[str, Path],
-                       /,
-                       bbox: ArrayLike,
-                       grid_shape: ArrayLike,
-                       chunk_shape: ArrayLike = None,
-                       *,
-                       overwrite: bool = False,
-                       length_unit: str = None,
-                       scale: Union[List[str], str] = None,
-                       profiles: Optional[Dict[str, 'Profile']] = None,
-                       coordinate_system: Optional[CoordinateSystem] = None)-> HDF5_File_Handle:
+    def build_skeleton(
+        cls,
+        path: Union[str, Path],
+        /,
+        bbox: ArrayLike,
+        grid_shape: ArrayLike,
+        chunk_shape: ArrayLike = None,
+        *,
+        overwrite: bool = False,
+        length_unit: str = None,
+        scale: Union[List[str], str] = None,
+        profiles: Optional[Dict[str, "Profile"]] = None,
+        coordinate_system: Optional[CoordinateSystem] = None,
+    ) -> HDF5_File_Handle:
         """
         Construct a "skeleton" for the :py:class:`Model` class.
 
@@ -679,19 +692,25 @@ class Model(metaclass=ModelMeta):
         # VALIDATE path. Convert to a path object and manage overwriting.
         path = Path(path)
         if path.exists() and not overwrite:
-            raise ValueError(f"The path '{path}' already exists. Use `overwrite=True` to overwrite.")
+            raise ValueError(
+                f"The path '{path}' already exists. Use `overwrite=True` to overwrite."
+            )
         elif path.exists() and overwrite:
             path.unlink()
 
         # VALIDATE coordinate system
         if coordinate_system is None:
             if cls.DEFAULT_COORDINATE_SYSTEM is not None:
-                coordinate_system = cls.DEFAULT_COORDINATE_SYSTEM(**cls.DEFAULT_COORDINATE_SYSTEM_PARAMS)
+                coordinate_system = cls.DEFAULT_COORDINATE_SYSTEM(
+                    **cls.DEFAULT_COORDINATE_SYSTEM_PARAMS
+                )
             else:
-                raise ValueError("Coordinate system must be provided to build the model skeleton.")
+                raise ValueError(
+                    "Coordinate system must be provided to build the model skeleton."
+                )
 
         # CREATE the file reference
-        handle = HDF5_File_Handle(path, mode='w').switch_mode('r+')
+        handle = HDF5_File_Handle(path, mode="w").switch_mode("r+")
         cls.logger.debug("[BLDR] HDF5 file created successfully.")
 
         # Initialize the grid manager skeleton
@@ -719,8 +738,8 @@ class Model(metaclass=ModelMeta):
     # @@ VALIDATORS @@ #
     # These methods are for validating various types.
     @classmethod
-    def _cls_validate_coordinate_system(cls,cs: 'CoordinateSystem'):
-        """
+    def _cls_validate_coordinate_system(cls, cs: "CoordinateSystem"):
+        r"""
         Validate the coordinate system of the model.
 
         Ensures the coordinate system matches allowed systems.
@@ -736,10 +755,14 @@ class Model(metaclass=ModelMeta):
             If the coordinate system is not allowed.
         """
         if (cls.GRID_MANAGER_TYPE.ALLOWED_COORDINATE_SYSTEMS is not None) and (
-                cs.__class__.__name__ not in cls.GRID_MANAGER_TYPE.ALLOWED_COORDINATE_SYSTEMS):
-            raise ValueError(f"Invalid coordinate system for Model subclass {cls.__name__}: {cs}.\nThis error likely indicates"
-                             f" that you are trying to initialize a structure with a coordinate system which is not compatible"
-                             f" with the model.")
+            cs.__class__.__name__
+            not in cls.GRID_MANAGER_TYPE.ALLOWED_COORDINATE_SYSTEMS
+        ):
+            raise ValueError(
+                f"Invalid coordinate system for Model subclass {cls.__name__}: {cs}.\nThis error likely indicates"
+                f" that you are trying to initialize a structure with a coordinate system which is not compatible"
+                f" with the model."
+            )
 
     def _validate_coordinate_system(self):
         """
@@ -762,21 +785,23 @@ class Model(metaclass=ModelMeta):
         return self.__str__()
 
     def __call__(self, overwrite: bool = False, pathway: Optional[str] = None):
-        self.solve_model(overwrite=overwrite,pathway=pathway)
+        self.solve_model(overwrite=overwrite, pathway=pathway)
 
-    def __getitem__(self, item: str) -> 'ModelField':
+    def __getitem__(self, item: str) -> "ModelField":
         try:
             return self.profiles[item]
         except KeyError:
             raise KeyError(f"Model {self} has no field named {item}.")
 
     def __setitem__(self, _: str, __: Any):
-        raise NotImplementedError("Model objects do not permit direct setting using __setitem__.")
+        raise NotImplementedError(
+            "Model objects do not permit direct setting using __setitem__."
+        )
 
     def __len__(self) -> int:
         return len(self.FIELDS)
 
-    def __eq__(self, other: 'Model') -> bool:
+    def __eq__(self, other: "Model") -> bool:
         return self.path == other.path
 
     def __iter__(self):
@@ -828,7 +853,7 @@ class Model(metaclass=ModelMeta):
 
     @property
     def grid_manager(self) -> ModelGridManager:
-        """
+        r"""
         The grid manager for the model.
 
         The grid manager (:py:class:`~pisces.models.grids.base.ModelGridManager`) is responsible for handling all grid-related operations,
@@ -848,8 +873,8 @@ class Model(metaclass=ModelMeta):
 
     # noinspection PyPep8Naming
     @property
-    def FIELDS(self) -> 'ModelFieldContainer':
-        """
+    def FIELDS(self) -> "ModelFieldContainer":
+        r"""
         Access the fields stored in the model's :py:attr:`grid_manager`.
 
         Fields are data arrays stored within the grid manager, typically representing
@@ -870,7 +895,7 @@ class Model(metaclass=ModelMeta):
 
     @property
     def coordinate_system(self) -> CoordinateSystem:
-        """
+        r"""
         Retrieve the coordinate system used by the model.
 
         The coordinate system defines the spatial framework (e.g., spherical,
@@ -891,7 +916,7 @@ class Model(metaclass=ModelMeta):
 
     @property
     def geometry_handler(self) -> GeometryHandler:
-        """
+        r"""
         Retrieve the geometry handler for the model.
 
         The geometry handler manages operations that depend on the model's spatial
@@ -920,7 +945,7 @@ class Model(metaclass=ModelMeta):
 
     @property
     def profiles(self) -> HDF5ProfileRegistry:
-        """
+        r"""
         Access the profiles stored in the model.
 
         Profiles are functional or tabulated representations of physical quantities
@@ -940,15 +965,14 @@ class Model(metaclass=ModelMeta):
 
     @property
     def particle_sampler(self) -> ModelSampler:
-        """
+        r"""
         The model sampler attached to this model.
         """
         # TODO: better doc.
-        if not hasattr(self, '_particle_sampler'):
+        if not hasattr(self, "_particle_sampler"):
             self._particle_sampler = ModelSampler(self)
 
         return self._particle_sampler
-
 
     @property
     def is_solved(self) -> bool:
@@ -977,18 +1001,20 @@ class Model(metaclass=ModelMeta):
         if pathway in self._solver.list_pathways():
             self._solver.default = pathway
         else:
-            raise ValueError(f"Pathway {pathway} is not recognized for models of class {self.__class__.__name__}.\n"
-                             f"Recognized pathways are {list(self._solver.list_pathways())}.")
+            raise ValueError(
+                f"Pathway {pathway} is not recognized for models of class {self.__class__.__name__}.\n"
+                f"Recognized pathways are {list(self._solver.list_pathways())}."
+            )
 
     # @@ UTILITY FUNCTIONS @@ #
     # These utility functions are used throughout the model generation process for various things
     # and are not sufficiently general to be worth implementing elsewhere.
     def _assign_default_units_and_add_field(
-            self,
-            field_name: str,
-            field_data: unyt.unyt_array,
-            create_field: bool = True,
-            axes: Optional[List[str]] = None
+        self,
+        field_name: str,
+        field_data: unyt.unyt_array,
+        create_field: bool = True,
+        axes: Optional[List[str]] = None,
     ) -> unyt.unyt_array:
         """
         Assigns the appropriate units to a field and optionally adds it to the model's field container.
@@ -1042,7 +1068,9 @@ class Model(metaclass=ModelMeta):
         try:
             units = self.get_default_units(field_name)
         except KeyError as e:
-            raise ValueError(f"No default units defined for field '{field_name}'.") from e
+            raise ValueError(
+                f"No default units defined for field '{field_name}'."
+            ) from e
 
         field_data = field_data.to(units)
 
@@ -1061,7 +1089,7 @@ class Model(metaclass=ModelMeta):
                 "[EXEC] Added field '%s' (units=%s, ndim=%s).",
                 field_name,
                 units,
-                field_data.ndim
+                field_data.ndim,
             )
 
         # Return the field so that it can be accessed if this was just a unit validation method.
@@ -1075,7 +1103,9 @@ class Model(metaclass=ModelMeta):
         if missing:
             raise ValueError(f"Cannot compute {field_name}. Missing fields: {missing}")
 
-    def _coerce_extent_for_plots(self, extent: Any) -> Tuple[unyt.unyt_array, np.ndarray]:
+    def _coerce_extent_for_plots(
+        self, extent: Any
+    ) -> Tuple[unyt.unyt_array, np.ndarray]:
         """
         Basic utility function to coerce extent args passed to plotting
         routines.
@@ -1088,7 +1118,7 @@ class Model(metaclass=ModelMeta):
         if isinstance(extent, tuple):
             # Extent provided as (array, unit) tuple.
             try:
-                extent = unyt.unyt_array(extent[0],extent[1])
+                extent = unyt.unyt_array(extent[0], extent[1])
             except Exception as e:
                 raise ValueError(f"Invalid extent parameter: {e}.") from e
         elif not isinstance(extent, unyt.unyt_array):
@@ -1145,7 +1175,10 @@ class Model(metaclass=ModelMeta):
             The checker methods list.
         """
         try:
-            return cls._PATHWAYS[pathway]['processes'], cls._PATHWAYS[pathway]['checkers']
+            return (
+                cls._PATHWAYS[pathway]["processes"],
+                cls._PATHWAYS[pathway]["checkers"],
+            )
         except KeyError:
             raise KeyError(f"The pathway '{pathway}' does not exist.")
 
@@ -1177,12 +1210,14 @@ class Model(metaclass=ModelMeta):
         try:
             return cls.get_pathway(pathway)[0][step]
         except IndexError:
-            raise ValueError(f"The pathway '{pathway}' does not have the step '{step}'.")
+            raise ValueError(
+                f"The pathway '{pathway}' does not have the step '{step}'."
+            )
         except KeyError as e:
             raise e
 
     @classmethod
-    def get_pathway_length(cls,pathway: str) -> int:
+    def get_pathway_length(cls, pathway: str) -> int:
         """
         Return the length of a specific pathway in the model.
 
@@ -1194,11 +1229,11 @@ class Model(metaclass=ModelMeta):
         -------
         int
         """
-        processes,checkers = cls.get_pathway(pathway)
+        processes, checkers = cls.get_pathway(pathway)
         return len(processes)
 
     @classmethod
-    def list_pathways(cls)-> List[str]:
+    def list_pathways(cls) -> List[str]:
         """
         Return a list of the pathway names present in this :py:class:`Model` class.
 
@@ -1289,21 +1324,31 @@ class Model(metaclass=ModelMeta):
             kwarg_lines = []
             for k, v in process_info["kwargs"].items():
                 kwarg_lines.append(f"{k}={v}")
-            kwarg_string = "{\n" + ("\n".join(kwarg_lines)) + "\n}" if kwarg_lines else "{}"
+            kwarg_string = (
+                "{\n" + ("\n".join(kwarg_lines)) + "\n}" if kwarg_lines else "{}"
+            )
 
             # Use the short docstring snippet if available; fallback if empty or None.
             desc = process_info.get("desc", "No Description") or "No Description"
 
-            process_table.append([
-                step_number,
-                process_info["name"],
-                arg_string,
-                kwarg_string,
-                desc,
-            ])
+            process_table.append(
+                [
+                    step_number,
+                    process_info["name"],
+                    arg_string,
+                    kwarg_string,
+                    desc,
+                ]
+            )
 
         # Column headers for the table of processes.
-        headers = ["Step", "Process Name", "Arguments", "Keyword Arguments", "Description"]
+        headers = [
+            "Step",
+            "Process Name",
+            "Arguments",
+            "Keyword Arguments",
+            "Description",
+        ]
         process_table_str = tabulate(process_table, headers=headers, tablefmt="grid")
 
         # Format the checker list (if any).
@@ -1313,14 +1358,18 @@ class Model(metaclass=ModelMeta):
             checkers_str = "None"
 
         # Print the assembled summary.
-        print(f"\n====================== Pathway Summary: '{pathway_name}' ======================\n")
+        print(
+            f"\n====================== Pathway Summary: '{pathway_name}' ======================\n"
+        )
         print("Steps:")
         print("------")
         print(process_table_str)
         print("\nCheckers:")
         print("---------")
         print(checkers_str)
-        print("\n===============================================================================")
+        print(
+            "\n==============================================================================="
+        )
 
     @classmethod
     def get_default_units(cls, field_name: str) -> unyt.Unit:
@@ -1352,19 +1401,26 @@ class Model(metaclass=ModelMeta):
         # Fetch the unit data from the field entry in the
         # parameters object.
         try:
-            _unit_str = cls.config[f'fields.{field_name}.units']
+            _unit_str = cls.config[f"fields.{field_name}.units"]
             if _unit_str is None:
                 raise KeyError()
         except KeyError:
-            raise ValueError("Failed to get default units for field `%s` because it is not a known field."%field_name)
+            raise ValueError(
+                "Failed to get default units for field `%s` because it is not a known field."
+                % field_name
+            )
         except NotImplementedError as e:
-            raise NotImplementedError(f"Failed to access the configuration utility for model class {cls.__name__}: {e}")
+            raise NotImplementedError(
+                f"Failed to access the configuration utility for model class {cls.__name__}: {e}"
+            )
 
         # Attempt to return the unit
         try:
             return unyt.Unit(_unit_str)
         except Exception as e:
-            raise ValueError(f"Failed to convert string unit {_unit_str} to unyt.Unit object: {e}")
+            raise ValueError(
+                f"Failed to convert string unit {_unit_str} to unyt.Unit object: {e}"
+            )
 
     def solve_model(self, overwrite: bool = False, pathway: str = None):
         """
@@ -1401,14 +1457,17 @@ class Model(metaclass=ModelMeta):
         """
         # Validate that the solver exists for this class and set the pathway / default pathway.
         # produce some logging information for the user.
-        if not hasattr(self, '_solver') or self._solver is None:
-            raise RuntimeError("The solver is not initialized. This error shouldn't be possible...")
+        if not hasattr(self, "_solver") or self._solver is None:
+            raise RuntimeError(
+                "The solver is not initialized. This error shouldn't be possible..."
+            )
 
         pathway = pathway or self.default_pathway
         if pathway is None:
-            raise ValueError(f"No `pathway` was provided and {self} has no default pathway set.\n"
-                             f"Please specify a pathway or a default pathway to solve the model.")
-
+            raise ValueError(
+                f"No `pathway` was provided and {self} has no default pathway set.\n"
+                f"Please specify a pathway or a default pathway to solve the model."
+            )
 
         # Produce the basic logging information for the user.
         self.logger.info("[EXEC] Solving model %s. ", self)
@@ -1419,13 +1478,24 @@ class Model(metaclass=ModelMeta):
         try:
             self._solver(pathway=pathway, overwrite=overwrite)
         except RuntimeError as e:
-            self.logger.error("[EXEC] Runtime error during execution of pathway '%s': %s", pathway, e)
+            self.logger.error(
+                "[EXEC] Runtime error during execution of pathway '%s': %s",
+                pathway,
+                e.__str__(),
+            )
             raise
         except Exception as e:
-            self.logger.error("[EXEC] Error during execution of pathway '%s': %s", pathway, e)
+            self.logger.error(
+                "[EXEC] Error during execution of pathway '%s': %s",
+                pathway,
+                e.__str__(),
+            )
             raise
         else:
-            self.logger.info("[EXEC] Successfully executed pathway '%s'.", pathway or self._solver.default)
+            self.logger.info(
+                "[EXEC] Successfully executed pathway '%s'.",
+                pathway or self._solver.default,
+            )
 
     def summary(self) -> None:
         r"""
@@ -1488,13 +1558,21 @@ class Model(metaclass=ModelMeta):
             raise ValueError("Cannot import tabulate package.")
 
         # Build the tables using subfunctions and custom implementations.
-        ptable, gtable, ftable = self.profiles.get_profile_summary(), self.grid_manager.get_grid_summary(), self.FIELDS.get_field_summary()
+        ptable, gtable, ftable = (
+            self.profiles.get_profile_summary(),
+            self.grid_manager.get_grid_summary(),
+            self.FIELDS.get_field_summary(),
+        )
 
-        model_table = tabulate([
-            ['Path', str(self.path)],
-            ['Solved',str(self.is_solved)],
-            ['Default Pathway',str(self.default_pathway)],
-        ], headers=['Attribute', 'Value'], tablefmt='grid')
+        model_table = tabulate(
+            [
+                ["Path", str(self.path)],
+                ["Solved", str(self.is_solved)],
+                ["Default Pathway", str(self.default_pathway)],
+            ],
+            headers=["Attribute", "Value"],
+            tablefmt="grid",
+        )
 
         # Summary Tables
         print("\n===================== Model Summary =====================\n")
@@ -1517,23 +1595,22 @@ class Model(metaclass=ModelMeta):
 
         print("\n=========================================================\n")
 
-
-
-    def plot_slice(self,
-                   field_name: str,
-                   extent: Any,
-                   view_axis: Optional[Literal["x","y","z"]] = 'z',
-                   figure: Optional['Figure'] = None,
-                   axes: Optional['Axes'] = None,
-                   resolution: Optional[Tuple[float,float]] = (500,500),
-                   view_axis_position: Optional[Any] = 0,
-                   **kwargs):
-        import matplotlib.pyplot as plt
+    def plot_slice(
+        self,
+        field_name: str,
+        extent: Any,
+        view_axis: Optional[Literal["x", "y", "z"]] = "z",
+        figure: Optional["Figure"] = None,
+        axes: Optional["Axes"] = None,
+        resolution: Optional[Tuple[float, float]] = (500, 500),
+        view_axis_position: Optional[Any] = 0,
+        **kwargs,
+    ):
         from pisces.utilities.plotting import construct_subplot
 
         # Setup the subplot / figure to ensure that they
         # are present
-        figure, axes = construct_subplot(figure,axes)
+        figure, axes = construct_subplot(figure, axes)
 
         # Validate the extent attribute. May be an unyt_array or Tuple(list, str) or simply
         # a basic list-like object. All cases need to be handled naturally.
@@ -1541,89 +1618,99 @@ class Model(metaclass=ModelMeta):
 
         # Construct the image array from inputs.
         image_array = self.grid_manager.generate_slice_image_array(
-            field_name,str(view_axis),extent_backend,np.array(resolution,dtype=np.uint16), view_axis_position
+            field_name,
+            str(view_axis),
+            extent_backend,
+            np.array(resolution, dtype=np.uint16),
+            view_axis_position,
         )
 
         # Check for non-plotting calls. This allows users more control over
         # plot routines by simply getting the image out on its own.
-        if kwargs.pop("noplot",False):
+        if kwargs.pop("noplot", False):
             return image_array, figure, axes
 
         # Add the image to the plot. Utilize the normalization passed via kwargs
         # if necessary and the colormap.
-        imshow_object = axes.imshow(image_array.T,extent=extent_image.d,**kwargs)
-
+        imshow_object = axes.imshow(image_array.T, extent=extent_image.d, **kwargs)
 
         # Managing axes labels, ticks, etc.
-        _axes_labels = [ax for ax in ['x','y','z'] if ax != view_axis]
-        axes.set_xlabel(r"$%s$ / $\left[%s\right]$" % (_axes_labels[0], extent_image.units.latex_repr))
-        axes.set_ylabel(r"$%s$ / $\left[%s\right]$" % (_axes_labels[1], extent_image.units.latex_repr))
+        _axes_labels = [ax for ax in ["x", "y", "z"] if ax != view_axis]
+        axes.set_xlabel(
+            r"$%s$ / $\left[%s\right]$"
+            % (_axes_labels[0], extent_image.units.latex_repr)
+        )
+        axes.set_ylabel(
+            r"$%s$ / $\left[%s\right]$"
+            % (_axes_labels[1], extent_image.units.latex_repr)
+        )
 
-        field_label = self.config[f'fields.{field_name}.label']
+        field_label = self.config[f"fields.{field_name}.label"]
         if field_label is None:
             field_label = field_name
 
-        figure.colorbar(imshow_object, ax=axes, label=r'%s / $\left[%s\right]$'%(field_label,self.FIELDS[field_name].units.latex_repr))
+        figure.colorbar(
+            imshow_object,
+            ax=axes,
+            label=r"%s / $\left[%s\right]$"
+            % (field_label, self.FIELDS[field_name].units.latex_repr),
+        )
 
         return image_array, figure, axes
 
-
     # noinspection PyIncorrectDocstring
-    def add_field_from_function(self,
-                                function: Callable,
-                                field_name: str,
-                                **kwargs):
+    def add_field_from_function(self, function: Callable, field_name: str, **kwargs):
         """
-         Create a :py:class:`~pisces.models.grids.base.ModelField` in this model's
-         :py:class:`~pisces.models.grids.base.ModelGridManager` by evaluating the provided function.
+        Create a :py:class:`~pisces.models.grids.base.ModelField` in this model's
+        :py:class:`~pisces.models.grids.base.ModelGridManager` by evaluating the provided function.
 
-         This method takes a function (``function``) and evaluates it at the relevant grid points to generate
-         a new field with name ``field_name``.
+        This method takes a function (``function``) and evaluates it at the relevant grid points to generate
+        a new field with name ``field_name``.
 
-         Parameters
-         ----------
-         function : Callable
-             A function which takes (as input) ``N`` arguments ``(x_1,...,x_N)`` corresponding to the coordinate
-             values of the ``N`` axes specified by the ``axes`` argument. If ``axes`` is not specified, then ``N=NDIM``, where
-             ``NDIM`` is the number of dimensions in the coordinate system.
-         field_name : str
-             The name to give to the newly generated field.
+        Parameters
+        ----------
+        function : Callable
+            A function which takes (as input) ``N`` arguments ``(x_1,...,x_N)`` corresponding to the coordinate
+            values of the ``N`` axes specified by the ``axes`` argument. If ``axes`` is not specified, then ``N=NDIM``, where
+            ``NDIM`` is the number of dimensions in the coordinate system.
+        field_name : str
+            The name to give to the newly generated field.
 
-             .. note::
+            .. note::
 
-                 The ``field_name`` will be the location in the HDF5 file as well (``FIELDS/field_name``).
+                The ``field_name`` will be the location in the HDF5 file as well (``FIELDS/field_name``).
 
-         axes : Optional[List[str]], optional
-             The coordinate axes along which the function is to be evaluated. If ``axes`` is not provided, then
-             it is assumed that the function operates on all the coordinates of the coordinate system.
+        axes : Optional[List[str]], optional
+            The coordinate axes along which the function is to be evaluated. If ``axes`` is not provided, then
+            it is assumed that the function operates on all the coordinates of the coordinate system.
 
-             .. hint::
+            .. hint::
 
-                 Ensure that ``axes`` is self-consistent with the call signature of the ``function`` parameter.
+                Ensure that ``axes`` is self-consistent with the call signature of the ``function`` parameter.
 
-         chunking : bool, optional
-             If `True`, evaluate the function in chunks. Default is `False`.
+        chunking : bool, optional
+            If `True`, evaluate the function in chunks. Default is `False`.
 
-             .. tip::
+            .. tip::
 
-                 This is generally not necessary unless you cannot load the entire base grid into memory at once. This
-                 is particularly common if the function is operating in 3 or more dimensions, in which case even moderately
-                 resolved grids may take up significant memory.
+                This is generally not necessary unless you cannot load the entire base grid into memory at once. This
+                is particularly common if the function is operating in 3 or more dimensions, in which case even moderately
+                resolved grids may take up significant memory.
 
-         units : Optional[str], optional
-             The units to give to the field. If ``units`` is not provided, then it is assumed that the field is
-             dimensionless.
-         dtype : str, optional
-             The data type of the field. Default is "f8".
-         overwrite : bool, optional
-             If `True`, overwrite an existing field with the same name. Default is `False`.
+        units : Optional[str], optional
+            The units to give to the field. If ``units`` is not provided, then it is assumed that the field is
+            dimensionless.
+        dtype : str, optional
+            The data type of the field. Default is "f8".
+        overwrite : bool, optional
+            If `True`, overwrite an existing field with the same name. Default is `False`.
 
-         Raises
-         ------
-         ValueError
-             If the function, axes, or other parameters are invalid.
-         """
-        __logging__ = kwargs.pop('logging',True)
+        Raises
+        ------
+        ValueError
+            If the function, axes, or other parameters are invalid.
+        """
+        __logging__ = kwargs.pop("logging", True)
 
         # Pass to the grid manager to add the field.
         self.grid_manager.add_field_from_function(function, field_name, **kwargs)
@@ -1633,10 +1720,9 @@ class Model(metaclass=ModelMeta):
             self.logger.debug("[SLVR] Field '%s' added from function.", field_name)
 
     # noinspection PyIncorrectDocstring
-    def add_field_from_profile(self,
-                               profile: Union[str, Profile],
-                               field_name: Optional[str] = None,
-                               **kwargs):
+    def add_field_from_profile(
+        self, profile: Union[str, Profile], field_name: Optional[str] = None, **kwargs
+    ):
         """
         Create a :py:class:`~pisces.models.grids.base.ModelField` in this model's
         :py:class:`~pisces.models.grids.base.ModelGridManager` by evaluating a profile.
@@ -1685,12 +1771,14 @@ class Model(metaclass=ModelMeta):
         ValueError
             If the function, axes, or other parameters are invalid.
         """
-        __logging__ = kwargs.pop('logging',True)
+        __logging__ = kwargs.pop("logging", True)
         # Setup the profile. If we got an actual profile, we need to check for the name
         # in the kwargs. Otherwise we need to look up the profile using the string we have.
         if isinstance(profile, Profile):
             if field_name is None:
-                raise ValueError("`profile` argument was a Profile class, `profile_name` is a required kwarg.")
+                raise ValueError(
+                    "`profile` argument was a Profile class, `profile_name` is a required kwarg."
+                )
         elif isinstance(profile, str):
             try:
                 if field_name is None:
@@ -1703,20 +1791,20 @@ class Model(metaclass=ModelMeta):
             raise TypeError("`profile` must be either a string or a Profile class.")
 
         # Now pass along to the grid manager to actually add the field.
-        self.grid_manager.add_field_from_profile(
-            profile,
-            field_name,
-            **kwargs
-        )
+        self.grid_manager.add_field_from_profile(profile, field_name, **kwargs)
 
         # Produce the output log.
         if __logging__:
-            self.logger.debug("[SLVR] Field '%s' added from internal profile.", field_name)
+            self.logger.debug(
+                "[SLVR] Field '%s' added from internal profile.", field_name
+            )
 
-    def convert_profile_to_field(self,
-                                 profile_name: str,
-                                 field_name: Optional[str] = None,
-                                 overwrite: bool = False):
+    def convert_profile_to_field(
+        self,
+        profile_name: str,
+        field_name: Optional[str] = None,
+        overwrite: bool = False,
+    ):
         """
         Convert a profile to a model field.
 
@@ -1744,7 +1832,9 @@ class Model(metaclass=ModelMeta):
         """
         # Look up the provided profile and ensure that it exists as expected.
         if profile_name not in self.profiles:
-            raise ValueError(f"The profile `{profile_name}` does not appear to be present in {self}.")
+            raise ValueError(
+                f"The profile `{profile_name}` does not appear to be present in {self}."
+            )
         profile = self.profiles[profile_name]
 
         # Validate the field name. If the field name is not provided, we assume it
@@ -1764,8 +1854,11 @@ class Model(metaclass=ModelMeta):
             logging=False,
             overwrite=overwrite,
         )
-        self.logger.debug("[EXEC] \t\tAdded field `%s` (units=%s) from profile.", field_name, str(_units))
-
+        self.logger.debug(
+            "[EXEC] \t\tAdded field `%s` (units=%s) from profile.",
+            field_name,
+            str(_units),
+        )
 
 
 class _RadialModel(Model):
@@ -1788,7 +1881,7 @@ class _RadialModel(Model):
     # The class parameters define several "standard" behaviors for the class.
     # These can be altered in subclasses to produce specific behaviors.
     DEFAULT_COORDINATE_SYSTEM = SphericalCoordinateSystem
-    INIT_FREE_AXES = ['r']
+    INIT_FREE_AXES = ["r"]
 
     # @@ UTILITY FUNCTIONS @@ #
     # These utility functions are used throughout the model generation process for various things
@@ -1797,12 +1890,16 @@ class _RadialModel(Model):
         """
         Retrieve the radial coordinates in the appropriate length units.
         """
-        return unyt.unyt_array(self.grid_manager.get_coordinates(axes=['r']).ravel(),
-                               self.grid_manager.length_unit)
+        return unyt.unyt_array(
+            self.grid_manager.get_coordinates(axes=["r"]).ravel(),
+            self.grid_manager.length_unit,
+        )
 
-    def construct_radial_spline(self,
-                                field_name: str,
-                                radii: Optional[Union[unyt.unyt_array,np.ndarray]] = None):
+    def construct_radial_spline(
+        self,
+        field_name: str,
+        radii: Optional[Union[unyt.unyt_array, np.ndarray]] = None,
+    ):
         """
         Generate a radial spline for the specified field.
 
@@ -1827,24 +1924,28 @@ class _RadialModel(Model):
         # base units. Ensure that field exists and that it is actually a radial field.
         if field_name not in self.FIELDS:
             raise ValueError(f"Field '{field_name}' does not exist in the model.")
-        if set(self.FIELDS[field_name].AXES) != {'r'}:
-            raise ValueError(f"Field '{field_name}' is not defined over the radial axis.")
+        if set(self.FIELDS[field_name].AXES) != {"r"}:
+            raise ValueError(
+                f"Field '{field_name}' is not defined over the radial axis."
+            )
 
         # Manage the radii construction as needed based on the input.
         if radii is None:
             radii = self.get_radii().d
         else:
-            radii = radii.d if hasattr(radii, 'units') else radii
+            radii = radii.d if hasattr(radii, "units") else radii
 
         field_data = self.FIELDS[field_name][...].ravel()
         return InterpolatedUnivariateSpline(radii, field_data.d)
 
-    def integrate_radial_density_field(self,
-                                       density_field: str,
-                                       mass_field: Optional[str] = None,
-                                       mass_unit: Optional[Union[str, unyt.Unit]] = None,
-                                       create_field: bool = False,
-                                       overwrite: bool = False):
+    def integrate_radial_density_field(
+        self,
+        density_field: str,
+        mass_field: Optional[str] = None,
+        mass_unit: Optional[Union[str, unyt.Unit]] = None,
+        create_field: bool = False,
+        overwrite: bool = False,
+    ):
         """
         Integrate a radial density field to compute the enclosed mass profile.
 
@@ -1899,9 +2000,13 @@ class _RadialModel(Model):
         # Retrieve and validate the input field. It must be a valid radial field. Additionally, if we cannot locate
         # a mass field, we need to be given the mass field name and the units.
         if density_field not in self.FIELDS:
-            raise ValueError(f"Density field `{density_field}` does not exist in {self}.")
-        if set(self.FIELDS[density_field].AXES) != {'r'}:
-            raise ValueError(f"Field '{density_field}' is not defined over the radial ('r') axis.")
+            raise ValueError(
+                f"Density field `{density_field}` does not exist in {self}."
+            )
+        if set(self.FIELDS[density_field].AXES) != {"r"}:
+            raise ValueError(
+                f"Field '{density_field}' is not defined over the radial ('r') axis."
+            )
 
         # Grab the density field.
         density_field_name = density_field
@@ -1911,18 +2016,22 @@ class _RadialModel(Model):
         if mass_field is None:
             # We didn't get a mass field so we need to look it up and try to grab the default units.
             try:
-                mass_field = self.config[f'fields.{density_field_name}.mass_field']
+                mass_field = self.config[f"fields.{density_field_name}.mass_field"]
                 mass_unit = self.get_default_units(mass_field)
             except KeyError:
-                raise KeyError(f"Mass field for '{density_field_name}' could not be found in configuration or was "
-                               f"missing units / reference to a mass field.\nIf it is not configured, it should be provided manually.")
+                raise KeyError(
+                    f"Mass field for '{density_field_name}' could not be found in configuration or was "
+                    f"missing units / reference to a mass field.\nIf it is not configured, it should be provided manually."
+                )
         elif mass_unit is None:
             # We still need to look up the mass unit.
             try:
                 mass_unit = self.get_default_units(mass_field)
             except KeyError:
-                raise KeyError(f"Mass field for '{density_field_name}' could not be found in configuration or was "
-                               f"missing units.\nIf it is not configured, it should be provided manually.")
+                raise KeyError(
+                    f"Mass field for '{density_field_name}' could not be found in configuration or was "
+                    f"missing units.\nIf it is not configured, it should be provided manually."
+                )
         else:
             # We have everything provided by the input arguments.
             pass
@@ -1931,7 +2040,9 @@ class _RadialModel(Model):
         # perform the shell integration routine. This should be adaptable
         # for any radial coordinate system due to the implementation of
         # integrate_in_shells.
-        radii, spline = self.get_radii(), self.construct_radial_spline(density_field_name)
+        radii, spline = self.get_radii(), self.construct_radial_spline(
+            density_field_name
+        )
 
         # noinspection PyUnresolvedReferences
         # We can skip inspection here because we know coordinate system is a subclass of CoordinateSystem.
@@ -1942,12 +2053,15 @@ class _RadialModel(Model):
         interior_density = spline(radii.d[0])
         integrand = lambda _r: interior_density * np.ones_like(_r)
         # noinspection PyUnresolvedReferences
-        enclosed_mass += self.coordinate_system.integrate_in_shells(integrand,[0,radii.d[0]])[1]
-
+        enclosed_mass += self.coordinate_system.integrate_in_shells(
+            integrand, [0, radii.d[0]]
+        )[1]
 
         # Manage the units. We compute `mass_units` which is the natural unit of the
         # computation and then covert to a target unit.
-        base_mass_unit = density_field.units * unyt.Unit(self.grid_manager.length_unit) ** 3
+        base_mass_unit = (
+            density_field.units * unyt.Unit(self.grid_manager.length_unit) ** 3
+        )
         enclosed_mass = unyt.unyt_array(enclosed_mass, base_mass_unit).to(mass_unit)
 
         # Optionally add the computed mass field to the field container
@@ -1957,17 +2071,19 @@ class _RadialModel(Model):
                 data=enclosed_mass,
                 units=str(mass_unit),
                 overwrite=overwrite,
-                axes=['r'],
+                axes=["r"],
             )
 
         return enclosed_mass
 
-    def compute_spherical_density_from_mass(self,
-                                            mass_field: str,
-                                            density_field: Optional[str] = None,
-                                            density_unit: Optional[Union[str, unyt.Unit]] = None,
-                                            create_field: bool = False,
-                                            overwrite: bool = False):
+    def compute_spherical_density_from_mass(
+        self,
+        mass_field: str,
+        density_field: Optional[str] = None,
+        density_unit: Optional[Union[str, unyt.Unit]] = None,
+        create_field: bool = False,
+        overwrite: bool = False,
+    ):
         """
         Differentiate a radial mass field to compute the density profile.
 
@@ -2005,10 +2121,14 @@ class _RadialModel(Model):
         # a mass field, we need to be given the mass field name and the units.
         if mass_field not in self.FIELDS:
             raise ValueError(f"Mass field `{mass_field}` does not exist in {self}.")
-        if set(self.FIELDS[mass_field].AXES) != {'r'}:
-            raise ValueError(f"Field '{mass_field}' is not defined over the radial ('r') axis.")
-        if self.coordinate_system.__class__.__name__ != 'SphericalCoordinateSystem':
-            raise ValueError(f"The `compute_spherical_density_from_mass` method only works for SphericalCoordinateSystems.")
+        if set(self.FIELDS[mass_field].AXES) != {"r"}:
+            raise ValueError(
+                f"Field '{mass_field}' is not defined over the radial ('r') axis."
+            )
+        if self.coordinate_system.__class__.__name__ != "SphericalCoordinateSystem":
+            raise ValueError(
+                "The `compute_spherical_density_from_mass` method only works for SphericalCoordinateSystems."
+            )
 
         # Grab the mass field.
         mass_field_name = mass_field
@@ -2018,7 +2138,11 @@ class _RadialModel(Model):
         if density_field is None:
             # We didn't get a density field so we need to look it up and try to grab the default units.
             try:
-                _valid_dfields = [field for field in self.FIELDS if self.config['fields.{field}.mass_field'] == mass_field_name]
+                _valid_dfields = [
+                    field
+                    for field in self.FIELDS
+                    if self.config["fields.{field}.mass_field"] == mass_field_name
+                ]
 
                 if len(_valid_dfields) != 1:
                     raise KeyError()
@@ -2026,15 +2150,19 @@ class _RadialModel(Model):
                 density_field = _valid_dfields[0]
                 density_unit = self.get_default_units(density_field)
             except KeyError:
-                raise KeyError(f"Mass field for '{density_field}' could not be found in configuration or was "
-                               f"missing units / reference to a density field. \nIf it is not configured, it should be provided manually.")
+                raise KeyError(
+                    f"Mass field for '{density_field}' could not be found in configuration or was "
+                    f"missing units / reference to a density field. \nIf it is not configured, it should be provided manually."
+                )
         elif density_unit is None:
             # We still need to look up the density unit.
             try:
                 density_unit = self.get_default_units(density_field)
             except KeyError:
-                raise KeyError(f"Mass field for '{density_field}' could not be found in configuration or was "
-                               f"missing units.\nIf it is not configured, it should be provided manually.")
+                raise KeyError(
+                    f"Mass field for '{density_field}' could not be found in configuration or was "
+                    f"missing units.\nIf it is not configured, it should be provided manually."
+                )
         else:
             # We have everything provided by the input arguments.
             pass
@@ -2046,12 +2174,13 @@ class _RadialModel(Model):
         radii, spline = self.get_radii(), self.construct_radial_spline(density_field)
 
         # Compute the density by taking the derivative
-        density_data = spline(radii.d,1)/(4*np.pi*radii.d**2)
-
+        density_data = spline(radii.d, 1) / (4 * np.pi * radii.d**2)
 
         # Manage the units. We compute `mass_units` which is the natural unit of the
         # computation and then covert to a target unit.
-        base_density_unit = mass_field.units / unyt.Unit(self.grid_manager.length_unit) ** 3
+        base_density_unit = (
+            mass_field.units / unyt.Unit(self.grid_manager.length_unit) ** 3
+        )
         density_data = unyt.unyt_array(density_data, base_density_unit).to(density_unit)
 
         # Optionally add the computed mass field to the field container
@@ -2061,7 +2190,7 @@ class _RadialModel(Model):
                 data=density_data,
                 units=str(density_unit),
                 overwrite=overwrite,
-                axes=['r'],
+                axes=["r"],
             )
 
         return density_data

@@ -1,12 +1,13 @@
 """
 Type structures for model grid objects.
 """
-from typing import Iterable, Union, List
+from typing import List, Union
 
 import numpy as np
 
+
 class BoundingBox(np.ndarray):
-    """
+    r"""
     A class representing a bounding box, inheriting from np.ndarray.
     Expected to be a 2xNDIM array where the first row represents
     the minimum bounds and the second row represents the maximum bounds.
@@ -41,29 +42,30 @@ class BoundingBox(np.ndarray):
 
         # Dimensionality coercion: must be 1D (create a new dim) or 2D.
         if array.ndim == 1:
-            array = array[:,np.newaxis]
+            array = array[:, np.newaxis]
         elif array.ndim > 2:
             raise ValueError(f"BoundingBox must be 2D (was {array.ndim}D).")
 
         # Enforce shape requirements
-        if array.shape == (array.size//2,2):
+        if array.shape == (array.size // 2, 2):
             array = array.T
 
-        if array.shape != (2,array.size//2):
+        if array.shape != (2, array.size // 2):
             # The shape isn't correct. We want to try to rework it.
             try:
-                array = array.reshape((2,array.size//2))
+                array = array.reshape((2, array.size // 2))
             except Exception as e:
-                raise ValueError(f"Could not reshape input array to be a valid BoundingBox: {e}.") from e
+                raise ValueError(
+                    f"Could not reshape input array to be a valid BoundingBox: {e}."
+                ) from e
 
         # Validate the values
-        if np.any(array[0,:] > array[1,:]):
-            raise ValueError(f"BoundingBox cannot have LL corner above UR corner.")
+        if np.any(array[0, :] > array[1, :]):
+            raise ValueError("BoundingBox cannot have LL corner above UR corner.")
 
         # Create the DomainDimensions instance as a view of the validated array
         obj = array.view(cls)
         return obj
-
 
     def __array_finalize__(self, obj):
         """
@@ -131,8 +133,9 @@ class DomainDimensions(np.ndarray):
             try:
                 array = array.reshape((array.size,))
             except Exception as e:
-                raise ValueError(f"Could not reshape input array to be a valid set of DomainDimensions: {e}.") from e
-
+                raise ValueError(
+                    f"Could not reshape input array to be a valid set of DomainDimensions: {e}."
+                ) from e
 
         # Create the DomainDimensions instance as a view of the validated array
         obj = array.view(cls)
@@ -169,28 +172,38 @@ class ChunkIndex(np.ndarray):
 
     """
 
-    def __new__(cls, index: Union[int, List,np.ndarray, 'ChunkIndex'], nchunks: Union[np.ndarray,List[int]]) -> np.ndarray:
-        nchunks = np.asarray(nchunks,dtype=int)
+    def __new__(
+        cls,
+        index: Union[int, List, np.ndarray, "ChunkIndex"],
+        nchunks: Union[np.ndarray, List[int]],
+    ) -> np.ndarray:
+        nchunks = np.asarray(nchunks, dtype=int)
         # Catch the special case where NDIM = 1 and we have a singleton value.
         if (len(nchunks) == 1) and (isinstance(index, int)):
             index = [index]
-        elif isinstance(index,int):
-            raise ValueError(f"Failed to coerce chunk index ({index}):\n"
-                             "The index was an integer, but NDIM > 1.")
+        elif isinstance(index, int):
+            raise ValueError(
+                f"Failed to coerce chunk index ({index}):\n"
+                "The index was an integer, but NDIM > 1."
+            )
 
         # CONVERT to np array to avoid any type issues.
-        obj = np.asarray(index,dtype=int).view(cls)
+        obj = np.asarray(index, dtype=int).view(cls)
 
         if len(obj) != len(nchunks):
-            raise ValueError(f"Failed to coerce chunk index ({index}):\n"
-                             f"The index had length {len(obj)}, but NDIM={len(nchunks)}.")
+            raise ValueError(
+                f"Failed to coerce chunk index ({index}):\n"
+                f"The index had length {len(obj)}, but NDIM={len(nchunks)}."
+            )
 
         # Validate that the chunk index is in the right range.
         _chunk_base = np.zeros_like(nchunks)
 
-        if np.any(np.greater_equal(obj,nchunks) | np.less(obj,_chunk_base)):
-            raise ValueError(f"Failed to coerce chunk index ({index}):\n"
-                             f"Index was not on chunk range {_chunk_base} to {nchunks - 1}.")
+        if np.any(np.greater_equal(obj, nchunks) | np.less(obj, _chunk_base)):
+            raise ValueError(
+                f"Failed to coerce chunk index ({index}):\n"
+                f"Index was not on chunk range {_chunk_base} to {nchunks - 1}."
+            )
 
         # Return the validated and reshaped object
         return obj

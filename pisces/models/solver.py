@@ -12,7 +12,7 @@ orchestrate the correct order of operations and ensure that preconditions are me
 For detailed documentation on how the solver infrastructure works, reference :ref:`model_solvers_overview`.
 
 """
-from typing import Callable, Dict, List, Optional, TYPE_CHECKING, Tuple, Any
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from tqdm.auto import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -61,7 +61,10 @@ class ModelSolver:
     default : str
         Default pathway to execute.
     """
-    def __init__(self, model: 'Model', is_solved: bool = False, default: Optional[str] = None):
+
+    def __init__(
+        self, model: "Model", is_solved: bool = False, default: Optional[str] = None
+    ):
         """
         Initialize the :py:class:`~pisces.models.solver.ModelSolver` class.
 
@@ -75,7 +78,7 @@ class ModelSolver:
             Default pathway to execute. By default this is ``None``, meaning that the user must
             specify the pipeline at execution.
         """
-        self.model: 'Model' = model
+        self.model: "Model" = model
         self.is_solved: bool = is_solved
         self.default: Optional[str] = default
 
@@ -102,7 +105,9 @@ class ModelSolver:
         """
         # VALIDATION: check if the solver is already solved and proceed accordingly.
         if self.is_solved and not overwrite:
-            raise RuntimeError("Solver is already marked as solved. Use `overwrite=True` to override.")
+            raise RuntimeError(
+                "Solver is already marked as solved. Use `overwrite=True` to override."
+            )
 
         # DETERMINE the relevant pathway or utilize the default.
         pathway = pathway or self.default
@@ -119,28 +124,47 @@ class ModelSolver:
         steps = self.model._PATHWAYS[pathway]["processes"]
         total_steps = len(steps)
 
-        with logging_redirect_tqdm(loggers=[self.model.logger,devlog,mylog]):
-            with tqdm(total=total_steps,
-                      desc=f"[EXEC]",
-                      leave=True,
-                      disable=pisces_params['system.preferences.disable_progress_bars']) as pbar:
+        with logging_redirect_tqdm(loggers=[self.model.logger, devlog, mylog]):
+            with tqdm(
+                total=total_steps,
+                desc="[EXEC]",
+                leave=True,
+                disable=pisces_params["system.preferences.disable_progress_bars"],
+            ) as pbar:
                 for step_number, process in sorted(steps.items()):
                     # Determine the process and run it.
-                    pname,pargs,pkwargs = process['name'],process['args'],process['kwargs']
+                    pname, pargs, pkwargs = (
+                        process["name"],
+                        process["args"],
+                        process["kwargs"],
+                    )
                     process = getattr(self.model, pname)
-                    self.model.logger.info(f"[EXEC] \t(%s/%s) START: `%s`.",step_number + 1, total_steps,pname)
+                    self.model.logger.info(
+                        "[EXEC] \t(%s/%s) START: `%s`.",
+                        step_number + 1,
+                        total_steps,
+                        pname,
+                    )
                     try:
-                        process(*pargs,**pkwargs)
+                        process(*pargs, **pkwargs)
                     except Exception as e:
-                        self.model.logger.error(f"[EXEC] \t(%s/%s) FAILED: `%s`.", step_number + 1, total_steps,
-                                               pname)
-                        pbar.set_description(f"[EXEC] STATUS: FAILED")
+                        self.model.logger.error(
+                            "[EXEC] \t(%s/%s) FAILED: `%s`.",
+                            step_number + 1,
+                            total_steps,
+                            pname,
+                        )
+                        pbar.set_description("[EXEC] STATUS: FAILED")
                         raise e
-                    self.model.logger.info(f"[EXEC] \t(%s/%s) COMPLETE: `%s`.", step_number + 1, total_steps,
-                                               pname)
+                    self.model.logger.info(
+                        "[EXEC] \t(%s/%s) COMPLETE: `%s`.",
+                        step_number + 1,
+                        total_steps,
+                        pname,
+                    )
                     pbar.set_description(f"[EXEC] STEP: {pname}")
                     pbar.update(1)
-                pbar.set_description(f"[EXEC] STATUS: DONE")
+                pbar.set_description("[EXEC] STATUS: DONE")
         self.is_solved = True
 
     def list_pathways(self) -> List[str]:
@@ -250,10 +274,14 @@ class ModelSolver:
         List[str]
             A list of valid pathway keys.
         """
-        return [pathway for pathway in self.list_pathways() if self.validate_pathway(pathway)]
+        return [
+            pathway
+            for pathway in self.list_pathways()
+            if self.validate_pathway(pathway)
+        ]
 
     @classmethod
-    def from_hdf5(cls, model: 'Model') -> 'ModelSolver':
+    def from_hdf5(cls, model: "Model") -> "ModelSolver":
         """
         Load solver state from an HDF5 file.
 
@@ -280,10 +308,10 @@ class ModelSolver:
         handle.attrs["_is_solved"] = self.is_solved
         handle.attrs["default"] = self.default
 
-def solver_process(path: str,
-                   step: int,
-                   args: Optional[List] = None,
-                   kwargs: Optional[Dict]=None) -> Callable:
+
+def solver_process(
+    path: str, step: int, args: Optional[List] = None, kwargs: Optional[Dict] = None
+) -> Callable:
     r"""
     Decorate a model method to register it as a process step within a solver pathway.
 
@@ -364,15 +392,27 @@ def solver_process(path: str,
     up these metadata records, calls ``compute_density("some_data", flag=True)``, and then
     calls ``compute_pressure()``.
     """
+
     # noinspection PyProtectedMember,PyUnresolvedReferences
     def decorator(func: Callable) -> Callable:
         func._solver_meta = getattr(func, "_solver_meta", [])
-        func._solver_meta.append({"path": path, "step": step, "type": "process","args":args, "kwargs":kwargs})
+        func._solver_meta.append(
+            {
+                "path": path,
+                "step": step,
+                "type": "process",
+                "args": args,
+                "kwargs": kwargs,
+            }
+        )
         return func
 
     return decorator
 
-def serial_solver_processes(entries: List[Tuple[str, int, List[Any], Dict[str, Any]]]) -> Callable:
+
+def serial_solver_processes(
+    entries: List[Tuple[str, int, List[Any], Dict[str, Any]]]
+) -> Callable:
     """
     Decorator that applies multiple :py:func:`solver_process` calls (one for each entry in ``entries``)
     to the same function in series.
@@ -431,6 +471,7 @@ def serial_solver_processes(entries: List[Tuple[str, int, List[Any], Dict[str, A
         return func
 
     return decorator
+
 
 def solver_checker(path: str) -> Callable:
     r"""
@@ -498,6 +539,7 @@ def solver_checker(path: str) -> Callable:
     the "cooling_flow" pathway. If it returns ``False``, the solver can raise an error
     or skip execution, thereby preventing a possibly inconsistent run.
     """
+
     # noinspection PyProtectedMember,PyUnresolvedReferences
     def decorator(func: Callable) -> Callable:
         func._solver_meta = getattr(func, "_solver_meta", [])
@@ -507,6 +549,7 @@ def solver_checker(path: str) -> Callable:
         return func
 
     return decorator
+
 
 def serial_solver_checkers(paths: List[str]) -> Callable:
     r"""
@@ -552,6 +595,7 @@ def serial_solver_checkers(paths: List[str]) -> Callable:
         # when validating the 'cooling_flow' pathway, and
         # `ensure_universal_sanity('heating_flow')` for 'heating_flow'.
     """
+
     def decorator(func: Callable) -> Callable:
         # Start with the original function object,
         # then iteratively decorate it with solver_checker for each path.

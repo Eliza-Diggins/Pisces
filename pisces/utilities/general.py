@@ -5,10 +5,11 @@ This module provides general-purpose utilities for dynamic class discovery and o
 
 
 """
-from typing import Type, TypeVar
 import sys
+from typing import Type, TypeVar
 
-_T = TypeVar('_T')
+_T = TypeVar("_T")
+
 
 def find_in_subclasses(base_class: Type[_T], class_name: str) -> Type[_T]:
     """
@@ -64,7 +65,10 @@ def find_in_subclasses(base_class: Type[_T], class_name: str) -> Type[_T]:
         if result:
             return result
 
-    raise ValueError(f"Failed to find subclass of {base_class.__name__} named {class_name}.")
+    raise ValueError(
+        f"Failed to find subclass of {base_class.__name__} named {class_name}."
+    )
+
 
 def get_deep_size(obj, seen_ids=None):
     """
@@ -93,7 +97,10 @@ def get_deep_size(obj, seen_ids=None):
     size = sys.getsizeof(obj)
 
     if isinstance(obj, dict):
-        size += sum(get_deep_size(k, seen_ids) + get_deep_size(v, seen_ids) for k, v in obj.items())
+        size += sum(
+            get_deep_size(k, seen_ids) + get_deep_size(v, seen_ids)
+            for k, v in obj.items()
+        )
     elif isinstance(obj, (list, tuple, set, frozenset)):
         size += sum(get_deep_size(i, seen_ids) for i in obj)
 

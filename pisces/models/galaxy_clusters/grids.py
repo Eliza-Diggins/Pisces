@@ -12,15 +12,16 @@ The :py:class:`ClusterGridManager` class extends :py:class:`~pisces.models.grids
 commonly used in galaxy cluster modeling. It ensures the appropriate construction of
 bounding boxes and scaling types for spherical grids.
 """
-from typing import Union, List
+from typing import List, Union
 
 import numpy as np
 from numpy.typing import NDArray
+
 from pisces.models.grids.base import ModelGridManager
 
 
 class ClusterGridManager(ModelGridManager):
-    """
+    r"""
     A specialized grid manager for spherical grids in galaxy cluster models.
 
     This class provides utility functions to ensure that the grid's bounding box
@@ -33,15 +34,18 @@ class ClusterGridManager(ModelGridManager):
     - The scaling adjustments made by `correct_scale` ensure that radial axes can
       use logarithmic scaling while angular axes remain linear.
     """
-    ALLOWED_COORDINATE_SYSTEMS = ['SphericalCoordinateSystem',
-                                  'OblateHomoeoidalCoordinateSystem',
-                                  'ProlateHomoeoidalCoordinateSystem']
-    DEFAULT_SCALE = ['log','linear','linear']
-    DEFAULT_LENGTH_UNIT = 'kpc'
+
+    ALLOWED_COORDINATE_SYSTEMS = [
+        "SphericalCoordinateSystem",
+        "OblateHomoeoidalCoordinateSystem",
+        "ProlateHomoeoidalCoordinateSystem",
+    ]
+    DEFAULT_SCALE = ["log", "linear", "linear"]
+    DEFAULT_LENGTH_UNIT = "kpc"
 
     @staticmethod
     def correct_bbox(r_min: float, r_max: float) -> NDArray[np.floating]:
-        """
+        r"""
         Construct the bounding box for the spherical coordinate system.
 
         This method creates a bounding box for spherical coordinates, where the
@@ -75,11 +79,11 @@ class ClusterGridManager(ModelGridManager):
         - `[r_max, pi/2, pi/2]` for the maximum values of [r, theta, phi].
         This restricts the grid to the first octant.
         """
-        return np.array([[r_min, 0, -np.pi], [r_max, np.pi, np.pi]], dtype='f8')
+        return np.array([[r_min, 0, -np.pi], [r_max, np.pi, np.pi]], dtype="f8")
 
     @staticmethod
     def correct_scale(scale: Union[List[str], str]) -> List[str]:
-        """
+        r"""
         Ensure the scale is appropriately formatted for spherical coordinates.
 
         This method ensures that the radial axis can use logarithmic scaling
@@ -114,8 +118,5 @@ class ClusterGridManager(ModelGridManager):
           and the angular axes default to "linear".
         """
         if isinstance(scale, str):
-            return [scale, 'linear', 'linear']
+            return [scale, "linear", "linear"]
         return scale
-
-
-

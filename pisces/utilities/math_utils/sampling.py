@@ -1,25 +1,30 @@
 """
 Sampling utilities for Pisces.
 """
-from typing import Optional, Union, Callable, Any, Literal
-from scipy.integrate import cumulative_simpson, cumulative_trapezoid
+from typing import Any, Callable, Literal, Optional, Union
+
 import numpy as np
+from scipy.integrate import cumulative_simpson, cumulative_trapezoid
 
 from pisces.utilities.config import pisces_params
-from pisces.utilities.math_utils._sampling_opt import rejection_sampling_2D, rejection_sampling_3D, \
-    rejection_sampling_2D_proposal, rejection_sampling_3D_proposal
+from pisces.utilities.math_utils._sampling_opt import (
+    rejection_sampling_2D,
+    rejection_sampling_2D_proposal,
+    rejection_sampling_3D,
+    rejection_sampling_3D_proposal,
+)
 
 
 # noinspection PyTypeChecker
 def rejection_sample(
-        x: np.ndarray,
-        y: np.ndarray,
-        n_samples: int,
-        proposal: Optional[Union[Callable, np.ndarray]] = None,
-        proposal_axis: int = 0,
-        chunk_size: int = None,
-        max_iter: int = 10_000,
-        out: Optional[Any] = None
+    x: np.ndarray,
+    y: np.ndarray,
+    n_samples: int,
+    proposal: Optional[Union[Callable, np.ndarray]] = None,
+    proposal_axis: int = 0,
+    chunk_size: int = None,
+    max_iter: int = 10_000,
+    out: Optional[Any] = None,
 ):
     r"""
     Perform rejection sampling in 2D or 3D space to generate samples from a function proportional to a
@@ -139,28 +144,38 @@ def rejection_sample(
     # Check that x and y are valid shapes.
     ndim = x.ndim - 1
     if not np.array_equal(_x_shape[:-1], _y_shape):
-        raise ValueError(f"rejection_sample got x argument with shape {_x_shape} and y argument with shape {_y_shape}.\n"
-                         f"Function expects N-1 commensurate axes, which is not the case here.")
+        raise ValueError(
+            f"rejection_sample got x argument with shape {_x_shape} and y argument with shape {_y_shape}.\n"
+            f"Function expects N-1 commensurate axes, which is not the case here."
+        )
 
     # check that the last axis has the correct dimensions and that y has the correct dimensions.
     if y.ndim != ndim:
-        raise ValueError(f"rejection_sample detected that x was {ndim} dimensional coordinate grid, but y was {y.ndim} dimensional.\n"
-                         f"Function expects ndim(x) = ndim(y).")
+        raise ValueError(
+            f"rejection_sample detected that x was {ndim} dimensional coordinate grid, but y was {y.ndim} dimensional.\n"
+            f"Function expects ndim(x) = ndim(y)."
+        )
 
     if _x_shape[-1] != ndim:
-        raise ValueError(f"Coordinate grid provide as `x` argument was {ndim} dimensional. "
-                         f"Must have {ndim} coordinate axes, not {_x_shape[-1]}.")
+        raise ValueError(
+            f"Coordinate grid provide as `x` argument was {ndim} dimensional. "
+            f"Must have {ndim} coordinate axes, not {_x_shape[-1]}."
+        )
 
     # Check that the dimension is either 2 or 3. We don't support higher and lower should be done
     # with inverse sampling.
     if ndim < 2:
-        raise ValueError(f"Determined `x` to be {ndim}, which should be performed with inverse transform sampling.")
+        raise ValueError(
+            f"Determined `x` to be {ndim}, which should be performed with inverse transform sampling."
+        )
     elif ndim > 3:
-        raise ValueError(f"Determined `x` to be {ndim}, but only 2 and 3 dimensional rejection sampling are supported.")
+        raise ValueError(
+            f"Determined `x` to be {ndim}, but only 2 and 3 dimensional rejection sampling are supported."
+        )
 
     # Manage the arguments that need to be filled if they aren't provided.
     if chunk_size is None:
-        chunk_size = np.amax([1e6, n_samples]) # Cap at 1e6 to be generally beneficial.
+        chunk_size = np.amax([1e6, n_samples])  # Cap at 1e6 to be generally beneficial.
 
     if out is None:
         # create an out array from scratch.
@@ -171,7 +186,7 @@ def rejection_sample(
     if proposal is not None:
         # Construct an axis slice so that we can extract the evaluation domain for the
         # proposal more elegantly that we were forced to do in the Cython.
-        _prop_axis_slice = list([0]*ndim + [proposal_axis])
+        _prop_axis_slice = list([0] * ndim + [proposal_axis])
         _prop_axis_slice[proposal_axis] = slice(None)
         _prop_axis_slice = tuple(_prop_axis_slice)
 
@@ -179,7 +194,7 @@ def rejection_sample(
         # portion of the abscissa.
         if callable(proposal):
             x_proposal = x[_prop_axis_slice]
-            proposal = proposal(x)
+            proposal = proposal(x_proposal)
 
         # Pass the data on to the low-level callable
         if ndim == 2:
@@ -192,7 +207,7 @@ def rejection_sample(
                 proposal_axis,
                 out,
                 max_iter,
-                int(pisces_params['system.preferences.disable_progress_bars'])
+                int(pisces_params["system.preferences.disable_progress_bars"]),
             )
         elif ndim == 3:
             rejection_sampling_3D_proposal(
@@ -204,7 +219,8 @@ def rejection_sample(
                 proposal_axis,
                 out,
                 max_iter,
-                int(pisces_params['system.preferences.disable_progress_bars']))
+                int(pisces_params["system.preferences.disable_progress_bars"]),
+            )
     else:
         if ndim == 2:
             rejection_sampling_2D(
@@ -214,7 +230,7 @@ def rejection_sample(
                 chunk_size,
                 out,
                 max_iter,
-                int(pisces_params['system.preferences.disable_progress_bars'])
+                int(pisces_params["system.preferences.disable_progress_bars"]),
             )
         elif ndim == 3:
             rejection_sampling_3D(
@@ -224,18 +240,19 @@ def rejection_sample(
                 chunk_size,
                 out,
                 max_iter,
-                int(pisces_params['system.preferences.disable_progress_bars'])
+                int(pisces_params["system.preferences.disable_progress_bars"]),
             )
 
     # Finish and return the output array
     return out
 
+
 def inverse_transform_sample(
-        x: np.ndarray,
-        y: np.ndarray,
-        n_samples: int,
-        out: Optional[np.ndarray] = None,
-        integrator: Literal["simpson","trapezoid"] = "trapezoid",
+    x: np.ndarray,
+    y: np.ndarray,
+    n_samples: int,
+    out: Optional[np.ndarray] = None,
+    integrator: Literal["simpson", "trapezoid"] = "trapezoid",
 ) -> np.ndarray:
     r"""
     Perform inverse transform sampling for a 1D probability density function (PDF).
@@ -297,7 +314,9 @@ def inverse_transform_sample(
     # Input validation. Check shapes and ensure that all of the likelihood function values are
     # larger than 0. Construct the output array if not provided.
     if x.shape != y.shape:
-        raise ValueError(f"x and y must have the same shape, but got {x.shape} and {y.shape}.")
+        raise ValueError(
+            f"x and y must have the same shape, but got {x.shape} and {y.shape}."
+        )
     if np.any(y < 0):
         raise ValueError("y must be non-negative.")
     if out is None:
@@ -312,7 +331,7 @@ def inverse_transform_sample(
 
     # Construct the cumulative distribution using either simpson quadrature or the
     # trapazoidal sum over the elements.
-    cdf = _integrator(y,x,initial=0)
+    cdf = _integrator(y, x, initial=0)
     cdf /= cdf[-1]  # Normalize the CDF to 1
 
     # Generate uniform random numbers in [0, 1]
@@ -322,8 +341,9 @@ def inverse_transform_sample(
 
     return out
 
+
 def random_sample_spherical_angles(num_points: int):
-    """
+    r"""
     Generate random samples of spherical angles (theta and phi).
 
     This function samples `num_points` random points on a sphere by generating

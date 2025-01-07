@@ -3,7 +3,9 @@ Generic container classes for use in Pisces.
 """
 from collections import OrderedDict
 from typing import Any, Optional
+
 from pisces.utilities.general import get_deep_size
+
 
 class LRUCache(dict):
     """
@@ -43,7 +45,7 @@ class LRUCache(dict):
 
     def __init__(self, max_size: Optional[float] = None):
         if max_size is None:
-            max_size = float('inf')  # Unlimited size if not specified
+            max_size = float("inf")  # Unlimited size if not specified
 
         if max_size <= 0:
             raise ValueError("max_size must be greater than 0.")
@@ -166,6 +168,7 @@ class LRUCache(dict):
         """
         return len(self._order)
 
+
 class LRUCacheDescriptor:
     """
     Descriptor for managing an LRUCache as an attribute of a class.
@@ -252,4 +255,6 @@ class LRUCacheDescriptor:
         AttributeError
             Always raised to prevent assignment to the cache.
         """
-        raise AttributeError(f"Cannot assign to '{self._name}' directly. Use the LRUCache methods.")
+        raise AttributeError(
+            f"Cannot assign to '{self._name}' directly. Use the LRUCache methods."
+        )

@@ -120,4 +120,3 @@ The following diagram gives a basic overview of this pipeline:
 .. image:: ../../diagrams/gclstr_dens_tden_general.svg
 
 A cluster may be generated in this pipeline using the :py:meth:`~pisces.models.galaxy_clusters.models.ClusterModel.from_dens_and_tden` workflow.
-

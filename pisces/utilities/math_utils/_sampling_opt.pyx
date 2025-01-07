@@ -61,7 +61,7 @@ cdef inline np.ndarray[DTYPE_t, ndim=1] interp1d_base(
     """
     Compute the interpolated value at ``x`` given the two bordering
     ``x`` and ``y`` values. This method is valid for vectorized inputs.
-    
+
     Parameters
     ----------
     x: np.ndarray[float64]
@@ -89,7 +89,7 @@ cdef inline np.ndarray[DTYPE_t, ndim=1] interp1d(
     """
     Construct and evaluate the 1-D linear interpolation over a specific abscissa and
     interpolant.
-    
+
     Parameters
     ----------
     inputs: np.ndarray[float64]
@@ -128,18 +128,18 @@ cdef np.ndarray[DTYPE_t, ndim=1] interp2d(
         np.ndarray[DTYPE_t, ndim=2] inputs):
     """
     Perform linear interpolation in 2 dimensions.
-    
+
     Parameters
     ----------
     abscissa : np.ndarray[DTYPE_t, ndim=3]
         The grid of points for interpolation.
-    
+
     interpolation_values : np.ndarray[DTYPE_t, ndim=2]
         Values defined on the grid.
-    
+
     inputs : np.ndarray[DTYPE_t, ndim=2]
         Query points for interpolation.
-    
+
     Returns
     -------
     np.ndarray[DTYPE_t, ndim=1]
@@ -186,18 +186,18 @@ cdef np.ndarray[DTYPE_t, ndim=1] interp3d(
         np.ndarray[DTYPE_t, ndim=2] inputs):
     """
     Perform linear interpolation in 3 dimensions.
-    
+
     Parameters
     ----------
     abscissa : np.ndarray[DTYPE_t, ndim=4]
         The grid of points for interpolation.
-    
+
     interpolation_values : np.ndarray[DTYPE_t, ndim=3]
         Values defined on the grid.
-    
+
     inputs : np.ndarray[DTYPE_t, ndim=2]
         Query points for interpolation.
-    
+
     Returns
     -------
     np.ndarray[DTYPE_t, ndim=1]
@@ -896,4 +896,3 @@ def rejection_sampling_3D_proposal(
         raise RuntimeError("Rejection sampling failed to generate enough samples within max_iterations.")
 
     return result_buffer
-

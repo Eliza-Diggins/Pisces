@@ -14,7 +14,7 @@ See Also
 
 """
 from abc import ABC, ABCMeta, abstractmethod
-from typing import Any, List, Dict, TYPE_CHECKING, Callable, Union, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import sympy as sp
@@ -23,8 +23,11 @@ from pisces.geometry.exceptions import ConversionError
 from pisces.geometry.utils import CoordinateConverter
 from pisces.utilities.array_utils import CoordinateArray
 from pisces.utilities.general import find_in_subclasses
-from pisces.utilities.math_utils.numeric import partial_derivative, function_partial_derivative
 from pisces.utilities.logging import mylog
+from pisces.utilities.math_utils.numeric import (
+    function_partial_derivative,
+    partial_derivative,
+)
 
 if TYPE_CHECKING:
     from pisces.geometry._typing import AxisAlias
@@ -46,7 +49,7 @@ class CoordinateSystemMeta(ABCMeta):
         abstract base classes like ``CoordinateSystem`` and ``RadialCoordinateSystem``.
 
     """
-    _IGNORED = ['CoordinateSystem','RadialCoordinateSystem']
+    _IGNORED = ["CoordinateSystem", "RadialCoordinateSystem"]
 
     def __new__(mcs, name, bases, namespace, **kwargs):
         r"""
@@ -85,11 +88,11 @@ class CoordinateSystemMeta(ABCMeta):
         ValueError
             If the ``AXES`` attribute is not defined in the class namespace.
         """
-        if 'AXES' not in namespace:
+        if "AXES" not in namespace:
             raise ValueError("AXES not in namespace")
 
-        _axes = namespace['AXES']
-        namespace['SYMBAXES'] = [sp.Symbol(ax) for ax in _axes]
+        _axes = namespace["AXES"]
+        namespace["SYMBAXES"] = [sp.Symbol(ax) for ax in _axes]
 
     @classmethod
     def _construct_parameter_symbols(mcs, namespace):
@@ -101,11 +104,11 @@ class CoordinateSystemMeta(ABCMeta):
         ValueError
             If the ``PARAMETERS`` attribute is not defined in the class namespace or is not a dictionary.
         """
-        if 'PARAMETERS' not in namespace:
+        if "PARAMETERS" not in namespace:
             raise ValueError("PARAMETERS not in namespace")
 
-        _parameters = list(namespace['PARAMETERS'].keys())
-        namespace['SYMBPARAMS'] = {param: sp.Symbol(param) for param in _parameters}
+        _parameters = list(namespace["PARAMETERS"].keys())
+        namespace["SYMBPARAMS"] = {param: sp.Symbol(param) for param in _parameters}
 
     @classmethod
     def _process_lame_coefficients(mcs, namespace):
@@ -127,27 +130,36 @@ class CoordinateSystemMeta(ABCMeta):
         #
         # Pull the number of dimensions so we know how many Lame coefficients there are.
         try:
-            cs_ndim = namespace['NDIM']
+            cs_ndim = namespace["NDIM"]
         except KeyError:
-            raise ValueError("Failed to determine `NDIM` while processing Lame coefficients. Did you"
-                             " forget to add NDIM to a subclass of CoordinateSystem?")
+            raise ValueError(
+                "Failed to determine `NDIM` while processing Lame coefficients. Did you"
+                " forget to add NDIM to a subclass of CoordinateSystem?"
+            )
 
         # Start pulling the lame coefficients from the name space and sympifying them.
         lame_coefficients = {}
 
         for dim in range(cs_ndim):
-            cf_attr = namespace.pop(f'lame_{dim}', None) # ! REMOVES lame_dim from the namespace.
+            cf_attr = namespace.pop(
+                f"lame_{dim}", None
+            )  # ! REMOVES lame_dim from the namespace.
             if cf_attr is None:
-                raise ValueError(f"Failed to locate `lame_{dim}` while processing Lame coefficients. Did you"
-                                 f" forget to implement it for a subclass of CoordinateSystem?")
+                raise ValueError(
+                    f"Failed to locate `lame_{dim}` while processing Lame coefficients. Did you"
+                    f" forget to implement it for a subclass of CoordinateSystem?"
+                )
 
             lame_coefficients[dim] = cf_attr
 
         # obtain the relevant parameters and axes, then construct the _lame_symbolic attribute.
-        PARAMS = namespace['SYMBPARAMS']
-        AXES = namespace['SYMBAXES']
-        namespace['_lame_symbolic'] = {namespace['AXES'][dim]: sp.sympify(lcoeff_func(*AXES, **PARAMS)) for
-                                       dim, lcoeff_func in lame_coefficients.items()}
+        PARAMS = namespace["SYMBPARAMS"]
+        AXES = namespace["SYMBAXES"]
+        namespace["_lame_symbolic"] = {
+            namespace["AXES"][dim]: sp.sympify(lcoeff_func(*AXES, **PARAMS))
+            for dim, lcoeff_func in lame_coefficients.items()
+        }
+
 
 # noinspection PyMethodMayBeStatic,PyMethodParameters,PyUnresolvedReferences,PyTypeChecker
 class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
@@ -176,7 +188,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # _SKIP_LAMBDIFICATION: Fill with any derived symbols that should not be lambdified automatically.
     # _handler_class_name: The name of the geometry handler subclass to handle this type of coordinate system.
     _SKIP_LAMBDIFICATION = []
-    _handler_class_name = 'GeometryHandler'
+    _handler_class_name = "GeometryHandler"
 
     # @@ CLASS ATTRIBUTES @@ #
     # DEVELOPERS: these should be set in any subclass of CoordinateSystem. The axes
@@ -185,11 +197,11 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     NDIM: int = 3
     """int: The number of dimensions in this coordinate system.
     """
-    AXES: list[str] = ['x','y','z']
+    AXES: list[str] = ["x", "y", "z"]
     """list of str: The axes (coordinate variables) in this coordinate system."""
     PARAMETERS: Dict[str, Any] = {}
     """ dict of str, Any: The parameters for this coordinate system and their default values.
-    
+
     Each of the parameters in :py:attr:`~pisces.geometry.base.CoordinateSystem.PARAMETERS` may be provided as a ``kwarg`` when creating
     a new instance of this class.
     """
@@ -257,7 +269,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         # The _derive_symbolic_attributes method now fills the symbolic
         # attributes dictionary with the relevant symbolic components.
         mylog.info(
-            f"Preparing derived attributes for {self.__class__.__name__} instance. This may take a few seconds...")
+            f"Preparing derived attributes for {self.__class__.__name__} instance. This may take a few seconds..."
+        )
         self._derive_symbolic_attributes()
 
         # Lambdifying symbolic attributes
@@ -280,17 +293,26 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         self._lame_functions = []
         self._lame_inst_symbols = {}
 
-        mylog.info(f"Preparing Lame Coefficients for {self.__class__.__name__} instance. This may take a few seconds...")
+        mylog.info(
+            f"Preparing Lame Coefficients for {self.__class__.__name__} instance. This may take a few seconds..."
+        )
         for ax in self.AXES:
             mylog.debug(f"\t [COMPLETE] Axis {ax} finished.")
             symbolic_lame_function = self.__class__._lame_symbolic[ax]
-            self._lame_inst_symbols[ax] = sp.simplify(symbolic_lame_function.subs(self.parameters))
-            self._lame_functions.append(self.lambdify_expression(symbolic_lame_function))
+            self._lame_inst_symbols[ax] = sp.simplify(
+                symbolic_lame_function.subs(self.parameters)
+            )
+            self._lame_functions.append(
+                self.lambdify_expression(symbolic_lame_function)
+            )
 
     def _derive_symbolic_attributes(self):
-        self._symbolic_attributes['jacobian'] = sp.simplify(sp.prod([self.get_lame_symbolic(ax) for ax in self.AXES]).subs(
-            self.parameters))
-        mylog.debug(f"\t [COMPLETE] Derived the jacobian...")
+        self._symbolic_attributes["jacobian"] = sp.simplify(
+            sp.prod([self.get_lame_symbolic(ax) for ax in self.AXES]).subs(
+                self.parameters
+            )
+        )
+        mylog.debug("\t [COMPLETE] Derived the jacobian...")
 
     def _lambdify_derived_attributes(self):
         mylog.info("Lambdifying attributes...")
@@ -299,7 +321,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                 mylog.debug(f"\t [SKIP] Skipping {sym_attr_name}")
                 continue
 
-            self._lambdified_attributes[sym_attr_name] = self.lambdify_expression(symb_attr_value)
+            self._lambdified_attributes[sym_attr_name] = self.lambdify_expression(
+                symb_attr_value
+            )
             mylog.debug(f"\t [COMPLETE] Lambdifyed attribute {sym_attr_name}...")
 
     def lambdify_expression(self, expression: Union[str, sp.Basic]) -> Callable:
@@ -334,7 +358,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             # Create a lambda function returning an array of the same shape as the first argument
             return lambda *args, cv=constant_value: np.full_like(args[0], cv)
         else:
-            return sp.lambdify(self.SYMBAXES, bound_expression, 'numpy')
+            return sp.lambdify(self.SYMBAXES, bound_expression, "numpy")
 
     # @@ DERIVED ATTRIBUTE METHODS @@ #
     # For each of the attributes in _derive_symbolic_attributes, the symbolic calculation
@@ -378,10 +402,12 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             return self._symbolic_attributes[attribute_name]
         except KeyError:
             raise ValueError(
-                f'Attribute `{attribute_name}` is not defined symbolically for class `{self.__class__.__name__}`.'
+                f"Attribute `{attribute_name}` is not defined symbolically for class `{self.__class__.__name__}`."
             )
 
-    def set_derived_attribute_symbolic(self, attribute_name: str, symbolic_attribute: sp.Basic, overwrite: bool = False):
+    def set_derived_attribute_symbolic(
+        self, attribute_name: str, symbolic_attribute: sp.Basic, overwrite: bool = False
+    ):
         r"""
         Define or overwrite a symbolic representation of a derived attribute.
 
@@ -412,12 +438,14 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         if (attribute_name in self._symbolic_attributes) and not overwrite:
             raise ValueError(
-                f'Attribute `{attribute_name}` is already defined for class `{self.__class__.__name__}`.'
+                f"Attribute `{attribute_name}` is already defined for class `{self.__class__.__name__}`."
             )
 
         self._symbolic_attributes[attribute_name] = symbolic_attribute
 
-    def get_derived_attribute_function(self, attribute_name: str, convert_symbolic: bool = False) -> Callable:
+    def get_derived_attribute_function(
+        self, attribute_name: str, convert_symbolic: bool = False
+    ) -> Callable:
         r"""
         Retrieve a numerical function representation of a derived attribute.
 
@@ -467,7 +495,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                     self.set_derived_attribute_function(
                         attribute_name,
                         self.lambdify_expression(_symbolic),
-                        overwrite=True
+                        overwrite=True,
                     )
                 except Exception as ex:
                     raise ValueError(
@@ -475,13 +503,17 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
                     ) from e
 
                 # Return the newly created numerical function
-                return self.get_derived_attribute_function(attribute_name, convert_symbolic=False)
+                return self.get_derived_attribute_function(
+                    attribute_name, convert_symbolic=False
+                )
 
             raise ValueError(
-                f'Attribute `{attribute_name}` is not defined numerically for class `{self.__class__.__name__}`.'
+                f"Attribute `{attribute_name}` is not defined numerically for class `{self.__class__.__name__}`."
             )
 
-    def set_derived_attribute_function(self, attribute_name: str, function: Callable, overwrite: bool = False):
+    def set_derived_attribute_function(
+        self, attribute_name: str, function: Callable, overwrite: bool = False
+    ):
         r"""
         Define or overwrite a numerical function representation of a derived attribute.
 
@@ -512,12 +544,14 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         if (attribute_name in self._lambdified_attributes) and not overwrite:
             raise ValueError(
-                f'Attribute `{attribute_name}` is already defined for class `{self.__class__.__name__}`.'
+                f"Attribute `{attribute_name}` is already defined for class `{self.__class__.__name__}`."
             )
 
         self._lambdified_attributes[attribute_name] = function
 
-    def _eval_der_attr_func(self, attribute_name: str, coordinates: np.ndarray) -> np.ndarray:
+    def _eval_der_attr_func(
+        self, attribute_name: str, coordinates: np.ndarray
+    ) -> np.ndarray:
         coordinates = CoordinateArray(coordinates, self.NDIM)
         coordinates = np.moveaxis(coordinates, -1, 0)
 
@@ -551,9 +585,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         for the ``i``-th axis. The Jacobian determinant is critical in volume integrations and changes
         of variables in non-Cartesian coordinates.
         """
-        return self._eval_der_attr_func('jacobian', coordinates)
+        return self._eval_der_attr_func("jacobian", coordinates)
 
-    def get_symbolic_D_term(self, axis: 'AxisAlias', basis: str) -> sp.Basic:
+    def get_symbolic_D_term(self, axis: "AxisAlias", basis: str) -> sp.Basic:
         r"""
         Retrieve the symbolic representation of the :math:`D`-term for a specified axis and basis.
 
@@ -601,18 +635,24 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         # CONSTRUCT the symbol first.
         if D_name not in self._symbolic_attributes:
-            if basis not in ['unit', 'covariant', 'contravariant']:
-                raise ValueError(f"Invalid basis `{basis}`. Expected one of 'unit', 'covariant', or 'contravariant'.")
+            if basis not in ["unit", "covariant", "contravariant"]:
+                raise ValueError(
+                    f"Invalid basis `{basis}`. Expected one of 'unit', 'covariant', or 'contravariant'."
+                )
 
             _scale = dict(unit=-1, contravariant=-2, covariant=0)[basis]
             _lame = self.get_lame_symbolic(axis)
-            J = self.get_derived_attribute_symbolic('jacobian')
-            D = sp.simplify((1 / J) * sp.diff((J / _lame ** _scale), self.SYMBAXES[axis_index]))
+            J = self.get_derived_attribute_symbolic("jacobian")
+            D = sp.simplify(
+                (1 / J) * sp.diff((J / _lame**_scale), self.SYMBAXES[axis_index])
+            )
             self._symbolic_attributes[D_name] = D
 
         return self._symbolic_attributes[D_name]
 
-    def D_term(self, coordinates: np.ndarray, axis: 'AxisAlias', basis: str) -> np.ndarray:
+    def D_term(
+        self, coordinates: np.ndarray, axis: "AxisAlias", basis: str
+    ) -> np.ndarray:
         r"""
         Computes the :math:`D`-term for the divergence along a given axis in a particular basis.
 
@@ -658,10 +698,12 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         D_name = f"D_{axis_index}_{basis}"
         # CONSTRUCT the lambda function
         if D_name not in self._lambdified_attributes:
-            self._lambdified_attributes[D_name] = self.lambdify_expression(self.get_symbolic_D_term(axis, basis))
+            self._lambdified_attributes[D_name] = self.lambdify_expression(
+                self.get_symbolic_D_term(axis, basis)
+            )
         return self._eval_der_attr_func(D_name, coordinates)
 
-    def get_symbolic_L_term(self, axis: 'AxisAlias'):
+    def get_symbolic_L_term(self, axis: "AxisAlias"):
         r"""
         Retrieve the symbolic representation of the :math:`L`-term for the Laplacian along a given axis.
 
@@ -690,9 +732,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         The :math:`L`-term accounts for the geometric contributions to the Laplacian operator.
         """
-        return self.get_symbolic_D_term( axis, basis='contravariant')
+        return self.get_symbolic_D_term(axis, basis="contravariant")
 
-    def L_term(self, coordinates: np.ndarray, axis: 'AxisAlias') -> np.ndarray:
+    def L_term(self, coordinates: np.ndarray, axis: "AxisAlias") -> np.ndarray:
         r"""
         Computes the :math:`L`-term for the Laplacian along a given axis.
 
@@ -734,16 +776,18 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         The :math:`L`-term is specific to the contravariant basis.
         """
-        return self.D_term(coordinates, axis, 'contravariant')
+        return self.D_term(coordinates, axis, "contravariant")
 
     # @@ DIFFERENTIAL OPERATORS @@ #
     # These are the core methods for evaluating differential operations. They generally
     # do not need to be altered.
-    def compute_derivative(self,
-                           field: Union[np.ndarray, Callable],
-                           coordinates: np.ndarray,
-                           axes: Union['AxisAlias',List['AxisAlias']],
-                           **kwargs) -> np.ndarray:
+    def compute_derivative(
+        self,
+        field: Union[np.ndarray, Callable],
+        coordinates: np.ndarray,
+        axes: Union["AxisAlias", List["AxisAlias"]],
+        **kwargs,
+    ) -> np.ndarray:
         r"""
         Compute the derivative of a scalar field along a specific axis.
 
@@ -784,16 +828,17 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         This function ensures compatibility with both array-like and callable field representations.
         """
         # Validate and reshape coordinates for numerical differentiation
-        coordinates = CoordinateArray(coordinates, self.NDIM) # (...,NDIM)
+        coordinates = CoordinateArray(coordinates, self.NDIM)  # (...,NDIM)
 
         # Determine the type of the field and validate inputs
         if isinstance(field, np.ndarray):
-            field_type = 'array'
+            field_type = "array"
         elif callable(field):
-            field_type = 'function'
+            field_type = "function"
         else:
             raise ValueError(
-                f"Unsupported field type: {type(field)}. Expected np.ndarray, or Callable.")
+                f"Unsupported field type: {type(field)}. Expected np.ndarray, or Callable."
+            )
 
         # Convert axis to numeric if provided as a string
         if not issubclass(axes, (tuple, list)):
@@ -801,24 +846,28 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         axes_indices = [self.ensure_axis_numeric(axis) for axis in axes]
 
         # Compute derivative for numerical fields (array or function)
-        if field_type == 'array':
+        if field_type == "array":
             return partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
-        elif field_type == 'function':
-            return function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+        elif field_type == "function":
+            return function_partial_derivative(
+                field, coordinates, axes=axes_indices, **kwargs
+            )
 
         # This return is redundant due to error checks, but added for clarity
         raise RuntimeError("Unexpected execution path in `compute_derivative`.")
 
     # @ GRADIENT @ #
-    def compute_gradient(self,
-                         field: Union[np.ndarray, Callable],
-                         coordinates: np.ndarray,
-                         /,
-                         axes: Union['AxisAlias', List['AxisAlias']] = None,
-                         *,
-                         derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                         basis: str = 'unit',
-                         **kwargs) -> np.ndarray:
+    def compute_gradient(
+        self,
+        field: Union[np.ndarray, Callable],
+        coordinates: np.ndarray,
+        /,
+        axes: Union["AxisAlias", List["AxisAlias"]] = None,
+        *,
+        derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        basis: str = "unit",
+        **kwargs,
+    ) -> np.ndarray:
         r"""
         Compute the gradient of a scalar field.
 
@@ -892,77 +941,96 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         # The field type is determined based on type and then (if numpy array), we coerce the field further to
         # match the shape of the coordinates.
         if isinstance(field, np.ndarray):
-            field_type = 'array'
+            field_type = "array"
 
             # checking that the field has the correct shape. This will ensure that
             # (..., NDIM) matches the shape of the coordinates.
             try:
                 field = field.reshape(coordinates.shape[:-1])
             except Exception as e:
-                raise ValueError(f"Field (shape={field.shape}) does not match the shape of coordinates (shape={coordinates.shape}).\n"
-                                 f"The field should have had shape {coordinates.shape[:-1]}.\n"
-                                 f"ERROR={e}")
+                raise ValueError(
+                    f"Field (shape={field.shape}) does not match the shape of coordinates (shape={coordinates.shape}).\n"
+                    f"The field should have had shape {coordinates.shape[:-1]}.\n"
+                    f"ERROR={e}"
+                )
 
         elif callable(field):
-            field_type = 'function'
+            field_type = "function"
         else:
             raise ValueError(
-                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable.")
+                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable."
+            )
 
         # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
         # need to be computed and we need to enforce further restrictions on the grid shape.
         if derivatives is not None:
-            if field_type == 'function':
+            if field_type == "function":
                 # validate that the derivatives are provided correctly and that we have as many as
                 # necessary.
                 if not isinstance(derivatives, (list, tuple)):
-                    raise ValueError(f"Field was specified as a function, but derivatives were provided with type {type(derivatives)}.\n"
-                                     "We always expect a list of derivative functions when `field` is a function.")
+                    raise ValueError(
+                        f"Field was specified as a function, but derivatives were provided with type {type(derivatives)}.\n"
+                        "We always expect a list of derivative functions when `field` is a function."
+                    )
 
                 if len(derivatives) != len(axes):
-                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(derivatives)} derivatives, which doesn't match.")
+                    raise ValueError(
+                        f"Computing the gradient over {len(axes)} axes, but the user provided {len(derivatives)} derivatives, which doesn't match."
+                    )
 
                 # Coerce the coordinates and then evaluate them.
                 # The derivatives should now have shape (...,len(axes))
-                d_coords = np.moveaxis(coordinates,-1,0)
+                d_coords = np.moveaxis(coordinates, -1, 0)
                 derivatives = np.stack([d(*d_coords) for d in derivatives], axis=-1)
 
             # validate
             if derivatives.shape != (*coordinates.shape[:-1], len(axes)):
-                raise ValueError(f"Derivatives were found to have shape {derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
-                                 f" Please ensure that you have provided the `derivatives` argument correctly. Consult the documentation for detailed information.")
+                raise ValueError(
+                    f"Derivatives were found to have shape {derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                    f" Please ensure that you have provided the `derivatives` argument correctly. Consult the documentation for detailed information."
+                )
 
         else:
             # The derivatives are not provided to us; they need to be computed which will require additional enforced
             # structure on the grid.
-            if field_type == 'function':
-                derivatives = function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+            if field_type == "function":
+                derivatives = function_partial_derivative(
+                    field, coordinates, axes=axes_indices, **kwargs
+                )
             else:
                 # validate the grid shape.
                 if coordinates.ndim != self.NDIM + 1:
-                    raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
-                derivatives = partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
+                    raise ValueError(
+                        f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM + 1} dimensional coordinate array."
+                    )
+                derivatives = partial_derivative(
+                    coordinates, field, axes=axes_indices, **kwargs
+                )
 
         # FINISH the computation in the correct basis.
-        if basis == 'contravariant':
+        if basis == "contravariant":
             return derivatives
-        elif basis == 'unit':
+        elif basis == "unit":
             return self.scale_by_lame(coordinates, derivatives, axes=axes, order=-1)
-        elif basis == 'covariant':
+        elif basis == "covariant":
             return self.scale_by_lame(coordinates, derivatives, axes=axes, order=-2)
         else:
-            raise ValueError(f"Invalid basis '{basis}'. Expected 'unit', 'covariant', or 'contravariant'.")
+            raise ValueError(
+                f"Invalid basis '{basis}'. Expected 'unit', 'covariant', or 'contravariant'."
+            )
 
     # @ DIVERGENCE @ #
-    def compute_divergence(self,
-                           field: Union[np.ndarray, Callable],
-                           coordinates: Optional[np.ndarray],
-                           /,
-                           axes: Union['AxisAlias', List['AxisAlias']] = None,
-                           *,
-                           derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                           basis: str = 'unit',
-                           **kwargs) -> np.ndarray:
+    def compute_divergence(
+        self,
+        field: Union[np.ndarray, Callable],
+        coordinates: Optional[np.ndarray],
+        /,
+        axes: Union["AxisAlias", List["AxisAlias"]] = None,
+        *,
+        derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        basis: str = "unit",
+        **kwargs,
+    ) -> np.ndarray:
         r"""
         Compute the divergence of a vector field in the coordinate system.
 
@@ -1021,57 +1089,71 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         # The field type is determined based on type and then (if numpy array), we coerce the field further to
         # match the shape of the coordinates.
         if isinstance(field, np.ndarray):
-            field_type = 'array'
+            field_type = "array"
 
             # checking that the field has the correct shape. This will ensure that
             # (..., NDIM) matches the shape of the coordinates.
             try:
-                field = field.reshape((*coordinates.shape[:-1],len(axes)))
+                field = field.reshape((*coordinates.shape[:-1], len(axes)))
             except Exception as e:
                 raise ValueError(
                     f"Field (shape={field.shape}) does not match the shape of coordinates (shape={coordinates.shape}).\n"
                     f"The field should have had shape ({coordinates.shape[:-1]},{len(axes)}).\n"
-                    f"ERROR={e}")
+                    f"ERROR={e}"
+                )
 
         elif callable(field):
-            field_type = 'function'
+            field_type = "function"
         else:
             raise ValueError(
-                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable.")
+                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable."
+            )
 
         # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
         # need to be computed and we need to enforce further restrictions on the grid shape.
         if derivatives is not None:
-            if field_type == 'function':
+            if field_type == "function":
                 # validate that the derivatives are provided correctly and that we have as many as
                 # necessary.
                 if not isinstance(derivatives, (list, tuple)):
-                    raise ValueError(f"Field was specified as a function, but derivatives were provided with type {type(derivatives)}.\n"
-                                     "We always expect a list of derivative functions when `field` is a function.")
+                    raise ValueError(
+                        f"Field was specified as a function, but derivatives were provided with type {type(derivatives)}.\n"
+                        "We always expect a list of derivative functions when `field` is a function."
+                    )
 
                 if len(derivatives) != len(axes):
-                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(derivatives)} derivatives, which doesn't match.")
+                    raise ValueError(
+                        f"Computing the gradient over {len(axes)} axes, but the user provided {len(derivatives)} derivatives, which doesn't match."
+                    )
 
                 # Coerce the coordinates and then evaluate them.
                 # The derivatives should now have shape (...,len(axes))
-                d_coords = np.moveaxis(coordinates,-1,0)
+                d_coords = np.moveaxis(coordinates, -1, 0)
                 derivatives = np.stack([d(*d_coords) for d in derivatives], axis=-1)
 
             # validate
             if derivatives.shape != (*coordinates.shape[:-1], len(axes)):
-                raise ValueError(f"Derivatives were found to have shape {derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
-                                 f" Please ensure that you have provided the `derivatives` argument correctly. Consult the documentation for detailed information.")
+                raise ValueError(
+                    f"Derivatives were found to have shape {derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                    f" Please ensure that you have provided the `derivatives` argument correctly. Consult the documentation for detailed information."
+                )
 
         else:
             # The derivatives are not provided to us; they need to be computed which will require additional enforced
             # structure on the grid.
-            if field_type == 'function':
-                derivatives = function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+            if field_type == "function":
+                derivatives = function_partial_derivative(
+                    field, coordinates, axes=axes_indices, **kwargs
+                )
             else:
                 # validate the grid shape.
                 if coordinates.ndim != self.NDIM + 1:
-                    raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
-                derivatives = partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
+                    raise ValueError(
+                        f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM + 1} dimensional coordinate array."
+                    )
+                derivatives = partial_derivative(
+                    coordinates, field, axes=axes_indices, **kwargs
+                )
 
         # Compute divergence using the product rule and _get_D_term
         divergence_terms = []
@@ -1081,24 +1163,28 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             # Retrieve or compute the D_term
             D_values = self.D_term(coordinates, axis, basis=basis)
             # Compute the divergence term for this axis
-            divergence_term = (D_values * field[..., i]) + (lame[...,i]**_scale)*derivatives[...,i]
+            divergence_term = (D_values * field[..., i]) + (
+                lame[..., i] ** _scale
+            ) * derivatives[..., i]
             divergence_terms.append(divergence_term)
 
         # Sum the divergence terms to get the total divergence
-        divergence = np.sum(divergence_terms,axis=0)
+        divergence = np.sum(divergence_terms, axis=0)
 
         return divergence
 
-    def compute_laplacian(self,
-                          field: Union[np.ndarray, Callable],
-                          coordinates: np.ndarray,
-                          /,
-                          axes: Union['AxisAlias', List['AxisAlias']] = None,
-                          *,
-                          basis: str = 'unit',
-                          first_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                          second_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
-                          **kwargs) -> np.ndarray:
+    def compute_laplacian(
+        self,
+        field: Union[np.ndarray, Callable],
+        coordinates: np.ndarray,
+        /,
+        axes: Union["AxisAlias", List["AxisAlias"]] = None,
+        *,
+        basis: str = "unit",
+        first_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        second_derivatives: List[Optional[Union[np.ndarray, Callable]]] = None,
+        **kwargs,
+    ) -> np.ndarray:
         r"""
         Compute the Laplacian of a scalar field.
 
@@ -1126,7 +1212,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
                 The free dimensions are those which are free **after** the operation, not before it. Thus,
                 if a gradient computation breaks symmetry, the coordinates must include the now-free coordinates.
-                
+
         axes : AxisAlias or List or AxisAlias
             The axes along which the Laplacian is computed.
         basis : {'unit', 'covariant', 'contravariant'}, optional
@@ -1175,89 +1261,122 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         # The field type is determined based on type and then (if numpy array), we coerce the field further to
         # match the shape of the coordinates.
         if isinstance(field, np.ndarray):
-            field_type = 'array'
+            field_type = "array"
 
             # checking that the field has the correct shape. This will ensure that
             # (..., NDIM) matches the shape of the coordinates.
             try:
-                field = field.reshape((*coordinates.shape[:-1],len(axes)))
+                field = field.reshape((*coordinates.shape[:-1], len(axes)))
             except Exception as e:
                 raise ValueError(
                     f"Field (shape={field.shape}) does not match the shape of coordinates (shape={coordinates.shape}).\n"
                     f"The field should have had shape ({coordinates.shape[:-1]},{len(axes)}).\n"
-                    f"ERROR={e}")
+                    f"ERROR={e}"
+                )
 
         elif callable(field):
-            field_type = 'function'
+            field_type = "function"
         else:
             raise ValueError(
-                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable.")
+                f"Unsupported field type: {type(field)}. Expected str, sympy.Basic, np.ndarray, or Callable."
+            )
 
         # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
         # need to be computed and we need to enforce further restrictions on the grid shape.
         if first_derivatives is not None:
-            if field_type == 'function':
+            if field_type == "function":
                 # validate that the first_derivatives are provided correctly and that we have as many as
                 # necessary.
                 if not isinstance(first_derivatives, (list, tuple)):
-                    raise ValueError(f"Field was specified as a function, but first_derivatives were provided with type {type(first_derivatives)}.\n"
-                                     "We always expect a list of derivative functions when `field` is a function.")
+                    raise ValueError(
+                        f"Field was specified as a function, but first_derivatives were provided with type {type(first_derivatives)}.\n"
+                        "We always expect a list of derivative functions when `field` is a function."
+                    )
 
                 if len(first_derivatives) != len(axes):
-                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(first_derivatives)} first_derivatives, which doesn't match.")
+                    raise ValueError(
+                        f"Computing the gradient over {len(axes)} axes, but the user provided {len(first_derivatives)} first_derivatives, which doesn't match."
+                    )
 
                 # Coerce the coordinates and then evaluate them.
                 # The first_derivatives should now have shape (...,len(axes))
-                d_coords = np.moveaxis(coordinates,-1,0)
-                first_derivatives = np.stack([d(*d_coords) for d in first_derivatives], axis=-1)
+                d_coords = np.moveaxis(coordinates, -1, 0)
+                first_derivatives = np.stack(
+                    [d(*d_coords) for d in first_derivatives], axis=-1
+                )
 
             # validate
             if first_derivatives.shape != (*coordinates.shape[:-1], len(axes)):
-                raise ValueError(f"Derivatives were found to have shape {first_derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
-                                 f" Please ensure that you have provided the `first_derivatives` argument correctly. Consult the documentation for detailed information.")
+                raise ValueError(
+                    f"Derivatives were found to have shape {first_derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                    f" Please ensure that you have provided the `first_derivatives` argument correctly. Consult the documentation for detailed information."
+                )
 
         else:
             # The first_derivatives are not provided to us; they need to be computed which will require additional enforced
             # structure on the grid.
-            if field_type == 'function':
-                first_derivatives = function_partial_derivative(field, coordinates, axes=axes_indices, **kwargs)
+            if field_type == "function":
+                first_derivatives = function_partial_derivative(
+                    field, coordinates, axes=axes_indices, **kwargs
+                )
             else:
                 # validate the grid shape.
                 if coordinates.ndim != self.NDIM + 1:
-                    raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
-                first_derivatives = partial_derivative(coordinates, field, axes=axes_indices, **kwargs)
+                    raise ValueError(
+                        f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM + 1} dimensional coordinate array."
+                    )
+                first_derivatives = partial_derivative(
+                    coordinates, field, axes=axes_indices, **kwargs
+                )
 
         # MANAGE the derivatives. If the user provided them, we just need to ensure that they are valid. If not, they
         # need to be computed and we need to enforce further restrictions on the grid shape.
         if second_derivatives is not None:
-            if field_type == 'function':
+            if field_type == "function":
                 # validate that the second_derivatives are provided correctly and that we have as many as
                 # necessary.
                 if not isinstance(second_derivatives, (list, tuple)):
-                    raise ValueError(f"Field was specified as a function, but second_derivatives were provided with type {type(second_derivatives)}.\n"
-                                     "We always expect a list of derivative functions when `field` is a function.")
+                    raise ValueError(
+                        f"Field was specified as a function, but second_derivatives were provided with type {type(second_derivatives)}.\n"
+                        "We always expect a list of derivative functions when `field` is a function."
+                    )
 
                 if len(second_derivatives) != len(axes):
-                    raise ValueError(f"Computing the gradient over {len(axes)} axes, but the user provided {len(second_derivatives)} second_derivatives, which doesn't match.")
+                    raise ValueError(
+                        f"Computing the gradient over {len(axes)} axes, but the user provided {len(second_derivatives)} second_derivatives, which doesn't match."
+                    )
 
                 # Coerce the coordinates and then evaluate them.
                 # The second_derivatives should now have shape (...,len(axes))
-                d_coords = np.moveaxis(coordinates,-1,0)
-                second_derivatives = np.stack([d(*d_coords) for d in second_derivatives], axis=-1)
+                d_coords = np.moveaxis(coordinates, -1, 0)
+                second_derivatives = np.stack(
+                    [d(*d_coords) for d in second_derivatives], axis=-1
+                )
 
             # validate
             if second_derivatives.shape != (*coordinates.shape[:-1], len(axes)):
-                raise ValueError(f"Derivatives were found to have shape {second_derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
-                                 f" Please ensure that you have provided the `second_derivatives` argument correctly. Consult the documentation for detailed information.")
+                raise ValueError(
+                    f"Derivatives were found to have shape {second_derivatives.shape} but shape should have been {(*coordinates.shape[:-1], len(axes))}... "
+                    f" Please ensure that you have provided the `second_derivatives` argument correctly. Consult the documentation for detailed information."
+                )
 
         else:
             # The second_derivatives are not provided to us; they need to be computed which will require additional enforced
             # structure on the grid.
             # validate the grid shape.
             if coordinates.ndim != self.NDIM + 1:
-                raise ValueError(f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM +1} dimensional coordinate array.")
-            second_derivatives = np.stack([
-                partial_derivative(coordinates, first_derivatives[...,axi], axes=[axi], **kwargs) for axi in range(len(axes_indices))],axis=-1)
+                raise ValueError(
+                    f"Coordinates must be a grid for numerical derivative computations. Expected {self.NDIM + 1} dimensional coordinate array."
+                )
+            second_derivatives = np.stack(
+                [
+                    partial_derivative(
+                        coordinates, first_derivatives[..., axi], axes=[axi], **kwargs
+                    )
+                    for axi in range(len(axes_indices))
+                ],
+                axis=-1,
+            )
 
         # Compute Laplacian terms
         laplacian_terms = []
@@ -1267,7 +1386,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             L_term = self.L_term(coordinates, axis)
 
             # Combine second derivative and first derivative contributions
-            laplacian_term = (1 / lame[...,i] ** 2) * second_derivatives[...,i] + (L_term * first_derivatives[...,i])
+            laplacian_term = (1 / lame[..., i] ** 2) * second_derivatives[..., i] + (
+                L_term * first_derivatives[..., i]
+            )
             laplacian_terms.append(laplacian_term)
 
         # Sum the Laplacian terms to get the total Laplacian
@@ -1292,7 +1413,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         gradient = {}
         for axis in self.AXES:
             lame_coeff = self.get_lame_symbolic(axis)
-            gradient[axis] = sp.simplify(sp.diff(expression, self.SYMBAXES[self.AXES.index(axis)]) / lame_coeff)
+            gradient[axis] = sp.simplify(
+                sp.diff(expression, self.SYMBAXES[self.AXES.index(axis)]) / lame_coeff
+            )
         return gradient
 
     def analytical_divergence(self, vector_field: Dict[str, sp.Basic]) -> sp.Basic:
@@ -1310,10 +1433,13 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             A symbolic expression for the divergence of the vector field.
         """
         divergence = 0
-        jacobian = self.get_derived_attribute_symbolic('jacobian')
+        jacobian = self.get_derived_attribute_symbolic("jacobian")
         for axis in self.AXES:
             lame_coeff = self.get_lame_symbolic(axis)
-            term = sp.diff(jacobian * vector_field[axis] / lame_coeff, self.SYMBAXES[self.AXES.index(axis)])
+            term = sp.diff(
+                jacobian * vector_field[axis] / lame_coeff,
+                self.SYMBAXES[self.AXES.index(axis)],
+            )
             divergence += term / jacobian
         return sp.simplify(divergence)
 
@@ -1332,23 +1458,23 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             A symbolic expression for the Laplacian of the scalar field.
         """
         laplacian = 0
-        jacobian = self.get_derived_attribute_symbolic('jacobian')
+        jacobian = self.get_derived_attribute_symbolic("jacobian")
         for axis in self.AXES:
             # Compute first set of values
             lame_coeff = self.get_lame_symbolic(axis)
             first_deriv = sp.diff(expression, self.SYMBAXES[self.AXES.index(axis)])
             # Compute the second set of values
-            _exp = (jacobian/lame_coeff**2)*first_deriv
+            _exp = (jacobian / lame_coeff**2) * first_deriv
             second_deriv = sp.diff(_exp, self.SYMBAXES[self.AXES.index(axis)])
 
-            laplacian += (1/jacobian)*second_deriv
+            laplacian += (1 / jacobian) * second_deriv
 
         return sp.simplify(laplacian)
 
     # @@ LAME FUNCTION MANAGEMENT @@ #
     # This is where the developer should implement the relevant Lame coefficient functions and
     # the various utilities for fetching those functions are placed.
-    def get_lame_symbolic(self, axis: 'AxisAlias') -> sp.Basic:
+    def get_lame_symbolic(self, axis: "AxisAlias") -> sp.Basic:
         r"""
         Retrieve the symbolic Lame coefficient for a specified axis.
 
@@ -1373,7 +1499,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         return self._lame_inst_symbols[self.ensure_axis_string(axis)]
 
-    def get_lame_function(self, axis: 'AxisAlias') -> Callable:
+    def get_lame_function(self, axis: "AxisAlias") -> Callable:
         r"""
         Retrieve the numerical function representing the Lame coefficient for a specified axis.
 
@@ -1398,7 +1524,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         """
         return self._lame_functions[self.ensure_axis_numeric(axis)]
 
-    def eval_lame(self, coordinates, axes: Optional[List['AxisAlias'] | 'AxisAlias'] = None) -> np.ndarray:
+    def eval_lame(
+        self, coordinates, axes: Optional[List["AxisAlias"] | "AxisAlias"] = None
+    ) -> np.ndarray:
         r"""
         Evaluate the Lame coefficients at specified coordinates for given axes.
 
@@ -1490,22 +1618,25 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
         # Validate axes and match with field components
         if axes is None:
-            axes = self.AXES[:field.shape[-1]]  # Deduce axes from the field's last dimension
+            axes = self.AXES[
+                : field.shape[-1]
+            ]  # Deduce axes from the field's last dimension
         if len(axes) != field.shape[-1]:
-            raise ValueError("`axes` must have the same length as the field's last dimension.")
+            raise ValueError(
+                "`axes` must have the same length as the field's last dimension."
+            )
 
         # Evaluate Lame coefficients for the specified axes
         lame_coefficients = self.eval_lame(coordinates, axes=axes)
 
         # Scale the field by the Lame coefficients raised to the specified order
-        scaled_field = field * (lame_coefficients ** order)
+        scaled_field = field * (lame_coefficients**order)
 
         # If the input field was scalar, return a scalar result
         if _is_scalar:
             return scaled_field.squeeze(axis=-1)
 
         return scaled_field
-
 
     # @@ COORDINATE CONVERSION @@ #
     # These are handlers for converting between coordinate systems.
@@ -1552,7 +1683,9 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         try:
             return self._convert_native_to_cartesian(coordinates)
         except Exception as e:
-            raise ConversionError(f"Failed to convert from {self.__class__.__name__} to cartesian: {e}")
+            raise ConversionError(
+                f"Failed to convert from {self.__class__.__name__} to cartesian: {e}"
+            )
 
     def from_cartesian(self, coordinates) -> np.ndarray:
         r"""
@@ -1596,9 +1729,13 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         try:
             return self._convert_cartesian_to_native(coordinates)
         except Exception as e:
-            raise ConversionError(f"Failed to convert from cartesian to  {self.__class__.__name__}: {e}")
+            raise ConversionError(
+                f"Failed to convert from cartesian to  {self.__class__.__name__}: {e}"
+            )
 
-    def convert_to(self, target_coord_system: 'CoordinateSystem', *args: Any) -> np.ndarray:
+    def convert_to(
+        self, target_coord_system: "CoordinateSystem", *args: Any
+    ) -> np.ndarray:
         r"""
         Convert coordinates from this system to another specified coordinate system.
 
@@ -1648,7 +1785,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
 
     # @@ UTILITY FUNCTIONS @@ #
     # These are basic helper functions to be used in various other methods.
-    def ensure_axis_numeric(self, axis: 'AxisAlias') -> int:
+    def ensure_axis_numeric(self, axis: "AxisAlias") -> int:
         r"""
         Ensure the given axis is represented as its numeric index.
 
@@ -1679,7 +1816,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         else:
             return axis
 
-    def ensure_axis_string(self, axis: 'AxisAlias') -> str:
+    def ensure_axis_string(self, axis: "AxisAlias") -> str:
         r"""
         Ensure the given axis is represented as its string name.
 
@@ -1732,8 +1869,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         axes = [self.ensure_axis_string(ax) for ax in axes]
         return [ax for ax in self.AXES if ax in axes]
 
-    def build_axes_mask(self, axes: List['AxisAlias']) -> np.ndarray[bool]:
-        """
+    def build_axes_mask(self, axes: List["AxisAlias"]) -> np.ndarray[bool]:
+        r"""
         Construct a boolean mask array indicating which axes are in ``axes``.
 
         Parameters
@@ -1746,7 +1883,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         A boolean mask array indicating which axes are in ``axes``.
         """
         # setup the indices array
-        indices = np.array([self.ensure_axis_numeric(ax) for ax in axes],dtype=int)
+        indices = np.array([self.ensure_axis_numeric(ax) for ax in axes], dtype=int)
         mask = np.zeros((self.NDIM,), dtype=bool)
         mask[indices] = True
         return mask
@@ -1754,7 +1891,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
     # @@ IO OPERATIONS @@ #
     # These provide method for reading and writing coordinate systems to disk. They
     # generally do not need to be overwritten in custom implementations.
-    def to_file(self, file_obj, fmt: str = 'json'):
+    def to_file(self, file_obj, fmt: str = "json"):
         r"""
         Save the coordinate system configuration to a file or group.
 
@@ -1765,17 +1902,19 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         fmt : {'json', 'yaml', 'hdf5'}, optional
             The format to use for saving. Default is 'json'.
         """
-        if fmt == 'json':
+        if fmt == "json":
             self._to_json(file_obj)
-        elif fmt == 'yaml':
+        elif fmt == "yaml":
             self._to_yaml(file_obj)
-        elif fmt == 'hdf5':
+        elif fmt == "hdf5":
             self._to_hdf5(file_obj)
         else:
-            raise ValueError(f"Unsupported format '{fmt}'. Use 'json', 'yaml', or 'hdf5'.")
+            raise ValueError(
+                f"Unsupported format '{fmt}'. Use 'json', 'yaml', or 'hdf5'."
+            )
 
     @classmethod
-    def from_file(cls, file_obj, fmt: str = 'json'):
+    def from_file(cls, file_obj, fmt: str = "json"):
         r"""
         Load the coordinate system configuration from a file or group.
 
@@ -1791,14 +1930,16 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         CoordinateSystem
             An instance of the loaded coordinate system.
         """
-        if fmt == 'json':
+        if fmt == "json":
             return cls._from_json(file_obj)
-        elif fmt == 'yaml':
+        elif fmt == "yaml":
             return cls._from_yaml(file_obj)
-        elif fmt == 'hdf5':
+        elif fmt == "hdf5":
             return cls._from_hdf5(file_obj)
         else:
-            raise ValueError(f"Unsupported format '{fmt}'. Use 'json', 'yaml', or 'hdf5'.")
+            raise ValueError(
+                f"Unsupported format '{fmt}'. Use 'json', 'yaml', or 'hdf5'."
+            )
 
     def _to_json(self, file_obj):
         r"""
@@ -1810,9 +1951,10 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             An open file to write to.
         """
         import json
+
         data = {
-            'class_name': self.__class__.__name__,
-            'parameters': self.parameters,
+            "class_name": self.__class__.__name__,
+            "parameters": self.parameters,
         }
         json.dump(data, file_obj)
 
@@ -1832,10 +1974,11 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             An instance of the loaded coordinate system.
         """
         import json
+
         data = json.load(file_obj)
 
-        _cls = find_in_subclasses(CoordinateSystem, data['class_name'])
-        return _cls(**data['kwargs'])
+        _cls = find_in_subclasses(CoordinateSystem, data["class_name"])
+        return _cls(**data["kwargs"])
 
     def _to_yaml(self, file_obj):
         r"""
@@ -1847,9 +1990,10 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             An open file to write to.
         """
         import yaml
+
         data = {
-            'class_name': self.__class__.__name__,
-            'parameters': self.parameters,
+            "class_name": self.__class__.__name__,
+            "parameters": self.parameters,
         }
         yaml.dump(data, file_obj)
 
@@ -1869,10 +2013,11 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             An instance of the loaded coordinate system.
         """
         import yaml
+
         data = yaml.safe_load(file_obj)
 
-        _cls = find_in_subclasses(CoordinateSystem, data['class_name'])
-        return _cls(**data['kwargs'])
+        _cls = find_in_subclasses(CoordinateSystem, data["class_name"])
+        return _cls(**data["kwargs"])
 
     def _to_hdf5(self, group_obj):
         r"""
@@ -1884,7 +2029,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             An open HDF5 group to write to.
         """
         import json
-        group_obj.attrs['class_name'] = self.__class__.__name__
+
+        group_obj.attrs["class_name"] = self.__class__.__name__
 
         # Save each kwarg individually as an attribute
         for key, value in self.parameters.items():
@@ -1909,23 +2055,24 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
             An instance of the loaded coordinate system.
         """
         import json
+
         data = {
-            'class_name': group_obj.attrs['class_name'],
+            "class_name": group_obj.attrs["class_name"],
         }
 
         # Load kwargs, deserializing complex data as needed
         kwargs = {}
         for key, value in group_obj.attrs.items():
-            if key != 'class_name':
+            if key != "class_name":
                 try:
                     kwargs[key] = json.loads(value)  # try to parse complex JSON data
                 except (TypeError, json.JSONDecodeError):
                     kwargs[key] = value  # simple data types remain as is
 
-        data['kwargs'] = kwargs
+        data["kwargs"] = kwargs
 
-        _cls = find_in_subclasses(CoordinateSystem, data['class_name'])
-        return _cls(**data['kwargs'])
+        _cls = find_in_subclasses(CoordinateSystem, data["class_name"])
+        return _cls(**data["kwargs"])
 
     def __hash__(self):
         r"""
@@ -1939,10 +2086,8 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         int
             The hash value of the instance.
         """
-        return hash((
-            self.__class__.__name__,
-            tuple(sorted(self.parameters.items()))
-        ))
+        return hash((self.__class__.__name__, tuple(sorted(self.parameters.items()))))
+
 
 class RadialCoordinateSystem(CoordinateSystem, ABC):
     r"""
@@ -1968,7 +2113,7 @@ class RadialCoordinateSystem(CoordinateSystem, ABC):
     #  should follow standard convention and the parameters and axes will become the
     #  symbolic attributes of the class.
     NDIM: int = 3
-    AXES: list[str] = ['x','y','z']
+    AXES: list[str] = ["x", "y", "z"]
     PARAMETERS: Dict[str, Any] = {}
 
     # @@ DYNAMICALLY GENERATED ATTRIBUTES @@ #
@@ -1982,10 +2127,10 @@ class RadialCoordinateSystem(CoordinateSystem, ABC):
     _lame_symbolic: Dict[str, sp.Basic] = None
 
     @abstractmethod
-    def integrate_in_shells(self,
-                            field: Union[np.ndarray,Callable],
-                            radii: np.ndarray):
-        """
+    def integrate_in_shells(
+        self, field: Union[np.ndarray, Callable], radii: np.ndarray
+    ):
+        r"""
         Integrate a scalar field over concentric shells in the radial coordinate.
 
         Parameters
