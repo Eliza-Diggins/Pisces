@@ -13,7 +13,7 @@ name: build-docs
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:  # Allows manual triggering of this workflow from the GitHub Actions interface
 
 jobs:
