@@ -1,0 +1,6 @@
+pisces.geometry.coordinate\_systems.CartesianCoordinateSystem1D.compute\_divergence
+===================================================================================
+
+.. currentmodule:: pisces.geometry.coordinate_systems
+
+.. automethod:: CartesianCoordinateSystem1D.compute_divergence
