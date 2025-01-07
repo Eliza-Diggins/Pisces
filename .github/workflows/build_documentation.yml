@@ -33,7 +33,7 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v2
     - name: Install Cython
-      run: pip install cython
+      run: pip install cython, numpy, setuptools,
 
     - name: Build Cython extensions
       run: python setup.py build_ext --inplace
