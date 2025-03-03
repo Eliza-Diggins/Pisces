@@ -1,15 +1,73 @@
+"""
+Core classes for interacting with particle data in Pisces.
+
+The pisces infrastructure for particle data centers around the :py:class:`ParticleDataset`, which is effectively an
+HDF5 wrapper that stores particle data in a hierarchical fashion so that each particle type has its own group and each
+field for a particle type has its own dataset within that group.
+
+These dataset objects are designed for light-weight export to other systems, including ``yt``.
+"""
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import h5py
 import numpy as np
 import unyt
+from numpy.typing import ArrayLike
 
 from pisces.io.hdf5 import HDF5_File_Handle
 from pisces.utilities.unit_utils import ensure_ytarray
 
+if TYPE_CHECKING:
+    from yt.frontends.stream.data_structures import StreamParticlesDataset
+
 
 class ParticleDataset:
+    """
+    A structured container for managing particle data in an HDF5-backed format. This class forms the
+    backbone of all particle data management in Pisces.
+
+    The :py:class:`ParticleDataset` class provides a hierarchical storage system where each
+    particle type (species) is stored as a **group**, and each field for a species is
+    stored as a dataset within that group. This structure allows efficient access,
+    manipulation, and export of particle data.
+
+    The dataset is designed for compatibility with external tools, including `yt`,
+    allowing for seamless integration into astrophysical and cosmological simulations.
+
+    Examples
+    --------
+
+    To create a dataset at a new path, simply call the class constructor and
+    feed the desired path. By default, this will load the path if it already exists. To
+    overwrite data, simply use ``overwrite=True``.
+
+    >>> # Import the ParticleDataset class from pisces.
+    >>> from pisces.particles.base import ParticleDataset
+    >>>
+    >>> # Create an empty particle dataset at `test.hdf5`.
+    >>> pset = ParticleDataset('test.hdf5',overwrite=True)
+    >>> print(pset)
+    <ParticleDataset: test.hdf5>
+
+    :py:class:`ParticleDataset` instances contain individual HDF5 groups, each corresponding to a
+    particle type (species). Species can be added, removed, and altered. When creating a species,
+    the number of particles in the file must be specified.
+
+    >>> from pisces.particles.base import ParticleDataset
+    >>> pset = ParticleDataset('test.hdf5',overwrite=True)
+    >>> print(pset.species)
+    {}
+    >>>
+    >>> # Add a dark matter species with 10^7 particles.
+    >>> _ = pset.add_species('dark_matter',int(1e7))
+    >>> print(pset.species)
+    {'dark_matter': ParticleSpecies(fields=[])}
+
+    Each species (:py:class:`ParticleSpecies`) acts as a container of :py:class:`ParticleField` instances.
+
+    """
+
     DEFAULT_BUFFER_SIZE: int = 1024
     """ int: The default size of the particle load buffer.
     The buffer size determines the maximum number of particles which are loaded into memory at any given
@@ -21,33 +79,50 @@ class ParticleDataset:
     # These methods form the core of the loading procedures for
     # particle datasets. Subclasses may overwrite these where necessary; however,
     # it is generally possible to leave the core of __init__ alone.
-    def __init__(self, path: Union[str, Path], buffer_size: int = None):
+    def __init__(
+        self, path: Union[str, Path], buffer_size: int = None, overwrite: bool = False
+    ):
         """
         Initialize the particle dataset from disk.
 
         Parameters
         ----------
         path : Union[str, Path]
-            Path to the HDF5 file containing the particle dataset. If the file
-            does not exist, it will be created.
+            The file path to the HDF5 dataset.
+
+            If ``path`` is an existing path, then an attempt will be made to load the file as a particle dataset. If
+            the ``path`` does not exist, then an empty dataset will be created. The ``overwrite`` argument can be used
+            to change this behavior to force existing data to be deleted.
+        overwrite: bool
+            If ``True``, force the creation of a new dataset even if the file already exists.
         buffer_size : int, optional
             The default buffer size (number of particles) to load into memory during processing.
             Defaults to :py:attr:`DEFAULT_BUFFER_SIZE` if not specified.
 
+
+        Raises
+        ------
+        ValueError
+            If the specified file path does not exist and cannot be created.
+
         Notes
         -----
-        The ``__init__`` process is very simple: it simply loads the reference to the HDF5 file provided
-        and then sweeps through the groups and adds each available group as a :py:class:`ParticleSpecies` to
-        the :py:attr:`species` collection.
-
+        For this class, then ``__init__`` procedure is quite simple. The core logic for setup is passed
+        off to the :py:meth:`ParticleDataset.build_skeleton`, which determines if the skeleton already exists and
+        returns the buffer. The class then creates a species buffer and starts loading species.
         """
-        # Pull the user's provided path and ensure that it exists.
-        # We do not permit non-existent paths to proceed.
+        # Enforce type constraints on self._path and then pass off to the skeleton builder. This
+        # will produce the core HDF5 structure before returning the buffer reference.
         self._path = Path(path)
-        self._handle = self.build_skeleton(path, buffer_size=buffer_size)
+        self._handle = self.build_skeleton(
+            path, buffer_size=buffer_size, overwrite=overwrite
+        )
+
+        # Set attributes
         self._buffer_size = self._handle.attrs["buffer_size"]
-        # Load the species handles and references.
-        # This is external to allow calls in other parts of the code.
+
+        # Proceed to load substructural information into constituent
+        # species and fields.
         self._species = {}
         self._load_particle_species()
 
@@ -89,13 +164,15 @@ class ParticleDataset:
         # if we can return or need to generate a new skeleton.
         path = Path(path)
         if path.exists() and not overwrite:
-            return HDF5_File_Handle(path, mode="r")
+            return HDF5_File_Handle(path, mode="r+")
+        elif path.exists() and overwrite:
+            path.unlink()
 
         # Ensure the file is created or overwritten
         handle = HDF5_File_Handle(path, mode="w")
         handle.attrs["buffer_size"] = buffer_size or cls.DEFAULT_BUFFER_SIZE
 
-        return handle.switch_mode("r")
+        return handle.switch_mode("r+")
 
     # @@ DUNDER METHODS @@ #
     # These are standard dunder methods for particle classes.
@@ -119,6 +196,9 @@ class ParticleDataset:
     def __delitem__(self, key: str) -> None:
         self.remove_species(key)
 
+    def __del__(self):
+        self.handle.close()
+
     def __contains__(self, key: str) -> bool:
         return key in self._species
 
@@ -136,9 +216,12 @@ class ParticleDataset:
         Parameters
         ----------
         name : str
-            The name of the new species.
+            The name of the new species. If ``name`` is a duplicate of an existing species, then the behavior will
+            depend on ``overwrite``. If ``overwrite`` is ``True``, then the existing species will be deleted, otherwise
+            an error is raised.
+
         num_particles : int
-            The number of particles in the new species.
+            The number of particles to allocate for the new species.
 
             .. warning::
 
@@ -168,7 +251,7 @@ class ParticleDataset:
         Parameters
         ----------
         name: str
-        The name of the species to remove.
+            The name of the species to remove.
         """
         if name not in self._handle:
             raise ValueError(
@@ -211,6 +294,123 @@ class ParticleDataset:
         for species_name in species_order:
             self.species[species_name].add_index_field(offset=offset)
             offset += len(self.species[species_name])
+
+    def to_yt(
+        self,
+        length_units: str = "pc",
+        mass_units: str = "Msun",
+        time_units: str = "s",
+        velocity_units: str = "km/s",
+        magnetic_units: str = "T",
+        bbox: ArrayLike = None,
+        **kwargs,
+    ) -> "StreamParticlesDataset":
+        """
+        Convert the particle dataset to a ``yt`` dataset. See :py:func:`yt.loaders.load_particles`.
+
+        Parameters
+        ----------
+        length_units: str, optional
+            The units of the length of the particles. Defaults to ``"pc"``.
+        mass_units: str, optional
+            The units of the mass of the particles. Defaults to ``"Msun"``.
+        time_units: str, optional
+            The units of the time of the particles. Defaults to ``"s"``.
+        velocity_units: str, optional
+            The units of the velocity of the particles. Defaults to ``"km/s"``.
+        magnetic_units: str, optional
+            The units of the magnetic field of the particles. Defaults to ``"T"``.
+        bbox: ArrayLike, optional
+            The bounding box of the particles. Defaults to ``None``, which will lead the
+            code to determine a minimal bounding box holding all of the particles.
+        kwargs:
+            Additional arguments to pass to :py:func:`yt.loaders.load_particles`.
+
+        Returns
+        -------
+        :py:class:`~yt.frontends.stream.data_structures.StreamParticlesDataset`
+        """
+        # Begin with importing yt. If we fail, we want to raise a
+        # wrapped error because yt is not explicitly a dependency.
+        try:
+            import yt
+        except ImportError as ex:
+            raise ImportError(
+                "Cannot convert particle dataset to yt because yt cannot be imported."
+            ) from ex
+
+        # Validation / setup steps.
+        # In order to generate the particle dataset, the bounding box has to be generated
+        # and the units need to be coerced.
+        _particle_fields = (
+            {}
+        )  # This is where we store all the data for in-memory loading.
+
+        unyt.unit_systems.UnitSystem(
+            "psystem", length_units, mass_units, time_units, "K"
+        )
+
+        # Determine the bounding box for the particle dataset.
+        # We do this by iterating through all of the particles unless a bbox is specified.
+        _bbox = bbox
+        if _bbox is None:
+            # Set the bbox by iterating through the particles.
+            _bbox = np.array([[0, 1] for _ in range(3)])
+            for _, species in self.species.items():
+                position_data = species.FIELDS["particle_position"][...].to_value(
+                    length_units
+                )
+                ndim = position_data.shape[-1]
+                _bbox = np.array(
+                    [
+                        [
+                            np.amin([np.amin(position_data[:, _i]), _bbox[_i, 0]]),
+                            np.amax([np.amax(position_data[:, _i]), _bbox[_i, 1]]),
+                        ]
+                        for _i in range(ndim)
+                    ]
+                )
+
+        # Add all of the particle fields to the dataset.
+        for ptype, species in self.species.items():
+            for field, field_data in species.FIELDS.items():
+                if field not in ["particle_position", "particle_velocity"]:
+                    _particle_fields[(ptype, field)] = field_data[...]
+                elif field == "particle_velocity":
+                    # Correct the velocity
+                    for i, ax_name in enumerate(["x", "y", "z"]):
+                        _particle_fields[(ptype, field + f"_{ax_name}")] = field_data[
+                            :, i
+                        ].to_value(velocity_units)
+                elif field == "particle_position":
+                    # Correct the velocity
+                    for i, ax_name in enumerate(["x", "y", "z"]):
+                        _particle_fields[(ptype, field + f"_{ax_name}")] = field_data[
+                            :, i
+                        ].to_value(length_units)
+
+            # Check and add in particle velocities if necessary
+            if "particle_velocity" not in species.FIELDS:
+                for _, ax_name in enumerate(["x", "y", "z"]):
+                    _particle_fields[
+                        (ptype, "particle_velocity" + f"_{ax_name}")
+                    ] = unyt.unyt_array(
+                        np.zeros(species.num_particles), "km/s"
+                    ).to_value(
+                        velocity_units
+                    )
+
+        # noinspection PyTypeChecker
+        return yt.load_particles(
+            _particle_fields,
+            bbox=_bbox,
+            length_unit=length_units,
+            mass_unit=mass_units,
+            velocity_unit=velocity_units,
+            time_unit=time_units,
+            magnetic_unit=magnetic_units,
+            **kwargs,
+        )
 
     # @@ Core Properties @@ #
     @property
@@ -273,13 +473,47 @@ class ParticleDataset:
         """
         return self._buffer_size
 
+    @property
+    def num_particles(self) -> Dict[str, int]:
+        """
+        The number of particles present in this :py:class:`ParticleDataset` instance.
+
+        Returns
+        -------
+        dict of str, int
+            Dictionary containing key-value pairs corresponding to each particle species and the number
+            of particles present in the dataset of that type.
+        """
+        return {k: self.species[k].num_particles for k in self.species.keys()}
+
 
 class ParticleSpecies:
+    """
+    Container class representing a particular type of particle in a
+    :py:class:`ParticleDataset` instance.
+    """
+
     # @@ LOADING METHODS @@ #
     # These methods form the core of the loading procedures for
     # particle species dataset. Subclasses may overwrite these where necessary; however,
     # it is generally possible to leave the core of __init__ alone.
     def __init__(self, particle_dataset: ParticleDataset, name: str):
+        """
+        Load the :py:class:`ParticleSpecies` from an existing :py:class:`ParticleDataset` instance given
+        the ``name`` of the particle type.
+
+        Parameters
+        ----------
+        particle_dataset: :py:class:`ParticleDataset`
+            The particle dataset containing this particle type and its constituent data.
+        name: str
+            The name of the particle type.
+
+        Raises
+        ------
+        ValueError
+            if ``name`` is not a group in the ``particle_dataset``.
+        """
         # Validate existence of the correct species group within the
         # particle dataset itself.
         if name not in particle_dataset.handle:
@@ -295,16 +529,48 @@ class ParticleSpecies:
         self._load_particle_fields()
 
     def _load_particle_fields(self):
+        """
+        Load all available particle fields for this species from the HDF5 file.
+
+        This method iterates over the datasets stored in the species group in the HDF5 file
+        and registers them as :py:class:`ParticleField` instances.
+
+        Returns
+        -------
+        None
+        """
         # Search through all of the groups in the HDF5 file
         # and pull them out as species.
-        for k, v in self._handle.items():
+        for k, _ in self._handle.items():
             if k not in self._fields:
-                self._fields[k] = v
+                self._fields[k] = ParticleField(self, k)
 
     @classmethod
     def build_skeleton(
         cls, handle: h5py.Group, name: str, num_particles: int, overwrite=None
     ):
+        """
+        Create or retrieve an HDF5 group for a particle species.
+
+        If the species already exists, it is returned unless ``overwrite=True`` is specified,
+        in which case the existing group is deleted and a new one is created.
+
+        Parameters
+        ----------
+        handle : h5py.Group
+            The HDF5 file handle where the species is being created.
+        name : str
+            The name of the species to be created.
+        num_particles : int
+            The number of particles in this species.
+        overwrite : bool, optional
+            If ``True``, deletes any existing species with the same name before creating a new one.
+
+        Returns
+        -------
+        h5py.Group
+            The HDF5 group associated with the species.
+        """
         # Check for an existing dataset and manage it if necessary. Use
         # overwrite to determine behavior.
         if name in handle:
@@ -398,6 +664,32 @@ class ParticleSpecies:
         dtype: str = "f8",
         units: str = "",
     ):
+        """
+        Add a new field to the particle species.
+
+        This method creates a new dataset in the HDF5 file under this species, storing per-particle
+        data such as position, velocity, mass, or any other property.
+
+        Parameters
+        ----------
+        name : str
+            The name of the new field.
+        element_shape : tuple of int, optional
+            The shape of individual elements in the field (e.g., ``(3,)`` for a 3D vector).
+        data : unyt.unyt_array or np.ndarray, optional
+            Initial data for the field. If provided, its shape must match the expected dimensions.
+        overwrite : bool, optional
+            If ``True``, allows overwriting an existing field with the same name.
+        dtype : str, optional
+            The data type of the field (default is ``float64``).
+        units : str, optional
+            The physical units of the field (e.g., ``"kpc"``, ``"Msun/kpc**3"``).
+
+        Returns
+        -------
+        ParticleField
+            The newly created field.
+        """
         field = ParticleField(
             self,
             name,
@@ -411,6 +703,22 @@ class ParticleSpecies:
         return field
 
     def remove_field(self, name: str):
+        """
+        Remove a field from the species.
+
+        This method deletes the specified field from the HDF5 dataset and the in-memory
+        representation of the species.
+
+        Parameters
+        ----------
+        name : str
+            The name of the field to remove.
+
+        Raises
+        ------
+        ValueError
+            If the field does not exist in this species.
+        """
         if name not in self.FIELDS:
             raise ValueError(
                 f"No particle species named '{name}' exists in the dataset."
@@ -418,6 +726,23 @@ class ParticleSpecies:
         del self._handle[name]
 
     def add_index_field(self, offset: int = 0, overwrite: bool = False):
+        """
+        Add an index field to uniquely identify each particle.
+
+        The index field assigns a unique integer ID to each particle, useful for tracking
+        particles across time steps or different datasets.
+
+        Parameters
+        ----------
+        offset : int, optional
+            The starting index value for this species. Defaults to ``0``.
+        overwrite : bool, optional
+            If ``True``, allows overwriting an existing index field.
+
+        Returns
+        -------
+        None
+        """
         self.add_field(
             "particle_index",
             data=np.arange(self.num_particles) + offset,
@@ -492,19 +817,60 @@ class ParticleSpecies:
 
     @property
     def FIELDS(self) -> Dict[str, "ParticleField"]:
+        """
+        Get the dictionary of fields associated with this particle species.
+
+        Returns
+        -------
+        dict of str to ParticleField
+            A dictionary where keys are field names and values are :py:class:`ParticleField` instances.
+        """
         self._load_particle_fields()
         return self._fields
 
     @property
     def handle(self) -> h5py.Group:
+        """
+        Get the HDF5 group associated with this particle species.
+
+        This property provides direct access to the HDF5 group in which this species' data is stored.
+        It allows interaction with the underlying file structure for reading or modifying particle fields.
+
+        Returns
+        -------
+        h5py.Group
+            The HDF5 group corresponding to this species.
+        """
         return self._handle
 
     @property
     def num_particles(self) -> int:
+        """
+        Get the total number of particles in this species.
+
+        The number of particles is fixed when the species is created and is stored as an attribute
+        in the HDF5 dataset.
+
+        Returns
+        -------
+        int
+            The total number of particles in this species.
+        """
         return self._handle.attrs["num_particles"]
 
     @property
     def dataset(self) -> ParticleDataset:
+        """
+        Get the parent :py:class:`ParticleDataset` instance that this species belongs to.
+
+        This allows access to the dataset that contains this species, enabling operations
+        that involve multiple species or dataset-wide modifications.
+
+        Returns
+        -------
+        ParticleDataset
+            The parent dataset containing this species.
+        """
         return self._dataset
 
 
@@ -737,3 +1103,7 @@ class ParticleField(unyt.unyt_array):
         """
         arr = self.buffer[key]
         return unyt.unyt_array(arr, units=self.units)
+
+    @property
+    def shape(self) -> Tuple[int, ...]:
+        return self.buffer.shape

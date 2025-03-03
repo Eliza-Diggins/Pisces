@@ -13,7 +13,7 @@ repos:
     -   id: check-yaml
         args: ["--unsafe"]
     -   id: check-added-large-files
-        args: ["--maxkb=750"]
+        args: ["--maxkb=2000"]
 -   repo: https://github.com/psf/black
     rev: 23.12.1
     hooks:

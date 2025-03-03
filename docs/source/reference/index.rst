@@ -57,6 +57,39 @@ Physical Models
 
     If you're a contributing developer, you'll get a lot out of the developer guide for models: :ref:`modeling_developer`.
 
+⚛️  Particle Datasets
++++++++++++++++++++++++++++++++++++++
+Useful for many purposes, Pisces supports to conversion of models to particle datasets. These datasets can be
+easily combined, altered, and exported for various purposes. Additionally, many astrophysical simulation softwares
+utilize particle based schemes for hydrodynamics / magnetohydrodynamics.
+
+
+.. raw:: html
+
+   <hr style="height:2px;background-color:black">
+
+Overview
+'''''''''''''''
+
+.. toctree::
+    :titlesonly:
+    :glob:
+    :numbered:
+
+    ./particles/particles
+
+Theory
+'''''''''''''''
+
+.. toctree::
+    :titlesonly:
+    :glob:
+    :numbered:
+
+    ./particles/sampling
+    ./particles/virialization
+
+
 :material-regular:`show_chart;2em` Profiles
 +++++++++++++++++++++++++++++++++++++++++++
 
@@ -107,13 +140,3 @@ Mathematical Physics
     :numbered:
 
     ./geometry/poisson_equation
-
-Statistical Methods
-'''''''''''''''''''
-
-.. toctree::
-    :titlesonly:
-    :glob:
-    :numbered:
-
-    ./particles/sampling

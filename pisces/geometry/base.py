@@ -1078,6 +1078,7 @@ class CoordinateSystem(ABC, metaclass=CoordinateSystemMeta):
         # Coordinates are coerced to CoordinateArray, which ensures a shape at least of (...,NDIM).
         # This does not enforce a grid shape -- must be done when derivatives are assessed.
         coordinates = CoordinateArray(coordinates, self.NDIM)
+
         # Construct the axes and their indices. Fill in if values are not provided.
         if axes is None:
             axes = self.AXES[:]

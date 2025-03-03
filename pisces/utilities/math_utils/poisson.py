@@ -26,6 +26,7 @@ from scipy.integrate import quad, quad_vec
 from scipy.interpolate import InterpolatedUnivariateSpline
 
 from pisces.utilities.array_utils import CoordinateArray
+from pisces.utilities.logging import devlog
 from pisces.utilities.math_utils.numeric import integrate, integrate_from_zero
 
 if TYPE_CHECKING:
@@ -668,36 +669,44 @@ def solve_poisson_ellipsoidal(
 
 
     """
-    # Manipulate the coordinates to ensure they need our formatting constraints and expectations.
+    # Manipulate the coordinates to ensure they meet our formatting constraints and expectations.
     #   - coordinates should be reformatted to our (...,NDIM) formatting standard.
     #   - coordinates are converted to cartesian coordinates for the integration procedure.
     #   - The minimum and maximum radii are extracted.
     coordinates = CoordinateArray(coordinates, coordinate_system.NDIM)
     cartesian_coordinates = coordinate_system.to_cartesian(coordinates)
     r_min, r_max = np.amin(coordinates[..., 0]), np.amax(coordinates[..., 0])
+
     # Extract the scale parameters and generate the necessary scale arrays for the
     # procedures that need to be carried out.
+    # We use the various scale arrays during the integration procedures.
     try:
         sx, sy, sz = (
             coordinate_system.scale_x,
             coordinate_system.scale_y,
             coordinate_system.scale_z,
         )
+        devlog.debug(
+            "Computing poisson problem in %s. Scales are %s,%s,%s.",
+            coordinate_system,
+            sx,
+            sy,
+            sz,
+        )
     except Exception as e:
         raise ValueError(
             f"Failed to extract scale parameters from input coordinate system ({coordinate_system}): {e}."
         )
-
-    _scale_array_shape = [1] * (
-        coordinates.ndim - 1
-    )  # Need N-1 slots to make broadcastable.
-    _unit_scale_array_base = np.ones(_scale_array_shape)
+    # Generate the scaled arrays with the correct shape.
+    # We want to have a (1,1,...) array so we can stack at the end for
+    # the number of dimensions we need.
+    _scl_arr_shp = [1] * (coordinates.ndim - 1)
 
     # produce the scale product and the inverse square array (both used later).
-    scale_product = sx * sy * sz
+    _coefficient = -np.pi / np.sqrt(sx * sy * sz)
     inverse_square_array = np.stack(
         [
-            _scale_parameter ** (-2) * _unit_scale_array_base
+            _scale_parameter ** (-2) * np.ones(_scl_arr_shp)
             for _scale_parameter in [sx, sy, sz]
         ],
         axis=-1,
@@ -755,6 +764,6 @@ def solve_poisson_ellipsoidal(
     integrand = lambda _tau: (psi_inf - psi_func(xi_func(_tau))) / denom_func(_tau)
 
     # Compute the integral using vectorized quadrature
-    potential = -np.pi * (1 / scale_product**2) * quad_vec(integrand, 0, np.inf)[0]
+    potential = _coefficient * quad_vec(integrand, 0, np.inf)[0]
 
     return potential

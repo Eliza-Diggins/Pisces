@@ -15,14 +15,27 @@ print(os.path)
 # @@ CYTHON UTILITIES @@ #
 # All of the cython extensions for the package have to be added
 # here to ensure that they are accessible and installed on use.
-rejection_sampling_utils = Extension(
-    "pisces.utilities.math_utils._sampling_opt",
-    sources=["pisces/utilities/math_utils/_sampling_opt.pyx"],
+linterp_utils = Extension(
+    "pisces.utilities.math_utils._linterp",
+    sources=["pisces/utilities/math_utils/_linterp.pyx"],
     language="c",
     libraries=["m"],
     include_dirs=[np.get_include()],
 )
-
+inv_sample_utils = Extension(
+    "pisces.particles.sampling._invsamp",
+    sources=["pisces/particles/sampling/_invsamp.pyx"],
+    language="c",
+    libraries=["m"],
+    include_dirs=[np.get_include()],
+)
+rej_sample_utils = Extension(
+    "pisces.particles.sampling._rejsamp",
+    sources=["pisces/particles/sampling/_rejsamp.pyx"],
+    language="c",
+    libraries=["m"],
+    include_dirs=[np.get_include()],
+)
 # Read the readme from /Pisces/README.rst. As long as we are in the
 # project directory, this should be accessible directly in path.
 with open("README.rst", "r", encoding="utf-8") as fh:
@@ -61,6 +74,6 @@ setup(
         "Topic :: Scientific/Engineering :: Visualization",
     ],
     include_package_data=True,
-    ext_modules=cythonize([rejection_sampling_utils]),
+    ext_modules=cythonize([linterp_utils, inv_sample_utils, rej_sample_utils]),
     python_requires=">=3.6",
 )

@@ -4,8 +4,8 @@ Core numerical functions commonly used in Pisces.
 from typing import Any, Callable, List, Literal, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
-from scipy.integrate import quad, quad_vec
+from numpy.typing import ArrayLike, NDArray
+from scipy.integrate import cumulative_trapezoid, quad, quad_vec
 
 
 def compute_grid_spacing(
@@ -419,3 +419,89 @@ def integrate_toinf(
         result[i] = quad(function, _x, np.inf)[0]
 
     return result
+
+
+def create_cdf(
+    x: ArrayLike,
+    y: ArrayLike,
+    bounds: Optional[ArrayLike] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Create a CDF by extending the 1D domain (if needed) and integrating
+    via the trapezoidal rule.
+
+    Parameters
+    ----------
+    x : array_like
+        1D array of abscissa (domain) points, assumed sorted in ascending order.
+    y : array_like
+        1D array of the function values (e.g. a PDF) at each point in `x`.
+        Must have the same shape as `x`.
+    bounds : array_like, optional
+        An array/list with two elements [lower_bound, upper_bound]. If
+        these are strictly outside the domain of `x`, the domain will be
+        extended by prepending/appending those boundary points, along
+        with corresponding `y` values at the edges (e.g. y[0], y[-1]).
+        If bounds overlap or are smaller than [x[0], x[-1]], behavior
+        can be customized or raise an error (see code comments).
+
+    Returns
+    -------
+    x_cdf : ndarray
+        The possibly extended abscissa array used for the CDF.
+    cdf : ndarray
+        The normalized cumulative distribution values, same shape as `x_cdf`.
+        cdf[-1] = 1.0 exactly.
+
+    Raises
+    ------
+    ValueError
+        If `x` and `y` do not match in shape,
+        or if `bounds` is not length 2,
+        or if `x` is not sorted (monotonic).
+
+    Notes
+    -----
+    1. This function assumes `y` >= 0 (e.g. a PDF), though no explicit check is performed here.
+    2. Extending by reusing `y[0]` and `y[-1]` for the boundary points is a simple choice.
+       If your function requires a different assumption at the extended boundary,
+       you should modify that logic accordingly.
+
+    """
+    # Perform basic validation. Ensure that every array is a valid array and that
+    # the bounds are actually bounding the domain.
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+
+    # Check the shape of the x and y arrays.
+    # Check that the abscissa is sorted.
+    if x.shape != y.shape:
+        raise ValueError(
+            f"x and y must have the same shape, got {x.shape} vs {y.shape}."
+        )
+    if np.any(np.diff(x) < 0):
+        raise ValueError("x must be sorted in ascending order (monotonic).")
+
+    # Manage the bounds if they are provided by the
+    # user. If not, we can skip all of this.
+    if bounds is not None:
+        # Validate the abscissa and the bounds.
+        if len(bounds) != 2:
+            raise ValueError(f"bounds must be length 2, got {bounds}.")
+
+        x_min, x_max = x[0], x[-1]
+        low, high = bounds
+        if (low >= x_min) | (high <= x_max):
+            raise ValueError(
+                f"Bounds failed to fully cover the domain of the abscissa: {x_min}, {x_max}."
+            )
+
+        # Extend the abscissa and the likelihood.
+        x = np.concatenate([[low], x, [high]]).ravel()
+        y = np.pad(y, pad_width=1, mode="edge")
+
+    # Compute and renormalize the cumulative distribution function.
+    cdf = cumulative_trapezoid(y, x, initial=0.0)
+    cdf /= cdf[-1]
+
+    return x, cdf

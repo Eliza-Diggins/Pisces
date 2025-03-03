@@ -48,3 +48,30 @@ fields:
   temperature:
     units: 'keV'
     label: '$T_{\rm g}$'
+#---------------------------------------------------------#
+# SAMPLING SETTINGS                                       #
+#---------------------------------------------------------#
+density-field-lut:
+  # The `density-field-lut` tells virializers which density
+  # field corresponds to each particle and therefore how to sample
+  # them.
+  # Keys: Particle types.
+  # Values: Density fields.
+  dark_matter: 'dark_matter_density'
+  gas: 'gas_density'
+  stars: 'stellar_density'
+field-lut:
+  # The `field-lut` tells the virializer which particle types
+  # get which fields during interpolation. Each ptype gets an entry
+  # and each entry contains pairs of (particle_field, model_field).
+  gas:
+    internal_energy: 'temperature'
+    density: 'gas_density'
+    pressure: 'pressure'
+    gravitational_potential: 'gravitational_potential'
+  dark_matter:
+    density: 'dark_matter_density'
+    gravitational_potential: 'gravitational_potential'
+  stars:
+    density: 'stellar_density'
+    gravitational_potential: 'gravitational_potential'

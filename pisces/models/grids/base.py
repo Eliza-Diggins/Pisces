@@ -296,11 +296,10 @@ class ModelGridManager:
         """
         # Manage scaling
         self._log_mask = np.array([ax == "log" for ax in self.scale], dtype=bool)
-        self._scaled_bbox = self.BBOX[...]
+        self._scaled_bbox = self.BBOX.copy()
         self._scaled_bbox[:, self._log_mask] = np.log10(
             self._scaled_bbox[:, self._log_mask]
         )
-
         # Compute chunk and cell sizes
         self._NCHUNKS = self.GRID_SHAPE // self.CHUNK_SHAPE
         self._CHUNK_SIZE = (
@@ -710,7 +709,7 @@ class ModelGridManager:
         overwrite : bool, optional
             If ``True``, any existing cached interpolator for the specified field and chunk is replaced.
             Default is ``False``.
-        **kwargs : dict, optional
+        **kwargs :
             Additional arguments passed to the ``RegularGridInterpolator``.
 
         Returns
@@ -1226,6 +1225,89 @@ class ModelGridManager:
         return make_grid_fields_broadcastable(
             arrays, axes, coordinate_system=self.coordinate_system
         )
+
+    def get_coordinate(
+        self,
+        chunk_index: Optional[np.ndarray] = None,
+        axes: Optional[AxesSpecifier] = None,
+        stencil_kwargs: Optional[dict] = None,
+        scaled: bool = False,
+    ) -> NDArray[np.float64]:
+        """
+        Compute the cell-centered coordinates for the grid or a specific chunk.
+
+        This method generates the coordinates for the grid cells, either for the entire grid or a specific chunk,
+        depending on the `chunk_index` parameter. The coordinates are computed based on the grid's bounding box,
+        grid shape, and scaling (linear or logarithmic) configuration.
+
+        Parameters
+        ----------
+        chunk_index : :py:class:`~pisces.models.grids.structs.ChunkIndex`, optional
+            The index of the chunk for which coordinates are computed. If `None`, the coordinates are computed
+            for the entire grid.
+        axes : Optional[AxesSpecifier], optional
+            The axes for which coordinates are computed. If `None`, coordinates are computed for all axes defined
+            by the grid's coordinate system.
+        scaled : bool, optional
+            If `True`, the coordinates are returned in their scaled (logarithmic) form for axes that are
+            logarithmically scaled. This means the values for logarithmic axes will remain in their base-10
+            logarithmic representation, preserving rectilinearity of the grid structure.
+
+            If `False` (default), the coordinates for logarithmic axes are transformed back into linear space
+            using a base-10 exponential transformation.
+        stencil_kwargs : Optional[dict], optional
+                Parameters defining a stencil region around the chunk. Should include:
+
+                - `stencil_size` (int): Size of the stencil in chunks to include around the specified chunk. Default is 0.
+                - `stencil_alignment` (str): Alignment of the stencil relative to the chunk, with options:
+
+                    - `'center'`: Stencil is symmetrically centered around the chunk.
+                    - `'left'`: Stencil extends entirely to the right of the chunk (default).
+                    - `'right'`: Stencil extends entirely to the left of the chunk.
+
+                If `chunk_index` is not provided, `stencil_kwargs` are ignored. If `chunk_index` is specified but
+                `stencil_kwargs` is `None`, a default stencil of size 1 (centered) is used.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            An array of cell-centered coordinates with shape ``(*GRID_SHAPE, len(axes))`` (if `chunk_index` is `None`)
+            or ``(*CHUNK_SHAPE, len(axes))`` (if `chunk_index` is specified). Each entry represents the center of
+            a grid cell in the requested coordinate system.
+
+        Raises
+        ------
+        ValueError
+            If invalid axes or chunk indices are provided.
+
+        """
+        # Validation. Ensure that we have a set of axes. Construct the axes mask.
+        if axes is None:
+            axes = self.coordinate_system.AXES
+        axes_mask = self.coordinate_system.build_axes_mask(axes)
+
+        # Obtain the slice data for the meshgrid. This performs all the
+        # necessary validation and handles chunks vs. full grid.
+        # NOTE: The reason we do this is because we might want just the slice
+        #   data for other reasons in other methods.
+        slice_data = self._get_coordinate_parameters(
+            axes_mask,
+            chunk_index=chunk_index,
+            stencil_kwargs=stencil_kwargs,
+            use_complex=True,
+        )
+
+        slice_data = [slice(*slc_data) for slc_data in slice_data]
+
+        # Create the coordinate grid. This requires moving the axis to the
+        # correct position and then rescaling for the log components.
+        coordinates = np.moveaxis(np.mgrid[*slice_data], 0, -1)
+        if not scaled:
+            coordinates[..., self.is_log_mask[axes_mask]] = (
+                10 ** coordinates[..., self.is_log_mask[axes_mask]]
+            )
+
+        return coordinates
 
     # @@ FEATURES @@ #
     def add_field_from_function(

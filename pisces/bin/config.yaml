@@ -29,7 +29,7 @@ logging:
     # The developer log. This will increase the ammount of technical detail printed to stdout.
     enabled: false
     format: '%(name)-3s : [%(levelname)-9s] %(asctime)s %(message)s' # Logger's string format for output
-    level: DEBUG    # Only logging passed to this level or higher are displayed.
+    level: INFO    # Only logging passed to this level or higher are displayed.
     stream: stderr   # Can be STDERR or STDOUT.
   code:
     enabled: true
