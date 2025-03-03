@@ -51,7 +51,6 @@ Model
       ~Model.handle
       ~Model.is_solved
       ~Model.logger
-      ~Model.particle_sampler
       ~Model.path
       ~Model.profiles
    

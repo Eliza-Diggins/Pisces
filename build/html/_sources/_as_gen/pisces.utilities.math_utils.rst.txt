@@ -24,7 +24,6 @@ pisces.utilities.math_utils
       numeric
       poisson
       profiles
-      sampling
       symbolic
    
    

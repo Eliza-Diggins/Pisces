@@ -138,6 +138,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
       
@@ -222,6 +229,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
           
@@ -301,8 +315,8 @@
 <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">from</span> <span class="nn">numpy.typing</span> <span class="kn">import</span> <span class="n">NDArray</span>
-<span class="kn">from</span> <span class="nn">scipy.integrate</span> <span class="kn">import</span> <span class="n">quad</span><span class="p">,</span> <span class="n">quad_vec</span>
+<span class="kn">from</span> <span class="nn">numpy.typing</span> <span class="kn">import</span> <span class="n">ArrayLike</span><span class="p">,</span> <span class="n">NDArray</span>
+<span class="kn">from</span> <span class="nn">scipy.integrate</span> <span class="kn">import</span> <span class="n">cumulative_trapezoid</span><span class="p">,</span> <span class="n">quad</span><span class="p">,</span> <span class="n">quad_vec</span>
 
 
 <div class="viewcode-block" id="compute_grid_spacing">
@@ -736,6 +750,95 @@
         <span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">quad</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="n">_x</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
 
     <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<div class="viewcode-block" id="create_cdf">
+<a class="viewcode-back" href="../../../../_as_gen/pisces.utilities.math_utils.numeric.create_cdf.html#pisces.utilities.math_utils.numeric.create_cdf">[docs]</a>
+<span class="k">def</span> <span class="nf">create_cdf</span><span class="p">(</span>
+    <span class="n">x</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span>
+    <span class="n">y</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span>
+    <span class="n">bounds</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ArrayLike</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a CDF by extending the 1D domain (if needed) and integrating</span>
+<span class="sd">    via the trapezoidal rule.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    x : array_like</span>
+<span class="sd">        1D array of abscissa (domain) points, assumed sorted in ascending order.</span>
+<span class="sd">    y : array_like</span>
+<span class="sd">        1D array of the function values (e.g. a PDF) at each point in `x`.</span>
+<span class="sd">        Must have the same shape as `x`.</span>
+<span class="sd">    bounds : array_like, optional</span>
+<span class="sd">        An array/list with two elements [lower_bound, upper_bound]. If</span>
+<span class="sd">        these are strictly outside the domain of `x`, the domain will be</span>
+<span class="sd">        extended by prepending/appending those boundary points, along</span>
+<span class="sd">        with corresponding `y` values at the edges (e.g. y[0], y[-1]).</span>
+<span class="sd">        If bounds overlap or are smaller than [x[0], x[-1]], behavior</span>
+<span class="sd">        can be customized or raise an error (see code comments).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    x_cdf : ndarray</span>
+<span class="sd">        The possibly extended abscissa array used for the CDF.</span>
+<span class="sd">    cdf : ndarray</span>
+<span class="sd">        The normalized cumulative distribution values, same shape as `x_cdf`.</span>
+<span class="sd">        cdf[-1] = 1.0 exactly.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        If `x` and `y` do not match in shape,</span>
+<span class="sd">        or if `bounds` is not length 2,</span>
+<span class="sd">        or if `x` is not sorted (monotonic).</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    1. This function assumes `y` &gt;= 0 (e.g. a PDF), though no explicit check is performed here.</span>
+<span class="sd">    2. Extending by reusing `y[0]` and `y[-1]` for the boundary points is a simple choice.</span>
+<span class="sd">       If your function requires a different assumption at the extended boundary,</span>
+<span class="sd">       you should modify that logic accordingly.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Perform basic validation. Ensure that every array is a valid array and that</span>
+    <span class="c1"># the bounds are actually bounding the domain.</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+
+    <span class="c1"># Check the shape of the x and y arrays.</span>
+    <span class="c1"># Check that the abscissa is sorted.</span>
+    <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;x and y must have the same shape, got </span><span class="si">{</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> vs </span><span class="si">{</span><span class="n">y</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;x must be sorted in ascending order (monotonic).&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Manage the bounds if they are provided by the</span>
+    <span class="c1"># user. If not, we can skip all of this.</span>
+    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Validate the abscissa and the bounds.</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bounds must be length 2, got </span><span class="si">{</span><span class="n">bounds</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+
+        <span class="n">x_min</span><span class="p">,</span> <span class="n">x_max</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">x</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">low</span><span class="p">,</span> <span class="n">high</span> <span class="o">=</span> <span class="n">bounds</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">low</span> <span class="o">&gt;=</span> <span class="n">x_min</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">high</span> <span class="o">&lt;=</span> <span class="n">x_max</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Bounds failed to fully cover the domain of the abscissa: </span><span class="si">{</span><span class="n">x_min</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">x_max</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Extend the abscissa and the likelihood.</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([[</span><span class="n">low</span><span class="p">],</span> <span class="n">x</span><span class="p">,</span> <span class="p">[</span><span class="n">high</span><span class="p">]])</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+        <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">pad_width</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;edge&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Compute and renormalize the cumulative distribution function.</span>
+    <span class="n">cdf</span> <span class="o">=</span> <span class="n">cumulative_trapezoid</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">initial</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+    <span class="n">cdf</span> <span class="o">/=</span> <span class="n">cdf</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">cdf</span></div>
 
 </pre></div>
 

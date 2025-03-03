@@ -138,6 +138,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
       
@@ -219,6 +226,13 @@
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../../reference/index.html">
     Pisces User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples.html">
+    Examples
   </a>
 </li>
 
@@ -309,7 +323,7 @@
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="kn">import</span> <span class="nn">warnings</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">from</span> <span class="nn">numpy.typing</span> <span class="kn">import</span> <span class="n">NDArray</span>
@@ -907,6 +921,115 @@
     <span class="n">coordinate_array</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">fixed_axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">position</span>
 
     <span class="k">return</span> <span class="n">coordinate_array</span></div>
+
+
+
+<div class="viewcode-block" id="extend_and_pad">
+<a class="viewcode-back" href="../../../_as_gen/pisces.utilities.array_utils.extend_and_pad.html#pisces.utilities.array_utils.extend_and_pad">[docs]</a>
+<span class="k">def</span> <span class="nf">extend_and_pad</span><span class="p">(</span>
+    <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">bounds</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-7</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Extend the coordinate grid and pad the associated data array so that the grid</span>
+<span class="sd">    reaches the specified boundary values.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    x: np.ndarray</span>
+<span class="sd">        Coordinate grid array with shape ``(N1, N2, ..., Nk, k)``, where the last</span>
+<span class="sd">        dimension represents the ``k`` coordinate axes. It is assumed that the grid</span>
+<span class="sd">        is separable (each coordinate axis can be extracted independently).</span>
+<span class="sd">    y: np.ndarray</span>
+<span class="sd">        Data array associated with the coordinate grid, of shape ``(N1, N2, ..., Nk)``.</span>
+<span class="sd">    bounds: np.ndarray</span>
+<span class="sd">        A 1D array of length ``2*k`` specifying the lower and upper boundaries</span>
+<span class="sd">        for each coordinate axis. For axis ``i``, ``bounds[2*i]`` is the lower bound</span>
+<span class="sd">        and ``bounds[2*i+1]`` is the upper bound.</span>
+<span class="sd">    threshold: float, optional</span>
+<span class="sd">        The minimum difference between the grid edge and the provided bound</span>
+<span class="sd">        required to trigger an extension. Defaults to ``1e-7``.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    x_extended: np.ndarray</span>
+<span class="sd">        The extended coordinate grid with shape (M1, M2, ..., Mk, k),</span>
+<span class="sd">        where the spatial dimensions have been extended on sides that</span>
+<span class="sd">        meet the threshold.</span>
+<span class="sd">    y_extended: np.ndarray</span>
+<span class="sd">        The padded data array with shape (M1, M2, ..., Mk), padded using edge values.</span>
+<span class="sd">    lr_specifier_buffer: np.ndarray</span>
+<span class="sd">        The array of shape ``(k,2)`` specifying if the lower and upper bounds of each axis are extended.</span>
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError:</span>
+<span class="sd">        If the length of the bounds array is not equal to 2*k or if a provided bound is</span>
+<span class="sd">        smaller than the corresponding edge of the coordinate grid.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Determine the number of dimensions, validate that the bounds are correctly specified,</span>
+    <span class="c1"># and generate the _lr_specifier_buffer to indicate which axes are being extended and</span>
+    <span class="c1"># in which directions they are being extended.</span>
+    <span class="n">_number_of_dims</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">_lr_specifier_buffer</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">_number_of_dims</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span> <span class="o">!=</span> <span class="n">_number_of_dims</span> <span class="o">*</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;`x` is </span><span class="si">{</span><span class="n">_number_of_dims</span><span class="si">}</span><span class="s2"> dimensions, bounds should be length </span><span class="si">{</span><span class="n">_number_of_dims</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2"> not </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="c1"># For each axis in the domain, we need to accomplish the following:</span>
+    <span class="c1"># 1. Extract the abscissa coordinates along that axis.</span>
+    <span class="c1"># 2. Extend the abscissa as needed to incorporate the bounds.</span>
+    <span class="c1"># 3. Add the new axis-specific abscissas back to the `new_axes` list.</span>
+    <span class="n">new_axes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">_number_of_dims</span><span class="p">):</span>
+        <span class="c1"># Obtain the bounds and obtain the basic axis coordinates so that</span>
+        <span class="c1"># they can be compared.</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">_number_of_dims</span>
+        <span class="n">index</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">axis_coords</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="o">*</span><span class="nb">tuple</span><span class="p">(</span><span class="n">index</span><span class="p">),</span> <span class="n">axis</span><span class="p">]</span>
+
+        <span class="c1"># Extract the bounds and the abscissa bounds.</span>
+        <span class="n">_lb</span><span class="p">,</span> <span class="n">_ub</span> <span class="o">=</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="n">axis</span><span class="p">],</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="n">axis</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
+        <span class="n">_b</span><span class="p">,</span> <span class="n">_u</span> <span class="o">=</span> <span class="n">axis_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">axis_coords</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="c1"># Compare the bounds and the edges. If a bound is sufficiently</span>
+        <span class="c1"># far away from the edge, we indicate that we need to extend.</span>
+        <span class="n">db</span><span class="p">,</span> <span class="n">du</span> <span class="o">=</span> <span class="n">_b</span> <span class="o">-</span> <span class="n">_lb</span><span class="p">,</span> <span class="n">_ub</span> <span class="o">-</span> <span class="n">_u</span>
+        <span class="k">if</span> <span class="n">db</span> <span class="o">&gt;=</span> <span class="n">threshold</span><span class="p">:</span>
+            <span class="n">_lr_specifier_buffer</span><span class="p">[</span><span class="n">axis</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="n">db</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Lower bound on axis </span><span class="si">{</span><span class="n">axis</span><span class="si">}</span><span class="s2"> is larger than the &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;edge of the abscissa.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">du</span> <span class="o">&gt;=</span> <span class="n">threshold</span><span class="p">:</span>
+            <span class="n">_lr_specifier_buffer</span><span class="p">[</span><span class="n">axis</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">elif</span> <span class="n">du</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Upper bound on axis </span><span class="si">{</span><span class="n">axis</span><span class="si">}</span><span class="s2"> is larger than the &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;edge of the abscissa.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Using the lr specifier buffer, we need to generate the</span>
+        <span class="c1"># reshaped array and then concatenate to form each of the constituent</span>
+        <span class="c1"># axes again.</span>
+        <span class="k">if</span> <span class="n">_lr_specifier_buffer</span><span class="p">[</span><span class="n">axis</span><span class="p">,</span> <span class="mi">0</span><span class="p">]:</span>
+            <span class="n">axis_coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(([</span><span class="n">bounds</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="n">axis</span><span class="p">]],</span> <span class="n">axis_coords</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">_lr_specifier_buffer</span><span class="p">[</span><span class="n">axis</span><span class="p">,</span> <span class="mi">1</span><span class="p">]:</span>
+            <span class="n">axis_coords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">((</span><span class="n">axis_coords</span><span class="p">,</span> <span class="p">[</span><span class="n">bounds</span><span class="p">[</span><span class="mi">2</span> <span class="o">*</span> <span class="n">axis</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]]))</span>
+
+        <span class="n">new_axes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axis_coords</span><span class="p">)</span>
+
+    <span class="c1"># Now that the corrected shape is known, we need to produce buffers and</span>
+    <span class="c1"># then determine the slices that correspond to the old dataset. Then we can</span>
+    <span class="c1"># finish up.</span>
+    <span class="c1">#</span>
+    <span class="c1"># Y can just be extended using the numpy padding implementation.</span>
+    <span class="n">y_extended</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">_lr_specifier_buffer</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;edge&quot;</span><span class="p">)</span>
+    <span class="n">x_extended</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="o">*</span><span class="n">new_axes</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s2">&quot;ij&quot;</span><span class="p">)</span>
+    <span class="n">x_extended</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">moveaxis</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">x_extended</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;f8&quot;</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">x_extended</span><span class="p">,</span> <span class="n">y_extended</span><span class="p">,</span> <span class="n">_lr_specifier_buffer</span></div>
 
 </pre></div>
 

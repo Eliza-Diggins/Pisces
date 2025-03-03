@@ -138,6 +138,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
       
@@ -219,6 +226,13 @@
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../../reference/index.html">
     Pisces User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples.html">
+    Examples
   </a>
 </li>
 
@@ -322,7 +336,6 @@
 <span class="kn">from</span> <span class="nn">pisces.geometry.coordinate_systems</span> <span class="kn">import</span> <span class="n">SphericalCoordinateSystem</span>
 <span class="kn">from</span> <span class="nn">pisces.io.hdf5</span> <span class="kn">import</span> <span class="n">HDF5_File_Handle</span>
 <span class="kn">from</span> <span class="nn">pisces.models.grids.base</span> <span class="kn">import</span> <span class="n">ModelGridManager</span>
-<span class="kn">from</span> <span class="nn">pisces.models.samplers</span> <span class="kn">import</span> <span class="n">ModelSampler</span>
 <span class="kn">from</span> <span class="nn">pisces.models.solver</span> <span class="kn">import</span> <span class="n">ModelSolver</span>
 <span class="kn">from</span> <span class="nn">pisces.models.utilities</span> <span class="kn">import</span> <span class="n">ModelConfigurationDescriptor</span>
 <span class="kn">from</span> <span class="nn">pisces.profiles.base</span> <span class="kn">import</span> <span class="n">Profile</span>
@@ -751,11 +764,7 @@
 <span class="sd">    model class&#39;s grid structures. Implementing a custom grid manager class specific to particular model constraints is made</span>
 <span class="sd">    possible by altering this attribute of the model class to point to the custom manager class.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">SAMPLE_TYPE</span><span class="p">:</span> <span class="n">Type</span><span class="p">[</span><span class="s2">&quot;ModelSampler&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ModelSampler</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot; Type[:py:class:`~pisces.models.samplers.ModelSampler`]: The sampler class to initialize when the</span>
-<span class="sd">    model is asked to produce particles from its distributions.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1"># TODO: better doc.</span>
+
     <span class="n">logger</span><span class="p">:</span> <span class="s2">&quot;Logger&quot;</span> <span class="o">=</span> <span class="n">LogDescriptor</span><span class="p">()</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot; Logger: The specialized logger for this model class.</span>
 
@@ -1100,7 +1109,7 @@
 
     <span class="k">def</span> <span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ModelField&quot;</span><span class="p">:</span>
         <span class="k">try</span><span class="p">:</span>
-            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">profiles</span><span class="p">[</span><span class="n">item</span><span class="p">]</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">FIELDS</span><span class="p">[</span><span class="n">item</span><span class="p">]</span>
         <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model </span><span class="si">{</span><span class="bp">self</span><span class="si">}</span><span class="s2"> has no field named </span><span class="si">{</span><span class="n">item</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
 
@@ -1273,17 +1282,6 @@
 <span class="sd">        be stored in the HDF5 file and retrieved for further computations.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_profiles</span>
-
-    <span class="nd">@property</span>
-    <span class="k">def</span> <span class="nf">particle_sampler</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelSampler</span><span class="p">:</span>
-<span class="w">        </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        The model sampler attached to this model.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1"># TODO: better doc.</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_particle_sampler&quot;</span><span class="p">):</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_particle_sampler</span> <span class="o">=</span> <span class="n">ModelSampler</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
-
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_particle_sampler</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">is_solved</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>

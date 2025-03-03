@@ -26,6 +26,7 @@ ClusterGridManager
       ~ClusterGridManager.get_chunk_map
       ~ClusterGridManager.get_chunk_mask
       ~ClusterGridManager.get_chunk_stencil
+      ~ClusterGridManager.get_coordinate
       ~ClusterGridManager.get_coordinates
       ~ClusterGridManager.get_grid_summary
       ~ClusterGridManager.get_stencil_bbox

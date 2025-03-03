@@ -138,6 +138,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
       
@@ -219,6 +226,13 @@
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../../../reference/index.html">
     Pisces User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../examples.html">
+    Examples
   </a>
 </li>
 
@@ -598,11 +612,10 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># Manage scaling</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_log_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">ax</span> <span class="o">==</span> <span class="s2">&quot;log&quot;</span> <span class="k">for</span> <span class="n">ax</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_scaled_bbox</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">BBOX</span><span class="p">[</span><span class="o">...</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_scaled_bbox</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">BBOX</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_scaled_bbox</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_log_mask</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_scaled_bbox</span><span class="p">[:,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_log_mask</span><span class="p">]</span>
         <span class="p">)</span>
-
         <span class="c1"># Compute chunk and cell sizes</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_NCHUNKS</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">GRID_SHAPE</span> <span class="o">//</span> <span class="bp">self</span><span class="o">.</span><span class="n">CHUNK_SHAPE</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_CHUNK_SIZE</span> <span class="o">=</span> <span class="p">(</span>
@@ -1020,7 +1033,7 @@
 <span class="sd">        overwrite : bool, optional</span>
 <span class="sd">            If ``True``, any existing cached interpolator for the specified field and chunk is replaced.</span>
 <span class="sd">            Default is ``False``.</span>
-<span class="sd">        **kwargs : dict, optional</span>
+<span class="sd">        **kwargs :</span>
 <span class="sd">            Additional arguments passed to the ``RegularGridInterpolator``.</span>
 
 <span class="sd">        Returns</span>
@@ -1557,6 +1570,92 @@
         <span class="k">return</span> <span class="n">make_grid_fields_broadcastable</span><span class="p">(</span>
             <span class="n">arrays</span><span class="p">,</span> <span class="n">axes</span><span class="p">,</span> <span class="n">coordinate_system</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">coordinate_system</span>
         <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ModelGridManager.get_coordinate">
+<a class="viewcode-back" href="../../../../_as_gen/pisces.models.grids.base.ModelGridManager.get_coordinate.html#pisces.models.grids.base.ModelGridManager.get_coordinate">[docs]</a>
+    <span class="k">def</span> <span class="nf">get_coordinate</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">chunk_index</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">axes</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">AxesSpecifier</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">stencil_kwargs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">scaled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Compute the cell-centered coordinates for the grid or a specific chunk.</span>
+
+<span class="sd">        This method generates the coordinates for the grid cells, either for the entire grid or a specific chunk,</span>
+<span class="sd">        depending on the `chunk_index` parameter. The coordinates are computed based on the grid&#39;s bounding box,</span>
+<span class="sd">        grid shape, and scaling (linear or logarithmic) configuration.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        chunk_index : :py:class:`~pisces.models.grids.structs.ChunkIndex`, optional</span>
+<span class="sd">            The index of the chunk for which coordinates are computed. If `None`, the coordinates are computed</span>
+<span class="sd">            for the entire grid.</span>
+<span class="sd">        axes : Optional[AxesSpecifier], optional</span>
+<span class="sd">            The axes for which coordinates are computed. If `None`, coordinates are computed for all axes defined</span>
+<span class="sd">            by the grid&#39;s coordinate system.</span>
+<span class="sd">        scaled : bool, optional</span>
+<span class="sd">            If `True`, the coordinates are returned in their scaled (logarithmic) form for axes that are</span>
+<span class="sd">            logarithmically scaled. This means the values for logarithmic axes will remain in their base-10</span>
+<span class="sd">            logarithmic representation, preserving rectilinearity of the grid structure.</span>
+
+<span class="sd">            If `False` (default), the coordinates for logarithmic axes are transformed back into linear space</span>
+<span class="sd">            using a base-10 exponential transformation.</span>
+<span class="sd">        stencil_kwargs : Optional[dict], optional</span>
+<span class="sd">                Parameters defining a stencil region around the chunk. Should include:</span>
+
+<span class="sd">                - `stencil_size` (int): Size of the stencil in chunks to include around the specified chunk. Default is 0.</span>
+<span class="sd">                - `stencil_alignment` (str): Alignment of the stencil relative to the chunk, with options:</span>
+
+<span class="sd">                    - `&#39;center&#39;`: Stencil is symmetrically centered around the chunk.</span>
+<span class="sd">                    - `&#39;left&#39;`: Stencil extends entirely to the right of the chunk (default).</span>
+<span class="sd">                    - `&#39;right&#39;`: Stencil extends entirely to the left of the chunk.</span>
+
+<span class="sd">                If `chunk_index` is not provided, `stencil_kwargs` are ignored. If `chunk_index` is specified but</span>
+<span class="sd">                `stencil_kwargs` is `None`, a default stencil of size 1 (centered) is used.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        NDArray[np.float64]</span>
+<span class="sd">            An array of cell-centered coordinates with shape ``(*GRID_SHAPE, len(axes))`` (if `chunk_index` is `None`)</span>
+<span class="sd">            or ``(*CHUNK_SHAPE, len(axes))`` (if `chunk_index` is specified). Each entry represents the center of</span>
+<span class="sd">            a grid cell in the requested coordinate system.</span>
+
+<span class="sd">        Raises</span>
+<span class="sd">        ------</span>
+<span class="sd">        ValueError</span>
+<span class="sd">            If invalid axes or chunk indices are provided.</span>
+
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Validation. Ensure that we have a set of axes. Construct the axes mask.</span>
+        <span class="k">if</span> <span class="n">axes</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">axes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinate_system</span><span class="o">.</span><span class="n">AXES</span>
+        <span class="n">axes_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">coordinate_system</span><span class="o">.</span><span class="n">build_axes_mask</span><span class="p">(</span><span class="n">axes</span><span class="p">)</span>
+
+        <span class="c1"># Obtain the slice data for the meshgrid. This performs all the</span>
+        <span class="c1"># necessary validation and handles chunks vs. full grid.</span>
+        <span class="c1"># NOTE: The reason we do this is because we might want just the slice</span>
+        <span class="c1">#   data for other reasons in other methods.</span>
+        <span class="n">slice_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_coordinate_parameters</span><span class="p">(</span>
+            <span class="n">axes_mask</span><span class="p">,</span>
+            <span class="n">chunk_index</span><span class="o">=</span><span class="n">chunk_index</span><span class="p">,</span>
+            <span class="n">stencil_kwargs</span><span class="o">=</span><span class="n">stencil_kwargs</span><span class="p">,</span>
+            <span class="n">use_complex</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">slice_data</span> <span class="o">=</span> <span class="p">[</span><span class="nb">slice</span><span class="p">(</span><span class="o">*</span><span class="n">slc_data</span><span class="p">)</span> <span class="k">for</span> <span class="n">slc_data</span> <span class="ow">in</span> <span class="n">slice_data</span><span class="p">]</span>
+
+        <span class="c1"># Create the coordinate grid. This requires moving the axis to the</span>
+        <span class="c1"># correct position and then rescaling for the log components.</span>
+        <span class="n">coordinates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">moveaxis</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">mgrid</span><span class="p">[</span><span class="o">*</span><span class="n">slice_data</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">scaled</span><span class="p">:</span>
+            <span class="n">coordinates</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_log_mask</span><span class="p">[</span><span class="n">axes_mask</span><span class="p">]]</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="mi">10</span> <span class="o">**</span> <span class="n">coordinates</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_log_mask</span><span class="p">[</span><span class="n">axes_mask</span><span class="p">]]</span>
+            <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">coordinates</span></div>
 
 
     <span class="c1"># @@ FEATURES @@ #</span>

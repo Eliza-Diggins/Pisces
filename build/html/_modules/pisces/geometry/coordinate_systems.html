@@ -138,6 +138,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
       
@@ -219,6 +226,13 @@
 <li class="nav-item ">
   <a class="nav-link nav-internal" href="../../../reference/index.html">
     Pisces User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples.html">
+    Examples
   </a>
 </li>
 
@@ -1533,44 +1547,76 @@
 <span class="sd">        .. plot::</span>
 <span class="sd">            :include-source:</span>
 
-<span class="sd">            &gt;&gt;&gt; from pisces.profiles.density import HernquistDensityProfile</span>
+<span class="sd">            &gt;&gt;&gt; from pisces.profiles.density import NFWDensityProfile</span>
 <span class="sd">            &gt;&gt;&gt; from pisces.geometry.coordinate_systems import OblateHomoeoidalCoordinateSystem</span>
 <span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<span class="sd">            &gt;&gt;&gt; import unyt</span>
+<span class="sd">            &gt;&gt;&gt; from pisces.utilities.physics import G</span>
 <span class="sd">            &gt;&gt;&gt; import matplotlib.pyplot as plt</span>
-<span class="sd">            &gt;&gt;&gt; from matplotlib.colors import Normalize</span>
 <span class="sd">            &gt;&gt;&gt;</span>
 <span class="sd">            &gt;&gt;&gt; # Hernquist profile with rho_0 = 1, r_s = 1</span>
-<span class="sd">            &gt;&gt;&gt; dp = HernquistDensityProfile(rho_0=1, r_s=1)</span>
-<span class="sd">            &gt;&gt;&gt; r = np.geomspace(1e-1, 1e3, 1000)</span>
-<span class="sd">            &gt;&gt;&gt; known_potential = -2 * np.pi / (1 + r)</span>
+<span class="sd">            &gt;&gt;&gt; dp = NFWDensityProfile(rho_0=3.66e6,r_s=25.3)</span>
+<span class="sd">            &gt;&gt;&gt; r = np.geomspace(1e-1, 1e5, 1000)</span>
 <span class="sd">            &gt;&gt;&gt;</span>
-<span class="sd">            &gt;&gt;&gt; # Setup the figure</span>
-<span class="sd">            &gt;&gt;&gt; fig, axes = plt.subplots(nrows=2, sharex=True, figsize=(6,10))</span>
-<span class="sd">            &gt;&gt;&gt; _ = axes[0].loglog(r, -known_potential, label=&quot;True Spherical Potential&quot;,color=&#39;k&#39;,ls=&#39;-&#39;)</span>
-<span class="sd">            &gt;&gt;&gt; _ = axes[1].semilogx(r, -known_potential/np.abs(known_potential[0]), color=&#39;k&#39;,ls=&#39;-&#39;)</span>
-<span class="sd">            &gt;&gt;&gt; _ = axes[1].set_xlabel(&quot;Radius (r)&quot;)</span>
-<span class="sd">            &gt;&gt;&gt; _ = axes[0].set_ylabel(r&quot;Potential $-\Phi(r)$&quot;)</span>
-<span class="sd">            &gt;&gt;&gt; _ = axes[1].set_ylabel(r&quot;Potential, $-\Phi(r)/\Phi(0)$&quot;)</span>
+<span class="sd">            &gt;&gt;&gt; # Oblate system with e = 0 (spherical)</span>
+<span class="sd">            &gt;&gt;&gt; cs0 = OblateHomoeoidalCoordinateSystem(ecc=0.00)</span>
+<span class="sd">            &gt;&gt;&gt; cs= OblateHomoeoidalCoordinateSystem(ecc=0.86)</span>
 <span class="sd">            &gt;&gt;&gt;</span>
-<span class="sd">            &gt;&gt;&gt; # Cycle through various eccentricities and plot each one.</span>
-<span class="sd">            &gt;&gt;&gt; eccentricities = [0.0,0.1,0.2,0.5,0.7,0.9,0.99]</span>
+<span class="sd">            &gt;&gt;&gt; # The coordinates need to be constructed as (..., 3) with all the</span>
+<span class="sd">            &gt;&gt;&gt; # required coordinates. For this example, we have only 1 phi and 1 theta</span>
+<span class="sd">            &gt;&gt;&gt; # in the coordinates.</span>
 <span class="sd">            &gt;&gt;&gt; coords = np.moveaxis(np.meshgrid(r,[0],[0],indexing=&#39;ij&#39;),0,-1)</span>
-<span class="sd">            &gt;&gt;&gt; for ecc in eccentricities:</span>
-<span class="sd">            ...     cs= OblateHomoeoidalCoordinateSystem(ecc=ecc)</span>
-<span class="sd">            ...</span>
-<span class="sd">            ...     # The coordinates need to be constructed as (..., 3) with all the</span>
-<span class="sd">            ...     # required coordinates. For this example, we have only 1 phi and 1 theta</span>
-<span class="sd">            ...     # in the coordinates.</span>
-<span class="sd">            ...     computed_potential = cs.solve_radial_poisson_problem(</span>
-<span class="sd">            ...         dp, coords)</span>
-<span class="sd">            ...</span>
-<span class="sd">            ...     # Plot comparison</span>
-<span class="sd">            ...     _ = axes[1].semilogx(r, -computed_potential[:,0,0]/(np.abs(computed_potential[0,0,0])),color=plt.cm.cool(ecc),ls=&#39;--&#39;)</span>
-<span class="sd">            ...     _ = axes[0].loglog(r, -computed_potential[:,0,0],color=plt.cm.cool(ecc),ls=&#39;--&#39;)</span>
-<span class="sd">            &gt;&gt;&gt; _ = axes[0].legend()</span>
-<span class="sd">            &gt;&gt;&gt; plt.colorbar(plt.cm.ScalarMappable(Normalize(vmin=0,vmax=1),</span>
-<span class="sd">            ...     cmap=plt.cm.cool),ax=axes, orientation=&#39;horizontal&#39;,fraction=0.07, label=r&#39;Eccentricity, $e$&#39;)</span>
+<span class="sd">            &gt;&gt;&gt; computed_potential = (unyt.unyt_array(cs.solve_radial_poisson_problem(</span>
+<span class="sd">            ...     dp, coords)[:,0,0],&quot;Msun/kpc&quot;) * G).to_value(&quot;km**2/s**2&quot;)</span>
+<span class="sd">            &gt;&gt;&gt; computed_potential0 = (unyt.unyt_array(cs0.solve_radial_poisson_problem(</span>
+<span class="sd">            ...     dp, coords)[:,0,0],&quot;Msun/kpc&quot;) * G).to_value(&quot;km**2/s**2&quot;)</span>
+<span class="sd">            &gt;&gt;&gt; # Plot comparison</span>
+<span class="sd">            &gt;&gt;&gt; _ = plt.semilogx(r, computed_potential, label=&quot;True Spherical Potential&quot;,color=&#39;k&#39;,ls=&#39;-&#39;)</span>
+<span class="sd">            &gt;&gt;&gt; _ = plt.semilogx(r, computed_potential0, label=&quot;True Spherical Potential&quot;,ls=&#39;-&#39;)</span>
 <span class="sd">            &gt;&gt;&gt; plt.show()</span>
+
+
+<span class="sd">        .. plot::</span>
+<span class="sd">            :include-source:</span>
+
+<span class="sd">           # &gt;&gt;&gt; from pisces.profiles.density import HernquistDensityProfile</span>
+<span class="sd">           # &gt;&gt;&gt; from pisces.geometry.coordinate_systems import OblateHomoeoidalCoordinateSystem</span>
+<span class="sd">           # &gt;&gt;&gt; import numpy as np</span>
+<span class="sd">           # &gt;&gt;&gt; import matplotlib.pyplot as plt</span>
+<span class="sd">           # &gt;&gt;&gt; from matplotlib.colors import Normalize</span>
+<span class="sd">           # &gt;&gt;&gt;</span>
+<span class="sd">           # &gt;&gt;&gt; # Hernquist profile with rho_0 = 1, r_s = 1</span>
+<span class="sd">           # &gt;&gt;&gt; dp = HernquistDensityProfile(rho_0=1, r_s=1)</span>
+<span class="sd">           # &gt;&gt;&gt; r = np.geomspace(1e-1, 1e3, 1000)</span>
+<span class="sd">           # &gt;&gt;&gt; known_potential = -2 * np.pi / (1 + r)</span>
+<span class="sd">           # &gt;&gt;&gt;</span>
+<span class="sd">           # &gt;&gt;&gt; # Setup the figure</span>
+<span class="sd">           # &gt;&gt;&gt; fig, axes = plt.subplots(nrows=2, sharex=True, figsize=(6,10))</span>
+<span class="sd">           # &gt;&gt;&gt; _ = axes[0].loglog(r, -known_potential, label=&quot;True Spherical Potential&quot;,color=&#39;k&#39;,ls=&#39;-&#39;)</span>
+<span class="sd">           # &gt;&gt;&gt; _ = axes[1].semilogx(r, -known_potential/np.abs(known_potential[0]), color=&#39;k&#39;,ls=&#39;-&#39;)</span>
+<span class="sd">           # &gt;&gt;&gt; _ = axes[1].set_xlabel(&quot;Radius (r)&quot;)</span>
+<span class="sd">           # &gt;&gt;&gt; _ = axes[0].set_ylabel(r&quot;Potential $-\Phi(r)$&quot;)</span>
+<span class="sd">           # &gt;&gt;&gt; _ = axes[1].set_ylabel(r&quot;Potential, $-\Phi(r)/\Phi(0)$&quot;)</span>
+<span class="sd">           # &gt;&gt;&gt;</span>
+<span class="sd">           # &gt;&gt;&gt; # Cycle through various eccentricities and plot each one.</span>
+<span class="sd">           # &gt;&gt;&gt; eccentricities = [0.0,0.1,0.2,0.5,0.7,0.9,0.99]</span>
+<span class="sd">           # &gt;&gt;&gt; coords = np.moveaxis(np.meshgrid(r,[0],[0],indexing=&#39;ij&#39;),0,-1)</span>
+<span class="sd">           # &gt;&gt;&gt; for ecc in eccentricities:</span>
+<span class="sd">           # ...     cs= OblateHomoeoidalCoordinateSystem(ecc=ecc)</span>
+<span class="sd">           # ...</span>
+<span class="sd">           # ...     # The coordinates need to be constructed as (..., 3) with all the</span>
+<span class="sd">           # ...     # required coordinates. For this example, we have only 1 phi and 1 theta</span>
+<span class="sd">           # ...     # in the coordinates.</span>
+<span class="sd">           # ...     computed_potential = cs.solve_radial_poisson_problem(</span>
+<span class="sd">           # ...         dp, coords)</span>
+<span class="sd">           # ...</span>
+<span class="sd">           # ...     # Plot comparison</span>
+<span class="sd">           # ...     _ = axes[1].semilogx(r, -computed_potential[:,0,0]/(np.abs(computed_potential[0,0,0])),color=plt.cm.cool(ecc),ls=&#39;--&#39;)</span>
+<span class="sd">           # ...     _ = axes[0].loglog(r, -computed_potential[:,0,0],color=plt.cm.cool(ecc),ls=&#39;--&#39;)</span>
+<span class="sd">           # &gt;&gt;&gt; _ = axes[0].legend()</span>
+<span class="sd">           # &gt;&gt;&gt; plt.colorbar(plt.cm.ScalarMappable(Normalize(vmin=0,vmax=1),</span>
+<span class="sd">           # ...     cmap=plt.cm.cool),ax=axes, orientation=&#39;horizontal&#39;,fraction=0.07, label=r&#39;Eccentricity, $e$&#39;)</span>
+<span class="sd">           # &gt;&gt;&gt; plt.show()</span>
 
 <span class="sd">        See Also</span>
 <span class="sd">        --------</span>

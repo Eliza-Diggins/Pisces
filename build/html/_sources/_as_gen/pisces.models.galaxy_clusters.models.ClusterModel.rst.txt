@@ -68,7 +68,6 @@ ClusterModel
       ~ClusterModel.handle
       ~ClusterModel.is_solved
       ~ClusterModel.logger
-      ~ClusterModel.particle_sampler
       ~ClusterModel.path
       ~ClusterModel.profiles
    

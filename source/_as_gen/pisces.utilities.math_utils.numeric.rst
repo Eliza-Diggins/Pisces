@@ -17,6 +17,7 @@ pisces.utilities.math_utils.numeric
 
    
       compute_grid_spacing
+      create_cdf
       function_partial_derivative
       integrate
       integrate_from_zero

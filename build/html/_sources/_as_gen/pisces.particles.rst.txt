@@ -1,0 +1,35 @@
+﻿pisces.particles
+================
+
+.. automodule:: pisces.particles
+
+   
+   
+   
+
+   
+   
+   
+
+   
+   
+   .. rubric:: Modules
+
+   .. autosummary::
+      :toctree:
+      :template: module.rst
+      :recursive:
+
+   
+      base
+      sampling
+   
+   
+
+   
+   
+   
+
+   
+   
+   

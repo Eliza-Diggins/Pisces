@@ -22,11 +22,13 @@
 
    
       base
+      galaxies
       galaxy_clusters
       grids
-      samplers
       solver
+      stars
       utilities
+      virialize
    
    
 

@@ -51,7 +51,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="1. Model Grid Management" href="models/modeling_grids.html" />
-    <link rel="prev" title="pisces.models.utilities.ModelConfigurationDescriptor.__init__" href="../_as_gen/pisces.models.utilities.ModelConfigurationDescriptor.__init__.html" />
+    <link rel="prev" title="pisces.initial_conditions" href="../_as_gen/pisces.initial_conditions.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="" />
@@ -143,6 +143,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
       
@@ -229,6 +236,13 @@
   </a>
 </li>
 
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../examples.html">
+    Examples
+  </a>
+</li>
+
   </ul>
 </nav></div>
           
@@ -267,6 +281,13 @@
 <li class="toctree-l1"><a class="reference internal" href="models/galaxy_clusters.html">1. Galaxy Cluster Modeling</a></li>
 </ul>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="particles/particles.html">1. Particles in Pisces</a></li>
+</ul>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="particles/sampling.html">1. Sampling Particles From Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="particles/virialization.html">2. Virializing Particles</a></li>
+</ul>
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="profiles/profiles_overview.html">1. Profiles in Pisces</a></li>
 <li class="toctree-l1"><a class="reference internal" href="profiles/profiles_developer.html">2. Profiles For Developers</a></li>
 </ul>
@@ -275,9 +296,6 @@
 </ul>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="geometry/poisson_equation.html">1. Solutions to the Poisson Equation</a></li>
-</ul>
-<ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="particles/sampling.html">1. Sampling Particles From Models</a></li>
 </ul>
 </div>
 </nav></div>
@@ -374,6 +392,29 @@ guides below will introduce the relevant physics and API for specific models.</p
 </div>
 </section>
 </section>
+<section id="particle-datasets">
+<h2>⚛️  Particle Datasets<a class="headerlink" href="#particle-datasets" title="Link to this heading">#</a></h2>
+<p>Useful for many purposes, Pisces supports to conversion of models to particle datasets. These datasets can be
+easily combined, altered, and exported for various purposes. Additionally, many astrophysical simulation softwares
+utilize particle based schemes for hydrodynamics / magnetohydrodynamics.</p>
+<hr style="height:2px;background-color:black"><section id="id1">
+<h3>Overview<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="particles/particles.html">1. Particles in Pisces</a></li>
+</ul>
+</div>
+</section>
+<section id="theory">
+<h3>Theory<a class="headerlink" href="#theory" title="Link to this heading">#</a></h3>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="particles/sampling.html">1. Sampling Particles From Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="particles/virialization.html">2. Virializing Particles</a></li>
+</ul>
+</div>
+</section>
+</section>
 <section id="svg-version-4-0-0-63c5cb3-width-2-0em-height-2-0em-class-sd-material-icon-sd-material-icon-show-chart-viewbox-0-0-24-24-aria-hidden-true-path-d-m0-0h24v24h0z-fill-none-path-path-d-m3-5-18-49l6-6-01-4-4l22-6-92l-1-41-1-41-7-09-7-97-4-4l2-16-99z-path-svg-profiles">
 <h2><svg version="4.0.0.63c5cb3" width="2.0em" height="2.0em" class="sd-material-icon sd-material-icon-show_chart" viewBox="0 0 24 24" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"></path><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"></path></svg> Profiles<a class="headerlink" href="#svg-version-4-0-0-63c5cb3-width-2-0em-height-2-0em-class-sd-material-icon-sd-material-icon-show-chart-viewbox-0-0-24-24-aria-hidden-true-path-d-m0-0h24v24h0z-fill-none-path-path-d-m3-5-18-49l6-6-01-4-4l22-6-92l-1-41-1-41-7-09-7-97-4-4l2-16-99z-path-svg-profiles" title="Link to this heading">#</a></h2>
 <hr style="height:2px;background-color:black"><p>Underlying all of the models in Pisces are physical profiles representing individual quantities like density and
@@ -405,14 +446,6 @@ with these classes.</p>
 </ul>
 </div>
 </section>
-<section id="statistical-methods">
-<h3>Statistical Methods<a class="headerlink" href="#statistical-methods" title="Link to this heading">#</a></h3>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="particles/sampling.html">1. Sampling Particles From Models</a></li>
-</ul>
-</div>
-</section>
 </section>
 </section>
 
@@ -427,12 +460,12 @@ with these classes.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../_as_gen/pisces.models.utilities.ModelConfigurationDescriptor.__init__.html"
+       href="../_as_gen/pisces.initial_conditions.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">pisces.models.utilities.ModelConfigurationDescriptor.__init__</p>
+        <p class="prev-next-title">pisces.initial_conditions</p>
       </div>
     </a>
     <a class="right-next"
@@ -469,11 +502,15 @@ with these classes.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#physical-models">Physical Models</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#particle-datasets">⚛️  Particle Datasets</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Overview</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#theory">Theory</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#svg-version-4-0-0-63c5cb3-width-2-0em-height-2-0em-class-sd-material-icon-sd-material-icon-show-chart-viewbox-0-0-24-24-aria-hidden-true-path-d-m0-0h24v24h0z-fill-none-path-path-d-m3-5-18-49l6-6-01-4-4l22-6-92l-1-41-1-41-7-09-7-97-4-4l2-16-99z-path-svg-profiles"><svg aria-hidden="true" class="sd-material-icon sd-material-icon-show_chart" height="2.0em" version="4.0.0.63c5cb3" viewbox="0 0 24 24" width="2.0em"><path d="M0 0h24v24H0z" fill="none"></path><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"></path></svg> Profiles</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#svg-version-4-0-0-63c5cb3-width-2-0em-height-2-0em-class-sd-material-icon-sd-material-icon-functions-viewbox-0-0-24-24-aria-hidden-true-path-d-m0-0h24v24h0z-fill-none-path-path-d-m18-4h6v2l6-5-6l6-18v2h12v-3h-7l5-5-5-5h7z-path-svg-mathematics"><svg aria-hidden="true" class="sd-material-icon sd-material-icon-functions" height="2.0em" version="4.0.0.63c5cb3" viewbox="0 0 24 24" width="2.0em"><path d="M0 0h24v24H0z" fill="none"></path><path d="M18 4H6v2l6.5 6L6 18v2h12v-3h-7l5-5-5-5h7z"></path></svg> Mathematics</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#system-geometry">System Geometry</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mathematical-physics">Mathematical Physics</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#statistical-methods">Statistical Methods</a></li>
 </ul>
 </li>
 </ul>

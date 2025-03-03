@@ -24,6 +24,7 @@ ModelGridManager
       ~ModelGridManager.get_chunk_map
       ~ModelGridManager.get_chunk_mask
       ~ModelGridManager.get_chunk_stencil
+      ~ModelGridManager.get_coordinate
       ~ModelGridManager.get_coordinates
       ~ModelGridManager.get_grid_summary
       ~ModelGridManager.get_stencil_bbox

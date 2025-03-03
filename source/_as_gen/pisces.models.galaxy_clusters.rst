@@ -23,6 +23,7 @@ pisces.models.galaxy_clusters
    
       grids
       models
+      virializers
    
    
 
