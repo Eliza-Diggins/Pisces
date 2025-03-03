@@ -116,6 +116,7 @@ Contents
 
    api
    reference/index
+   examples
 
 
 Indices and tables

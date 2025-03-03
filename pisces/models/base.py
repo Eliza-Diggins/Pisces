@@ -25,7 +25,6 @@ from pisces.geometry.base import CoordinateSystem
 from pisces.geometry.coordinate_systems import SphericalCoordinateSystem
 from pisces.io.hdf5 import HDF5_File_Handle
 from pisces.models.grids.base import ModelGridManager
-from pisces.models.samplers import ModelSampler
 from pisces.models.solver import ModelSolver
 from pisces.models.utilities import ModelConfigurationDescriptor
 from pisces.profiles.base import Profile
@@ -446,11 +445,7 @@ class Model(metaclass=ModelMeta):
     model class's grid structures. Implementing a custom grid manager class specific to particular model constraints is made
     possible by altering this attribute of the model class to point to the custom manager class.
     """
-    SAMPLE_TYPE: Type["ModelSampler"] = ModelSampler
-    """ Type[:py:class:`~pisces.models.samplers.ModelSampler`]: The sampler class to initialize when the
-    model is asked to produce particles from its distributions.
-    """
-    # TODO: better doc.
+
     logger: "Logger" = LogDescriptor()
     """ Logger: The specialized logger for this model class.
 
@@ -789,7 +784,7 @@ class Model(metaclass=ModelMeta):
 
     def __getitem__(self, item: str) -> "ModelField":
         try:
-            return self.profiles[item]
+            return self.FIELDS[item]
         except KeyError:
             raise KeyError(f"Model {self} has no field named {item}.")
 
@@ -962,17 +957,6 @@ class Model(metaclass=ModelMeta):
         be stored in the HDF5 file and retrieved for further computations.
         """
         return self._profiles
-
-    @property
-    def particle_sampler(self) -> ModelSampler:
-        r"""
-        The model sampler attached to this model.
-        """
-        # TODO: better doc.
-        if not hasattr(self, "_particle_sampler"):
-            self._particle_sampler = ModelSampler(self)
-
-        return self._particle_sampler
 
     @property
     def is_solved(self) -> bool:

@@ -12,7 +12,7 @@ Array Requirements
 
 """
 import warnings
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -590,3 +590,109 @@ def build_image_coordinate_array(
     coordinate_array[..., fixed_axis] = position
 
     return coordinate_array
+
+
+def extend_and_pad(
+    x: np.ndarray, y: np.ndarray, bounds: np.ndarray, threshold: float = 1e-7
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Extend the coordinate grid and pad the associated data array so that the grid
+    reaches the specified boundary values.
+
+    Parameters
+    ----------
+    x: np.ndarray
+        Coordinate grid array with shape ``(N1, N2, ..., Nk, k)``, where the last
+        dimension represents the ``k`` coordinate axes. It is assumed that the grid
+        is separable (each coordinate axis can be extracted independently).
+    y: np.ndarray
+        Data array associated with the coordinate grid, of shape ``(N1, N2, ..., Nk)``.
+    bounds: np.ndarray
+        A 1D array of length ``2*k`` specifying the lower and upper boundaries
+        for each coordinate axis. For axis ``i``, ``bounds[2*i]`` is the lower bound
+        and ``bounds[2*i+1]`` is the upper bound.
+    threshold: float, optional
+        The minimum difference between the grid edge and the provided bound
+        required to trigger an extension. Defaults to ``1e-7``.
+
+    Returns
+    -------
+    x_extended: np.ndarray
+        The extended coordinate grid with shape (M1, M2, ..., Mk, k),
+        where the spatial dimensions have been extended on sides that
+        meet the threshold.
+    y_extended: np.ndarray
+        The padded data array with shape (M1, M2, ..., Mk), padded using edge values.
+    lr_specifier_buffer: np.ndarray
+        The array of shape ``(k,2)`` specifying if the lower and upper bounds of each axis are extended.
+    Raises
+    ------
+    ValueError:
+        If the length of the bounds array is not equal to 2*k or if a provided bound is
+        smaller than the corresponding edge of the coordinate grid.
+    """
+    # Determine the number of dimensions, validate that the bounds are correctly specified,
+    # and generate the _lr_specifier_buffer to indicate which axes are being extended and
+    # in which directions they are being extended.
+    _number_of_dims = x.shape[-1]
+    _lr_specifier_buffer = np.zeros((_number_of_dims, 2), dtype=bool)
+
+    if len(bounds) != _number_of_dims * 2:
+        raise ValueError(
+            f"`x` is {_number_of_dims} dimensions, bounds should be length {_number_of_dims * 2} not {len(bounds)}."
+        )
+
+    # For each axis in the domain, we need to accomplish the following:
+    # 1. Extract the abscissa coordinates along that axis.
+    # 2. Extend the abscissa as needed to incorporate the bounds.
+    # 3. Add the new axis-specific abscissas back to the `new_axes` list.
+    new_axes = []
+    for axis in range(_number_of_dims):
+        # Obtain the bounds and obtain the basic axis coordinates so that
+        # they can be compared.
+        index = [0] * _number_of_dims
+        index[axis] = slice(None)
+        axis_coords = x[*tuple(index), axis]
+
+        # Extract the bounds and the abscissa bounds.
+        _lb, _ub = bounds[2 * axis], bounds[2 * axis + 1]
+        _b, _u = axis_coords[0], axis_coords[-1]
+
+        # Compare the bounds and the edges. If a bound is sufficiently
+        # far away from the edge, we indicate that we need to extend.
+        db, du = _b - _lb, _ub - _u
+        if db >= threshold:
+            _lr_specifier_buffer[axis, 0] = True
+        elif db < 0:
+            raise ValueError(
+                f"Lower bound on axis {axis} is larger than the "
+                f"edge of the abscissa."
+            )
+        if du >= threshold:
+            _lr_specifier_buffer[axis, 1] = True
+        elif du < 0:
+            raise ValueError(
+                f"Upper bound on axis {axis} is larger than the "
+                f"edge of the abscissa."
+            )
+
+        # Using the lr specifier buffer, we need to generate the
+        # reshaped array and then concatenate to form each of the constituent
+        # axes again.
+        if _lr_specifier_buffer[axis, 0]:
+            axis_coords = np.concatenate(([bounds[2 * axis]], axis_coords))
+        if _lr_specifier_buffer[axis, 1]:
+            axis_coords = np.concatenate((axis_coords, [bounds[2 * axis + 1]]))
+
+        new_axes.append(axis_coords)
+
+    # Now that the corrected shape is known, we need to produce buffers and
+    # then determine the slices that correspond to the old dataset. Then we can
+    # finish up.
+    #
+    # Y can just be extended using the numpy padding implementation.
+    y_extended = np.pad(y, _lr_specifier_buffer.astype(int), mode="edge")
+    x_extended = np.meshgrid(*new_axes, indexing="ij")
+    x_extended = np.moveaxis(np.asarray(x_extended, dtype="f8"), 0, -1)
+
+    return x_extended, y_extended, _lr_specifier_buffer
