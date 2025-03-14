@@ -5,26 +5,36 @@
 Pisces
 =========
 
-|yt-project|
+|yt-project| |isort| |black| |Pre-Commit| |docformatter| |NUMPSTYLE| |COMMIT| |CONTRIBUTORS| |docs|
 
 .. raw:: html
 
    <hr style="height:2px;background-color:black">
 
-**Pisces (or Py-ICs)** is an initial conditions generator software for astrophysical simulations and modeling. Pisces is capable of
-producing models of galaxies, galaxy clusters, early universe perturbations, and other useful systems either for use in their
-own right, or for export to simulation software. To ensure compatibility with emerging simulation softwares, Pisces maintains
-frontends which allow for easy interoperability between itself and all of the major simulation softwares.
+**Pisces (or Py-ICs)** is an open-source toolkit for constructing models of astrophysical systems and generating data for
+simulations. Designed for flexibility and ease of use, Pisces enables researchers to create a wide range of astrophysical
+models—including galaxies, galaxy clusters, and early universe perturbations—whether for direct analysis or as input for
+simulation software.
 
-This repository contains the core package, which is constructed modularly to facilitate easy development by users to meet
-particular scientific use cases. All of the necessary tools to get started building initial conditions are provided.
+Rather than being limited to initial condition generation, Pisces provides a modular and extensible framework that
+supports a variety of scientific use cases. It is built to integrate seamlessly with major astrophysical simulation
+tools through dedicated frontends, ensuring broad compatibility and interoperability.
 
-Development occurs here on Github, if you encounter any bugs, issues, documentation failures, or want to suggest features,
-we recommend that you submit an issue on the issues page of the repository.
+The core package is structured to facilitate customization and development, allowing users to adapt it to their specific
+research needs. All essential tools for model construction are included, with an emphasis on accessibility and ease of extension.
+
+Development takes place on `GitHub <https://www.github.com/eliza-diggins/Pisces>`_. If you encounter any issues, documentation
+gaps, or have feature suggestions, we encourage you to submit them via the repository's issues page.
+
 
 .. raw:: html
 
    <hr style="color:black">
+
+Installation
+============
+Pisces is written in Python 3.8 and is compatible with Python 3.8+ with continued support for older versions of Python. For instructions
+on installation and getting started, check out the :ref:`getting_started` page.
 
 
 Resources
@@ -79,7 +89,7 @@ Resources
 
         +++
 
-        .. button-ref:: reference
+        .. button-ref:: reference/index
             :expand:
             :color: secondary
             :click-parent:
@@ -117,6 +127,7 @@ Contents
    api
    reference/index
    examples
+   getting_started
 
 
 Indices and tables
@@ -133,3 +144,27 @@ Indices and tables
 
 .. |yt-project| image:: https://img.shields.io/static/v1?label="works%20with"&message="yt"&color="blueviolet"
    :target: https://yt-project.org
+
+.. |docs| image:: https://img.shields.io/badge/docs-latest-brightgreen
+   :target: https://eliza-diggins.github.io/Pisces
+
+.. |black| image:: https://img.shields.io/badge/code%20style-black-000000
+   :target: https://github.com/psf/black
+
+.. |isort| image:: https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336
+   :target: https://pycqa.github.io/isort/
+
+.. |Pre-Commit| image:: https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white
+   :target: https://github.com/pre-commit/pre-commit
+   :alt: pre-commit
+
+.. |CONTRIBUTORS| image:: https://img.shields.io/github/contributors/eliza-diggins/Pisces
+    :target: https://github.com/eliza-diggins/Pisces/graphs/contributors
+
+.. |COMMIT| image:: https://img.shields.io/github/last-commit/eliza-diggins/Pisces
+
+.. |NUMPSTYLE| image:: https://img.shields.io/badge/%20style-numpy-459db9
+    :target: https://numpydoc.readthedocs.io/en/latest/format.html
+
+.. |docformatter| image:: https://img.shields.io/badge/%20formatter-docformatter-fedcba
+    :target: https://github.com/PyCQA/docformatter

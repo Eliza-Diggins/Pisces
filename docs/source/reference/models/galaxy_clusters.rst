@@ -1,6 +1,6 @@
 .. _galaxy_clusters_models:
-Galaxy Cluster Modeling
-=======================
+Galaxy Clusters
+===============
 
 Overview
 --------

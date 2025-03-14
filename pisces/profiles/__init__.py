@@ -31,17 +31,17 @@ from .density import (
     MooreDensityProfile,
     NFWDensityProfile,
     PlummerDensityProfile,
-    RadialDensityProfile,
     SingularIsothermalDensityProfile,
     SNFWDensityProfile,
     TNFWDensityProfile,
     VikhlininDensityProfile,
+    _RadialDensityProfile,
 )
 from .entropy import (
     BaselineEntropyProfile,
     BrokenEntropyProfile,
-    RadialEntropyProfile,
     WalkerEntropyProfile,
+    _RadialEntropyProfile,
 )
 from .temperature import (
     AM06TemperatureProfile,
@@ -49,7 +49,7 @@ from .temperature import (
     CoolingFlowTemperatureProfile,
     DoubleBetaTemperatureProfile,
     IsothermalTemperatureProfile,
-    RadialTemperatureProfile,
     UniversalPressureTemperatureProfile,
     VikhlininTemperatureProfile,
+    _RadialTemperatureProfile,
 )

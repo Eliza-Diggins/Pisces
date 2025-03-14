@@ -1,11 +1,35 @@
 .. _geometry_overview:
 
-Geometry Overview
-=================
+============================
+Coordinate Systems in Pisces
+============================
 
-One of the cornerstone features of Pisces is its ability to support complicated processes in many generic coordinate systems.
-On this page, and the linked sub-pages, you'll find a detailed accounting of the theory and implementation behind our coordinate
-systems and what they can be used for.
+Pisces is a versatile model-building software designed for astrophysical applications across a wide range of scales
+and geometries. It supports modeling scenarios from galaxy clusters to stellar structures, as well as more
+intricate astrophysical environments.
+
+One of Pisces' core strengths is its ability to handle complex physical processes in diverse and flexible
+coordinate systems. This capability allows users to work seamlessly with different geometries, making
+it suitable for a variety of astrophysical contexts.
+
+On this page—and the linked sub-pages—you’ll find a comprehensive overview of the theory and implementation behind
+Pisces’ coordinate system framework, along with guidance on how to leverage it for your own modeling needs.
+
+Overview
+--------
+
+Coordinate systems and geometric computations are a complicated aspect of Pisces and (in some ways) are also the most
+critical part of the underlying infrastructure. Everything geometry related is managed through the :py:mod:`pisces.geometry` module,
+which features sub-modules for the following
+
+- :py:mod:`~pisces.geometry.coordinate_systems`: Provides classes representing all of the different coordinate systems you
+  can use in Pisces models as well as support for differential operations like the gradient, divergence, and laplacian.
+- :py:mod:`~pisces.geometry.handler`: Provides classes which merge coordinate systems with **symmetry** to reduce the complexity
+  of certain operations.
+
+Together, these two modules are used in pretty much every component of the Pisces ecosystem.
+
+
 
 Theory
 ------

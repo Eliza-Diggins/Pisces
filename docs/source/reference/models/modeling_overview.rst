@@ -1,6 +1,6 @@
 .. _modeling_overview:
-Introduction to Pisces Modeling
-===============================
+Modeling Overview
+===================
 
 The cornerstone of the Pisces ecosystem is the generation of astrophysical models. These models, in turn, can be passed
 on as initial conditions for simulations, used as test cases, or fed through instrument simulators to drive forward various
@@ -14,8 +14,8 @@ level necessary to use the Pisces library for science.
     also made an effort to exhaustively document the relevant codebase. The code is complex; however, it should be parsable
     given a solid understanding of python development.
 
-Overview
---------
+Introduction
+------------
 
 Every model in Pisces is a subclass of the :py:class:`~pisces.models.base.Model` class; which handles most of the basic
 logic of interaction, data management, file IO, etc. You're unlikely to ever need to interact directly with the model class; instead

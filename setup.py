@@ -22,6 +22,13 @@ linterp_utils = Extension(
     libraries=["m"],
     include_dirs=[np.get_include()],
 )
+eddington_utils = Extension(
+    "pisces.dynamics.eddington_sample",
+    sources=["pisces/dynamics/eddington_sample.pyx"],
+    language="c",
+    libraries=["m"],
+    include_dirs=[np.get_include()],
+)
 inv_sample_utils = Extension(
     "pisces.particles.sampling._invsamp",
     sources=["pisces/particles/sampling/_invsamp.pyx"],
@@ -74,6 +81,8 @@ setup(
         "Topic :: Scientific/Engineering :: Visualization",
     ],
     include_package_data=True,
-    ext_modules=cythonize([linterp_utils, inv_sample_utils, rej_sample_utils]),
+    ext_modules=cythonize(
+        [linterp_utils, inv_sample_utils, rej_sample_utils, eddington_utils]
+    ),
     python_requires=">=3.6",
 )

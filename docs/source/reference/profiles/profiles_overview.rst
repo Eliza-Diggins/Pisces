@@ -1,34 +1,74 @@
 .. _profiles-overview:
+
+===================
 Profiles in Pisces
 ===================
+
+Pisces uses profiles (effectively fancy functions) as a starting point for most modeling tasks. If you're trying to
+build a galaxy cluster, you'll use profiles for the dark matter density and the ICM temperature. If you're building a disk
+galaxy, you'll use profiles to specify the shape of the disk and the size of the bulge.
+
+Under the hood, all of the profiles in Pisces are contained in the :py:mod:`pisces.profiles` module. Many profiles that are
+familiar from the literature are already built-in and ready to use. In some cases, you may need to define a custom profile; in
+which case, you'll want to have a look at :ref:`profiles-developers`.
+
+Overview
+--------
+
+In Pisces, profiles are all descendants of the :py:class:`~pisces.profiles.base.Profile` class which provides the vast majority
+of the core functionality. It's worth reading the API documentation of that class if you're interested in the nitty-gritty, but
+at their core, profiles are **just functions** with some extra structure for various purposes.
+
+More specifically, Pisces profiles provide the following core functionality:
+
+- Pisces profiles are **callable functions** of their variables - they act just like any other ``def`` (or ``lambda``) style
+  function in python.
+- Pisces profiles have **parameters** which are specified when they are initialized which allow the user to specify things
+  like the shape of the profile.
+- Profile classes represent **types / families of profiles** which are then instantiated to produce **functions** in that family.
+- Profiles support both **numerical** and **symbolic** representations and manipulations. This allows then to occasionally
+  be useful for skipping numerical steps in procedures when a symbolic solution already exists.
+- Profiles have **units**.
+
 
 Profiles are a fundamental component in Pisces, designed to represent mathematical models with symbolic and numerical support.
 They are particularly useful for modeling quantities that depend on one or more independent variables, such as density,
 temperature, or velocity distributions.
 
-This guide provides an overview of the :py:class:`~pisces.profiles.base.Profile` base class, its key attributes and methods,
-and how to create your own profiles.
+.. _prof_create_call:
+Creating and Calling a Profile Instance
+----------------------------------------
 
-At their core, profiles in Pisces are mathematical functions parameterized by:
+When you're using built-in profiles, the setup is really quite simple. You simply need to find the corresponding
+:py:class:`~pisces.profiles.base.Profile` subclass and import it - then you can initialize it with the parameters of
+the profile.
 
-- **Independent variables** (:py:attr:`~pisces.profiles.base.Profile.AXES`): Variables that the profile depends on.
-- **Parameters** (:py:attr:`~pisces.profiles.base.Profile.DEFAULT_PARAMETERS`): Values that define the behavior or shape of the profile.
-- **Units** (:py:attr:`~pisces.profiles.base.Profile.DEFAULT_UNITS`): The dimensionality of the profile's output.
+.. hint::
 
-Each :py:class:`~pisces.profiles.base.Profile` has a base function which incorporates these axes and parameters, and each
-instance of the profile represents a specific choice of the parameters.
+    The API documentation for each of the profiles will tell you exactly what parameters are present available. Each profile
+    has a set of default parameters (:py:attr:`pisces.profiles.base.Profile.DEFAULT_PARAMETERS`) which will fill in any missing values
+    that aren't specified when you create the profile instance.
 
-Profiles support both symbolic manipulation (via `Sympy <https://www.sympy.org>`_) and numerical evaluation (via ``numpy``),
-making them versatile for analytical and computational tasks.
+Once a profile has been created using
 
-Initializing and Calling Profiles
----------------------------------
+.. code-block:: python
 
-At the surface, :py:class:`~pisces.profiles.base.Profile` classes are easy to work with. To initialize one, you simply need
-to feed it the relevant parameters (:py:attr:`~pisces.profiles.base.Profile.DEFAULT_PARAMETERS`) as ``kwargs``. For example, we can
-create and plot a :py:class:`~pisces.profiles.density.NFWDensityProfile` very simply:
+    >>> from pisces.profiles.density import NFWDensityProfile
+    >>> density = NFWDensityProfile(**params)
 
-.. dropdown:: Example
+you can all it just like any function:
+
+.. code-block:: python
+
+    >>> density(0)
+    (value at r=0)
+
+.. note::
+
+    Profiles are not strictly 1D functions - they could be functions of many variables. In that case, you need
+    to feed in each variable as a separate argument when calling the function.
+
+.. dropdown:: Example: Plotting an NFW Profile
 
     .. plot::
         :include-source:
@@ -45,73 +85,124 @@ create and plot a :py:class:`~pisces.profiles.density.NFWDensityProfile` very si
         >>> plt.xlabel(r"Radius, kpc")
         >>> plt.show()
 
-You can easily access the parameters (:py:attr:`~pisces.profiles.base.Profile.parameters`) and the units (:py:attr:`~pisces.profiles.base.Profile.units`)
-of your profile instance at any time.
+.. _prof_units:
+Profile Units and Parameter Units
+----------------------------------
 
-.. tip::
+In previous packages which inspired Pisces, model creation was done in a restrictive enough regime that there was a
+"natural unit system" to use. This is not the case in Pisces and therefore has necessitated including units in all Pisces profiles.
 
-    You can always set the output units of a profile by specifying ``units=...`` when initializing it. The units must
-    be consistent the with class default (:py:attr:`~pisces.profiles.base.Profile.DEFAULT_UNITS`), but other than that constraint,
-    they may be chosen to fit your need.
+Unit handling throughout Pisces is managed using the `unyt <https://unyt.readthedocs.io/en/stable/>`_ package which also provides
+unit management for the `yt project <yt-project.org>`_. We encourage briefly checking out the documentation for ``unyt`` to
+familiarize yourself with the basics of specifying unit-bearing quantities.
 
-Symbolic and Numeric Expressions
---------------------------------
+When creating a profile, input parameters may be **either** ``float`` or :py:class:`~unyt.unyt_quantity`. If a ``float`` is
+provided, then the parameter is assumed to be using the default unit for that parameter (which is specified by the developer). If
+an :py:class:`~unyt.unyt_quantity` is provided instead, then those units are propagated forward in the profile.
 
-Each profile class supports both symbolic and numerical representations of its underlying function as well as symbolic and numerical
-representations of special attributes like derivatives, integrals, and other properties. To access the underlying function, you can use
-either :py:attr:`~pisces.profiles.base.Profile.symbolic_expression` to access the instance-level version (with parameters substituted in) or
-:py:attr:`~pisces.profiles.base.Profile.class_symbolic_expression` to access the class-level version (without parameter substitution).
+Likewise, the ``axes_units`` argument can be provided when initializing the profile to specify the units of the dependent axes.
+Using the parameter and axes units, Pisces will automatically determine the "natural" output units for the profile and return any
+outputs as a :py:class:`unyt.unyt_array` with those units.
 
-Other symbolic expressions related to the base function may exist for specific profiles. They are always registered in one of two
-places / categories:
+When calling a profile, arguments without units are assumed to have the units specified in ``axes_units``. Arguments with units
+are propagated consistently. You can also set the ``units`` kwarg when calling a profile to determine which output units to use.
 
-- **Class-Level Expressions**: These are intrinsic to the **class**.
-- **Instance-Level Expressions**: These are intrinsic to each **instance**
+.. dropdown:: Example: NFW With Different Units
 
-The instance level expressions can also be converted to **numerical expressions** which are then well suited to computational
-tasks.
+    .. code-block:: python
+
+        >>> from pisces.profiles.density import NFWDensityProfile
+        >>>
+        >>> # Create an NFW profile with the default units.
+        >>> nfw_density_default_units  = NFWDensityProfile(rho_0=1e5,r_s=150) # (Assumes Msun/pc^3 and pc)
+        >>> print(nfw_density_default_units.output_units)
+        Msun/pc**3
+        >>> # Create an NFW profile in cgs.
+        >>> from unyt import unyt_quantity as uq
+        >>> nfw_density_default_units  = NFWDensityProfile(rho_0=uq(1,'g/cm**3'),r_s=uq(10,'m'))
+        >>> print(nfw_density_default_units.output_units)
+        g/cm**3
+
+.. hint::
+
+    You can check what units are being used when you have a profile by interacting with the :py:attr:`~pisces.profiles.base.Profile.axes_units`,
+    :py:attr:`~pisces.profiles.base.Profile.parameters`, and :py:attr:`~pisces.profiles.base.Profile.output_units` attributes.
+
+Working With Profiles Symbolically
+----------------------------------
+
+Underlying the Pisces profile system is the `sympy <https://www.sympy.org/en/index.html>`_ package, which provides support
+for computer algebra in python. Under the hood, each :py:class:`~pisces.profiles.Profile` class has a set of symbolic axes
+(:py:attr:`~pisces.profiles.Profile.SYMBAXES`) and a set of symbolic parameters (:py:attr:`~pisces.profiles.Profile.SYMBPARAMS`).
+When the class is created (when you import ``pisces``), Sympy will automatically build a **symbolic** version of the profile.
+
+Later on, when you initialize an instance of the profile, the parameters get substituted into the symbolic expression and
+the entire expression is converted to an efficient (numpy based) callable function. This is extremely versatile because users
+have access to both **symbolic manipulations** and **numerical manipulations** of the profile. In many cases, some (potentially
+expensive) numerical operations can be skipped over because an analytic solution is already known to exist for a particular profile. Access
+to the symbolic expressions allows these sorts of optimizations to be easily incorporated into the code base.
+
+In each profile class, the :py:attr:`~pisces.profiles.base.Profile.profile_expression` contains the symbolic representation of
+the profile:
+
+.. code-block:: python
+
+    >>> from pisces.profiles.density import NFWDensityProfile
+    >>> print(NFWDensityProfile.profile_expression)
+    r_s*rho_0/(r*(r/r_s + 1)**2)
+
+Each of the symbols in this expression is either a parameter symbol or a variable symbol as described in the preceding paragraph.
+
+Once the profile is initialized, you can access the "simplified" expression with parameters substituted in using :py:attr:`~pisces.profiles.base.symbolic_expression`.
+
+    >>> from pisces.profiles.density import NFWDensityProfile
+    >>> prof = NFWDensityProfile()
+    >>> print(prof.symbolic_expression)
+    1.0/(r*(1.0*r + 1)**2)
+
+Derived Expressions
++++++++++++++++++++
+
+One of the most useful features of Pisces profiles is the ability to derive new symbolic representations from expressions. We call
+these **derived expressions** and they can be created / manipulated in a variety of ways.
+
+In many cases, profiles (particularly well known profiles) have derived expressions which built into the Pisces infrastructure. These
+are called **class-level derived expressions** because they are provided as part of the profile class and are written by a developer.
+To see a list of these derived expressions, you can simply call :py:meth:`~pisces.profiles.base.Profile.list_class_expressions`.
+
+.. code-block:: python
+
+    >>> prof = NFWDensityProfile()
+    >>> prof.list_class_expressions()
+    ['spherical_potential', 'spherical_mass', 'derivative']
 
 .. note::
 
-    You cannot make class level expressions numerical because they still contain symbols for parameters. You can create an
-    instance-level version of any class-level expression and then create a numerical version of that. See the sections below
-    for details.
+    Not all profiles have any derived expressions at the class level - others may have many depending on
+    the relevance of the profile.
 
-Class Level Expressions
-+++++++++++++++++++++++
+In the example above, there are 3 class expressions representing different properties of the NFW profile. To access a derived attribute
+at the class level, simply use :py:meth:`~pisces.profiles.base.Profile.get_class_expression`
 
-Class-level expressions are derived symbolic attributes shared across all instances of a profile class. These expressions
-are often used to represent analytical properties like derivatives or asymptotic behaviors. The following functions provide
-the user with interaction capabilities
+.. code-block:: python
 
-- **Define**: Use the :py:meth:`~pisces.profiles.base.Profile.set_class_expression` method to register a symbolic expression.
-- **Access**: Use the :py:meth:`~pisces.profiles.base.Profile.get_class_expression` method to retrieve a registered symbolic expression.
+    >>> prof = NFWDensityProfile()
+    >>> prof.get_class_expression('spherical_mass')
+    4*pi*r_s**3*rho_0*(-r/(r + r_s) + log(r/r_s + 1))
 
-Class level expressions are functions of the symbolic axes (:py:attr:`~pisces.profiles.base.Profile.SYMBAXES`) and the
-symbolic parameters (:py:attr:`~pisces.profiles.base.Profile.SYMBPARAMS`).
+In addition to **class-level derived expressions**, there are also **instance-level derived expressions** which provide
+effectively the same functionality as class level expressions; however, with the specific parameter values already substituted
+into the expression. These can be accessed and manipulated via :py:meth:`pisces.profiles.base.Profile.get_expression`,
+:py:meth:`pisces.profiles.base.Profile.set_expression`, and :py:meth:`pisces.profiles.base.Profile.has_expression`.
 
-Instance Level Expressions
-++++++++++++++++++++++++++
+Additionally, the **instance-level derived expressions** can be converted to **numerical** expressions which can then
+be used for computation:
 
-Instance-level expressions are specific to a particular instance of a profile and can override
-or extend class-level definitions. These expressions depend on the instance's parameter values and are therefore
-only functions of the symbolic axes (:py:attr:`~pisces.profiles.base.Profile.SYMBAXES`).
+.. code-block:: python
 
-Every **class-level** expression can be converted to a **instance-level** expression. This conversion is (by default) done
-automatically when fetching an instance level attribute. Just like the class level attributes, you can access the instance level
-attributes as
+    >>> prof = NFWDensityProfile()
+    >>> pot = prof.get_numeric_expression('spherical_mass')
 
-- **Define**: Use the :py:meth:`~pisces.profiles.base.Profile.set_expression` method to register a symbolic expression.
-- **Access**: Use the :py:meth:`~pisces.profiles.base.Profile.get_expression` method to retrieve a registered expression.
-
-Numerical Expressions
-+++++++++++++++++++++
-
-Just as the :py:class:`~pisces.profiles.base.Profile` class keeps track of symbolic expressions, it can also keep track
-of numerical expressions. For every **instance-level** expression, there is also a numerical equivalent accessed using
-:py:meth:`~pisces.profiles.base.Profile.get_numeric_expression` which will pull the numerical expression from the class's repository.
-If the numerical version of an expression has not been used before, it is "lambdified" from the symbolic expression to produce
-the callable function. These always take the :py:attr:`~pisces.profiles.base.Profile.AXES` as inputs (separate slots).
 
 Serialization and IO Procedures
 -------------------------------

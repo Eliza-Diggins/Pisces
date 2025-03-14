@@ -2,49 +2,27 @@
 Pisces User Guide
 =================
 
-Some areas of the ``Pisces`` code are quite complex and rely heavily on complicated ideas from
-astrophysics, mathematics, and numerical methods. To make the use of the code as
-straight-forward as possible, we've provided a **User-Guide** for those interested in learning
-about particular aspects of the code. Resources in this section range from complex notes about
-the Pisces backend to basic physics overviews of specific types of systems.
+Pisces is a very large and diverse code base and has many interesting capabilities - we could not hope
+to cover all of these details in a single document. As such, this :ref:`reference` page has been constructed for
+users of Pisces to reference when they are in need of information about particular aspects of Pisces.
 
-:material-regular:`rocket_launch;2em` Physical Models And Components
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+If you're just getting started, we suggest checking out the :ref:`getting_started` page before jumping in here;
+these guides are tailored to users who already have basic understanding of the Pisces code. We also have a collection
+of :ref:`examples` which demonstrate many of the things discussed in the documents below.
 
-.. raw:: html
+Astrophysical Models
+--------------------
 
-   <hr style="height:2px;background-color:black">
+At the core of Pisces is the concept of a **model**, which represents a self-consistent physical representation of
+a system. Pisces provides a lot of models which are built-in as well as a lot of tooling for developing your own models.
+The documents in this section cover the physics of each of the built-in modeling modules as well as the modeling backend
+and information for those who need to build their own models. For a general overview of modeling in pisces, check out
+this introductory document: :ref:`modeling_overview`.
 
-At the core of any Pisces model, initial conditions, or other work product is at least one physical model
-representing a system or component of a system. This is where the physics really comes into the code and each
-of the available models is designed to seamlessly provide for versatile and robust physics to meet your needs.
+Built-In Models
++++++++++++++++
 
-To get started, go ahead and read the :ref:`modeling_overview` document. Once you've given that a read, the
-guides below will introduce the relevant physics and API for specific models.
-
-Backend References
-''''''''''''''''''
-
-.. toctree::
-    :titlesonly:
-    :glob:
-    :numbered:
-
-    ./models/modeling_grids
-    ./models/pipelines_solvers
-
-Overview
-''''''''
-
-.. toctree::
-    :titlesonly:
-    :glob:
-    :numbered:
-
-    ./models/modeling_overview
-
-Physical Models
-'''''''''''''''
+(*We'll add new sections here as new capabilities are developed*)
 
 .. toctree::
     :titlesonly:
@@ -53,23 +31,36 @@ Physical Models
 
     ./models/galaxy_clusters
 
-.. tip::
+Building Models
++++++++++++++++
 
-    If you're a contributing developer, you'll get a lot out of the developer guide for models: :ref:`modeling_developer`.
+.. toctree::
+    :titlesonly:
+    :glob:
+    :numbered:
 
-⚛️  Particle Datasets
-+++++++++++++++++++++++++++++++++++++
-Useful for many purposes, Pisces supports to conversion of models to particle datasets. These datasets can be
-easily combined, altered, and exported for various purposes. Additionally, many astrophysical simulation softwares
-utilize particle based schemes for hydrodynamics / magnetohydrodynamics.
+    ./models/modeling_developer
+    ./models/pipelines_solvers
+    ./models/modeling_grids
 
 
-.. raw:: html
+Doing Science With Models
+-------------------------
 
-   <hr style="height:2px;background-color:black">
+Pisces is science-focused at its core and is developed around the idea of providing a central toolkit for performing
+a wide array of analyses / scientific workflows for its models. Once a model has been created, there are many things that
+can be done with it. This section of the user guide provides documentation on many of the common use-cases for Pisces models.
 
-Overview
-'''''''''''''''
+In many cases, Pisces is interoperable with external / 3rd party software which provides much of its utility for
+scientific projects. In cases where a 3rd party software is used, we encourage the user to become familiar with that software
+as well in order to ensure that everything functions as expected.
+
+Converting Models to Particles
+++++++++++++++++++++++++++++++
+
+For many workflows, the most versatile option for analysis is to convert Pisces models to particle data that
+can then be exported to resources like `yt <https://yt-project.org/>'_ or other analysis packages. Pisces provides support
+for particle conversions as well as some more advanced machinery.
 
 .. toctree::
     :titlesonly:
@@ -77,29 +68,35 @@ Overview
     :numbered:
 
     ./particles/particles
+    ./particles/sampling
+    ./particles/virialization
 
-Theory
-'''''''''''''''
+Hydrodynamics Simulations
++++++++++++++++++++++++++
+
+Pisces originally started out as an initial-conditions generator for hydrodynamics / MHD simulations. One of the most
+useful functionalities of Pisces is its ability to produce these initial conditions and to interface with a variety
+of simulation codes.
 
 .. toctree::
     :titlesonly:
     :glob:
     :numbered:
 
-    ./particles/sampling
-    ./particles/virialization
+    ./simulations/codes
+    ./simulations/initial_conditions
 
+Building Blocks
+-------------------------
 
-:material-regular:`show_chart;2em` Profiles
-+++++++++++++++++++++++++++++++++++++++++++
+Behind the scenes, there is a lot going on in Pisces. Users need to be able to generate profiles, handle units, work
+in different geometries, etc. all with the end goal of building models they can use for science. In this section, we'll cover
+the details of the various "building-blocks" that make up the backend of Pisces.
 
-.. raw:: html
+Profiles
+++++++++
 
-   <hr style="height:2px;background-color:black">
-
-Underlying all of the models in Pisces are physical profiles representing individual quantities like density and
-temperature. These are all managed in the :py:mod:`~pisces.profiles` module. These guides will cover the basics of working
-with these classes.
+Profiles are a critical ingredient necessary for building most if the Pisces models.
 
 .. toctree::
     :titlesonly:
@@ -109,20 +106,12 @@ with these classes.
     ./profiles/profiles_overview
     ./profiles/profiles_developer
 
+Coordinate Systems
+++++++++++++++++++
 
-
-
-:material-regular:`functions;2em` Mathematics
-++++++++++++++++++++++++++++++++++++++++++++++
-
-.. raw:: html
-
-   <hr style="height:2px;background-color:black">
-
-These documents give an overview of the mathematical details that are relevant for this software.
-
-System Geometry
-'''''''''''''''
+Coordinate system support is one of the most sophisticated aspects of the Pisces code-base but is also one of the
+keystones of the entire system. In this section, we'll cover the details of these workhorse classes as well as how to
+develop custom ones.
 
 .. toctree::
     :titlesonly:
@@ -130,9 +119,14 @@ System Geometry
     :numbered:
 
     ./geometry/geometry_overview
+    ./geometry/geometry_background
 
-Mathematical Physics
-''''''''''''''''''''
+
+Miscellaneous Guides
+--------------------
+
+There are a few guides that don't fit in elsewhere!
+
 
 .. toctree::
     :titlesonly:

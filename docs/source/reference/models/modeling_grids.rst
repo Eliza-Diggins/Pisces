@@ -1,5 +1,5 @@
 .. _model_grid_management:
-Model Grid Management
+Model Data Structures
 =====================
 
 Underlying every physical model in pisces (from the :py:mod:`~pisces.models` module), is a so-called "grid manager" which

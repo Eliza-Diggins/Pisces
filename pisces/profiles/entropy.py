@@ -1,23 +1,20 @@
 """
 Entropy profiles for astrophysical modeling.
 """
+from abc import ABC
 from typing import Any, Dict, List
 
 import sympy as sp
+from unyt import unyt_quantity
 
-from pisces.profiles.base import Profile
-
-
-class RadialEntropyProfile(Profile):
-    _IS_ABC = True
-
-    # @@ CLASS ATTRIBUTES @@ #
-    AXES = ["r"]
-    DEFAULT_PARAMETERS = None
-    DEFAULT_UNITS: str = "keV*cm^2"
+from pisces.profiles.base import RadialProfile
 
 
-class BaselineEntropyProfile(RadialEntropyProfile):
+class _RadialEntropyProfile(RadialProfile, ABC):
+    _is_parent_profile = True
+
+
+class BaselineEntropyProfile(_RadialEntropyProfile):
     r"""
     Baseline Entropy Profile :footcite:p:`BaselineEntropy`.
 
@@ -65,25 +62,24 @@ class BaselineEntropyProfile(RadialEntropyProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "K_0": 10.0,
-        "K_200": 200.0,
-        "r_200": 1000.0,
-        "alpha": 1.1,
+        "K_0": unyt_quantity(10.0, "keV/cm**2"),
+        "K_200": unyt_quantity(200.0, "keV/cm**2"),
+        "r_200": unyt_quantity(1000.0, "pc"),
+        "alpha": unyt_quantity(1.1, ""),
     }
 
     @staticmethod
-    def _function(r, K_0, K_200, r_200, alpha):
+    def _profile(r, K_0, K_200, r_200, alpha):
         return K_0 + K_200 * (r / r_200) ** alpha
 
 
-class BrokenEntropyProfile(RadialEntropyProfile):
+class BrokenEntropyProfile(_RadialEntropyProfile):
     r"""
     Broken Entropy Profile :footcite:p:`BrokenEntropy`.
 
@@ -134,27 +130,27 @@ class BrokenEntropyProfile(RadialEntropyProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "r_s": 300.0,
-        "K_scale": 200.0,
-        "alpha": 1.1,
-        "K_0": 0.0,
+        "r_s": unyt_quantity(300.0, "pc"),
+        "K_scale": unyt_quantity(10.0, "keV/cm**2"),
+        "alpha": unyt_quantity(1, ""),
+        "K_0": unyt_quantity(10.0, "keV/cm**2"),
     }
 
     @staticmethod
-    def _function(r, r_s, K_scale, alpha, K_0=0.0):
+    def _profile(r, r_s, K_scale, alpha, K_0=0.0):
         x = r / r_s
         ret = (x**alpha) * (1.0 + x**5) ** (0.2 * (1.1 - alpha))
         return K_scale * (K_0 + ret)
 
 
-class WalkerEntropyProfile(RadialEntropyProfile):
+class WalkerEntropyProfile(_RadialEntropyProfile):
     r"""
     Walker Entropy Profile :footcite:p:`WalkerEntropy`.
 
@@ -204,21 +200,20 @@ class WalkerEntropyProfile(RadialEntropyProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
-    AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "r_200": 1000.0,
-        "A": 0.5,
-        "B": 0.2,
-        "K_scale": 100.0,
-        "alpha": 1.1,
+        "r_200": unyt_quantity(10000.0, "pc"),
+        "A": unyt_quantity(0.5, ""),
+        "B": unyt_quantity(0.5, ""),
+        "K_scale": unyt_quantity(100, "keV/cm**2"),
+        "alpha": unyt_quantity(1.1, ""),
     }
 
     @staticmethod
-    def _function(r, r_200, A, B, K_scale, alpha=1.1):
+    def _profile(r, r_200, A, B, K_scale, alpha=1.1):
         x = r / r_200
         return K_scale * (A * x**alpha) * sp.exp(-((x / B) ** 2))

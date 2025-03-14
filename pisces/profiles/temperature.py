@@ -1,24 +1,22 @@
 """
 Temperature profiles for astrophysical modeling.
 """
+from abc import ABC
 from typing import Any, Dict, List
+
+from unyt import unyt_quantity
 
 from pisces.profiles.base import RadialProfile
 
 
-class RadialTemperatureProfile(RadialProfile):
+class _RadialTemperatureProfile(RadialProfile, ABC):
     r"""
     Base class for radial temperature profiles with fixed axes, units, and parameters.
     """
-    _IS_ABC = True
-
-    # @@ CLASS ATTRIBUTES @@ #
-    AXES = ["r"]
-    DEFAULT_PARAMETERS = None
-    DEFAULT_UNITS: str = "keV"
+    _is_parent_profile = True
 
 
-class VikhlininTemperatureProfile(RadialTemperatureProfile):
+class VikhlininTemperatureProfile(_RadialTemperatureProfile):
     r"""
     Vikhlinin Temperature Profile :footcite:p:`VikhlininProfile`.
 
@@ -70,31 +68,31 @@ class VikhlininTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "T_0": 5.0,
-        "a": 0.1,
-        "b": 0.5,
-        "c": 1.2,
-        "r_t": 200.0,
-        "T_min": 2.0,
-        "r_cool": 10.0,
-        "a_cool": 0.2,
+        "T_0": unyt_quantity(5.0, "keV"),
+        "a": unyt_quantity(0.1, ""),
+        "b": unyt_quantity(0.1, ""),
+        "c": unyt_quantity(0.1, ""),
+        "r_t": unyt_quantity(500.0, "pc"),
+        "T_min": unyt_quantity(2.0, "keV"),
+        "r_cool": unyt_quantity(5.0, "pc"),
+        "a_cool": unyt_quantity(0.1, ""),
     }
 
     @staticmethod
-    def _function(r, T_0, a, b, c, r_t, T_min, r_cool, a_cool):
+    def _profile(r, T_0, a, b, c, r_t, T_min, r_cool, a_cool):
         x = (r / r_cool) ** a_cool
         t = (r / r_t) ** (-a) / ((1.0 + (r / r_t) ** b) ** (c / b))
         return T_0 * t * (x + T_min / T_0) / (x + 1)
 
 
-class AM06TemperatureProfile(RadialTemperatureProfile):
+class AM06TemperatureProfile(_RadialTemperatureProfile):
     r"""
     Ascasibar and Markevitch (2006) Temperature Profile :footcite:p:`AM06Profile`.
 
@@ -142,25 +140,25 @@ class AM06TemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "T_0": 4.0,
-        "a": 300.0,
-        "a_c": 50.0,
-        "c": 0.2,
+        "T_0": unyt_quantity(5.0, "keV"),
+        "a": unyt_quantity(50.0, "pc"),
+        "a_c": unyt_quantity(5.0, "pc"),
+        "c": unyt_quantity(0.5, ""),
     }
 
     @staticmethod
-    def _function(r, T_0, a, a_c, c):
+    def _profile(r, T_0, a, a_c, c):
         return T_0 / (1.0 + r / a) * (c + r / a_c) / (1.0 + r / a_c)
 
 
-class UniversalPressureTemperatureProfile(RadialTemperatureProfile):
+class UniversalPressureTemperatureProfile(_RadialTemperatureProfile):
     r"""
     Universal Pressure Temperature Profile.
 
@@ -201,23 +199,23 @@ class UniversalPressureTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "T_0": 5.0,
-        "r_s": 300.0,
+        "T_0": unyt_quantity(5.0, "keV"),
+        "r_s": unyt_quantity(50.0, "pc"),
     }
 
     @staticmethod
-    def _function(r, T_0, r_s):
+    def _profile(r, T_0, r_s):
         return T_0 * (1 + r / r_s) ** -1.5
 
 
-class IsothermalTemperatureProfile(RadialTemperatureProfile):
+class IsothermalTemperatureProfile(_RadialTemperatureProfile):
     r"""
     Isothermal Temperature Profile.
 
@@ -257,22 +255,22 @@ class IsothermalTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "T_0": 5.0,
+        "T_0": unyt_quantity(5.0, "keV"),
     }
 
     @staticmethod
-    def _function(r, T_0):
+    def _profile(r, T_0):
         return T_0
 
 
-class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
+class CoolingFlowTemperatureProfile(_RadialTemperatureProfile):
     r"""
     Cooling Flow Temperature Profile :footcite:p:`CoolingFlowsProfile`.
 
@@ -317,24 +315,24 @@ class CoolingFlowTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "T_0": 5.0,
-        "r_c": 100.0,
-        "a": 0.8,
+        "T_0": unyt_quantity(5.0, "keV"),
+        "r_c": unyt_quantity(500.0, "pc"),
+        "a": unyt_quantity(0.05, ""),
     }
 
     @staticmethod
-    def _function(r, T_0, r_c, a):
+    def _profile(r, T_0, r_c, a):
         return T_0 * (r / r_c) ** -a
 
 
-class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
+class DoubleBetaTemperatureProfile(_RadialTemperatureProfile):
     r"""
     Double Beta Temperature Profile :footcite:p:`DoubleBetaModel`.
 
@@ -384,29 +382,29 @@ class DoubleBetaTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "T_0": 5.0,
-        "r_c": 100.0,
-        "beta_1": 0.8,
-        "T_1": 3.0,
-        "beta_2": 1.2,
+        "T_0": unyt_quantity(5.0, "keV"),
+        "r_c": unyt_quantity(500.0, "pc"),
+        "beta_1": unyt_quantity(0.05, ""),
+        "T_1": unyt_quantity(4.0, "keV"),
+        "beta_2": unyt_quantity(0.05, ""),
     }
 
     @staticmethod
-    def _function(r, T_0, r_c, beta_1, T_1, beta_2):
+    def _profile(r, T_0, r_c, beta_1, T_1, beta_2):
         return (
             T_0 * (1 + (r / r_c) ** 2) ** -beta_1
             + T_1 * (1 + (r / r_c) ** 2) ** -beta_2
         )
 
 
-class BetaModelTemperatureProfile(RadialTemperatureProfile):
+class BetaModelTemperatureProfile(_RadialTemperatureProfile):
     r"""
     Beta Model Temperature Profile :footcite:p:`BetaModel`.
 
@@ -451,18 +449,18 @@ class BetaModelTemperatureProfile(RadialTemperatureProfile):
     # @@ CLASS ATTRIBUTES (INVARIANT) @@ #
     # Generally, these do not need to be changed in subclasses; however, they
     # may be if necessary. Ensure that any metaclasses / ABC's have _IS_ABC=True.
-    _IS_ABC = False
+    _is_parent_profile = False
 
     # @@ CLASS ATTRIBUTES @@ #
     # These attributes should be set / manipulated in all subclasses to
     # implement the desired behavior.
     AXES: List[str] = ["r"]
     DEFAULT_PARAMETERS: Dict[str, Any] = {
-        "T_0": 5.0,
-        "r_c": 100.0,
-        "beta": 0.8,
+        "T_0": unyt_quantity(5.0, "keV"),
+        "r_c": unyt_quantity(500.0, "pc"),
+        "beta": unyt_quantity(0.05, ""),
     }
 
     @staticmethod
-    def _function(r, T_0, r_c, beta):
+    def _profile(r, T_0, r_c, beta):
         return T_0 * (1 + (r / r_c) ** 2) ** -beta
